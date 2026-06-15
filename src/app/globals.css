@@ -1,0 +1,207 @@
+@import "tailwindcss";
+
+/* =============================================================================
+   Hartwell Pulse — design tokens
+   A darker, premium take on the Hartwell Digital brand. Gold is an accent only;
+   the dark base stays quiet so the data and gold carry the eye.
+   ========================================================================== */
+
+:root {
+  --pulse-bg: #0a0908; /* near-black, slightly warm, main background */
+  --pulse-surface: #14110f; /* raised panels, cards */
+  --pulse-surface-2: #1c1815; /* inputs, hover states, secondary panels */
+  --pulse-border: rgba(181, 166, 117, 0.12); /* hairline gold-tinted borders */
+  --pulse-border-strong: rgba(181, 166, 117, 0.22);
+  --pulse-gold: #b5a675; /* primary accent, from Hartwell Digital */
+  --pulse-gold-light: #cbbe97; /* hover, highlights */
+  --pulse-text: #f9f7f2; /* primary text, the Hartwell light tone */
+  --pulse-text-dim: rgba(249, 247, 242, 0.55); /* secondary text */
+  --pulse-text-mute: rgba(249, 247, 242, 0.3); /* captions, metadata */
+  --pulse-success: #6ba368; /* up trends, muted green */
+  --pulse-warn: #c9a04c; /* attention states */
+  --pulse-danger: #b5563f; /* down trends, muted terracotta, never harsh red */
+}
+
+/* Map brand tokens onto Tailwind's theme so utilities like `bg-pulse-surface`,
+   `text-pulse-gold`, `border-pulse-border`, `font-mono` all work. */
+@theme inline {
+  --color-pulse-bg: var(--pulse-bg);
+  --color-pulse-surface: var(--pulse-surface);
+  --color-pulse-surface-2: var(--pulse-surface-2);
+  --color-pulse-border: var(--pulse-border);
+  --color-pulse-border-strong: var(--pulse-border-strong);
+  --color-pulse-gold: var(--pulse-gold);
+  --color-pulse-gold-light: var(--pulse-gold-light);
+  --color-pulse-text: var(--pulse-text);
+  --color-pulse-text-dim: var(--pulse-text-dim);
+  --color-pulse-text-mute: var(--pulse-text-mute);
+  --color-pulse-success: var(--pulse-success);
+  --color-pulse-warn: var(--pulse-warn);
+  --color-pulse-danger: var(--pulse-danger);
+
+  --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "JetBrains Mono", "SFMono-Regular", monospace;
+
+  --radius-card: 12px;
+  --radius-input: 8px;
+}
+
+/* ---------- base ---------- */
+@layer base {
+  * {
+    border-color: var(--pulse-border);
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--pulse-bg);
+    color: var(--pulse-text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: rgba(181, 166, 117, 0.25);
+    color: var(--pulse-text);
+  }
+
+  /* Visible keyboard focus everywhere — accessibility requirement. */
+  :focus-visible {
+    outline: 2px solid var(--pulse-gold);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Quiet, on-brand scrollbars. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(181, 166, 117, 0.25) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: rgba(181, 166, 117, 0.18);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgba(181, 166, 117, 0.32);
+    background-clip: content-box;
+  }
+}
+
+/* ---------- utilities ---------- */
+@layer utilities {
+  /* Monospace small-caps section header, e.g. PERFORMANCE / GOOGLE ADS */
+  .mono-label {
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    color: var(--pulse-text-dim);
+  }
+
+  /* Monospace data treatment for metrics, timestamps, IDs. */
+  .data-mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* Shown only when printing (the PDF letterhead). */
+  .print-only {
+    display: none;
+  }
+
+  /* Very subtle gold grid texture for login / admin backgrounds. */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, rgba(181, 166, 117, 0.04) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(181, 166, 117, 0.04) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+
+  /* Faint scanline overlay for the internal-tool feel, kept very subtle. */
+  .bg-scanline {
+    background-image: repeating-linear-gradient(
+      to bottom,
+      rgba(249, 247, 242, 0.015) 0px,
+      rgba(249, 247, 242, 0.015) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  }
+
+  /* Radial vignette that pulls focus to the centre on auth screens. */
+  .bg-vignette {
+    background: radial-gradient(
+      120% 80% at 50% 0%,
+      rgba(181, 166, 117, 0.06) 0%,
+      transparent 55%
+    );
+  }
+}
+
+/* Print: flip to a light, document-like theme and hide app chrome, so a report
+   prints / saves to PDF as a clean white document rather than the dark UI. */
+@media print {
+  @page {
+    margin: 16mm;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .print-reset {
+    padding: 0 !important;
+  }
+  :root {
+    --pulse-bg: #ffffff;
+    --pulse-surface: #ffffff;
+    --pulse-surface-2: #f6f5f1;
+    --pulse-border: rgba(0, 0, 0, 0.12);
+    --pulse-border-strong: rgba(0, 0, 0, 0.2);
+    --pulse-text: #1a1714;
+    --pulse-text-dim: rgba(26, 23, 20, 0.72);
+    --pulse-text-mute: rgba(26, 23, 20, 0.5);
+  }
+  html,
+  body {
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  /* keep cards, figures and headings from splitting awkwardly across pages */
+  .report-block,
+  .report-figure {
+    break-inside: avoid;
+  }
+  .report-heading {
+    break-after: avoid;
+  }
+  .report-section {
+    margin-bottom: 1.5rem;
+  }
+}
+
+/* Respect reduced-motion: kill all non-essential animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
