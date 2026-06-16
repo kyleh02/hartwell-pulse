@@ -12,22 +12,11 @@ const isPublicRoute = createRouteMatcher([
   "/api/cron/(.*)",
 ]);
 
-export default clerkMiddleware(
-  async (auth, req) => {
-    if (!isPublicRoute(req)) {
-      await auth.protect();
-    }
-  },
-  {
-    // Harden against subdomain cookie-leaking. Clerk sets the session cookie on
-    // the root domain (hartwelldigital.com), so any sibling subdomain could
-    // otherwise present it. Only accept tokens issued for our own origins:
-    // the production portal domain (NEXT_PUBLIC_APP_URL) plus localhost for dev.
-    authorizedParties: [process.env.NEXT_PUBLIC_APP_URL, "http://localhost:3000"].filter(
-      (origin): origin is string => Boolean(origin),
-    ),
-  },
-);
+export default clerkMiddleware(async (auth, req) => {
+  if (!isPublicRoute(req)) {
+    await auth.protect();
+  }
+});
 
 export const config = {
   matcher: [
