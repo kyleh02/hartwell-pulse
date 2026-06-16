@@ -174,3 +174,27 @@ export async function setInvoiceStatus(invoiceId: string, status: InvoiceStatus)
   revalidatePath("/admin/invoices");
   revalidatePath(`/admin/invoices/${invoiceId}`);
 }
+
+export async function deleteInvoice(invoiceId: string) {
+  const { supabase } = await adminSupabase();
+
+  // Only drafts may be deleted. Anything that has been sent to a client (sent,
+  // paid, void) is a financial record and must be kept — guard it server-side so
+  // it holds even if a stale button slips through on the client.
+  const { data: inv } = await supabase
+    .from("invoices")
+    .select("status")
+    .eq("id", invoiceId)
+    .maybeSingle();
+  if (!inv) throw new Error("Invoice not found");
+  if ((inv as { status: InvoiceStatus }).status !== "draft") {
+    throw new Error("Only draft invoices can be deleted — sent invoices are kept on record.");
+  }
+
+  // Line items are removed by the composite FK's ON DELETE CASCADE.
+  const { error } = await supabase.from("invoices").delete().eq("id", invoiceId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/admin/invoices");
+  redirect("/admin/invoices");
+}

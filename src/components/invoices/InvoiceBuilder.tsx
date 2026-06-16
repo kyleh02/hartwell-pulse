@@ -16,6 +16,7 @@ import {
   saveInvoice,
   sendInvoice,
   setInvoiceStatus,
+  deleteInvoice,
 } from "@/app/admin/invoices/actions";
 import { InvoiceDocument } from "@/components/invoices/InvoiceDocument";
 import { PrintButton } from "@/components/invoices/PrintButton";
@@ -128,6 +129,17 @@ export function InvoiceBuilder({
       setStatus(s);
     });
   }
+  function del() {
+    if (
+      !window.confirm(
+        "Delete this draft invoice? This permanently removes it and can't be undone.",
+      )
+    )
+      return;
+    startTransition(async () => {
+      await deleteInvoice(invoice.id);
+    });
+  }
 
   // live preview built from the current edits
   const previewBundle: InvoiceBundle = {
@@ -180,6 +192,9 @@ export function InvoiceBuilder({
           <Badge tone={STATUS_TONE[status]}>{status}</Badge>
           {editable ? (
             <>
+              <Button variant="danger" size="sm" onClick={del} disabled={pending}>
+                <Trash2 size={14} /> Delete
+              </Button>
               <span className="data-mono text-[11px] text-pulse-text-mute">
                 {saved ? "saved" : "unsaved"}
               </span>

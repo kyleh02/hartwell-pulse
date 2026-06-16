@@ -6,7 +6,8 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { Button, buttonClasses } from "@/components/ui/Button";
+import { buttonClasses } from "@/components/ui/Button";
+import { NewClientForm } from "@/components/admin/NewClientForm";
 
 export const metadata = { title: "Clients" };
 
@@ -30,14 +31,14 @@ export default async function AdminClientsPage() {
         label={["Clients"]}
         title="Clients"
         description="Every client at a glance. Open a preview to see exactly what they see on their dashboard."
-        actions={<Button disabled>Add client</Button>}
+        actions={<NewClientForm />}
       />
 
       {clients.length === 0 ? (
         <EmptyState
           icon={<Users size={20} strokeWidth={1.75} />}
           title="No clients yet"
-          description="Run the demo seed in Supabase to add Demo Co, or full client setup is coming in the clients phase."
+          description="Add your first client and Pulse will create their login and company record in one step."
         />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
