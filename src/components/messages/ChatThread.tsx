@@ -85,6 +85,20 @@ export function ChatThread({
     setLoading(false);
   }, [supabase, clientId]);
 
+  // Viewing a conversation is the read receipt: clear this user's unread message
+  // notifications for this client. That's what stops the 30-minute unread-message
+  // email reminder from firing for messages you've already seen on the page.
+  const markRead = useCallback(async () => {
+    if (!userId) return;
+    await supabase
+      .from("notifications")
+      .update({ read_at: new Date().toISOString() })
+      .eq("recipient_user_id", userId)
+      .eq("client_id", clientId)
+      .eq("type", "message")
+      .is("read_at", null);
+  }, [supabase, userId, clientId]);
+
   useEffect(() => {
     setLoading(true);
     void load();
@@ -98,7 +112,9 @@ export function ChatThread({
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+    // Mark messages read on open and whenever new ones arrive while you're here.
+    void markRead();
+  }, [messages.length, markRead]);
 
   function insertEmoji(emoji: string) {
     const ta = textareaRef.current;
