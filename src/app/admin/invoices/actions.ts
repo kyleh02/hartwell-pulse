@@ -4,8 +4,13 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getPulseSession } from "@/lib/auth/session";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { computeTotals, lineAmount, formatMoney } from "@/lib/invoices-shared";
-import { sendEmail, emailLayout } from "@/lib/email";
+import {
+  computeTotals,
+  lineAmount,
+  formatMoney,
+  DEFAULT_INVOICE_EMAIL,
+} from "@/lib/invoices-shared";
+import { sendEmail, emailLayout, renderMessage } from "@/lib/email";
 import type { GstMode, Invoice, InvoiceStatus } from "@/lib/types/database";
 
 async function adminSupabase() {
@@ -68,6 +73,7 @@ export interface SaveInvoiceInput {
   due_date: string;
   gst_mode: GstMode;
   notes: string;
+  email_message: string;
   recurring: boolean;
   lines: { description: string; quantity: number; unit_amount: number }[];
 }
@@ -90,6 +96,7 @@ export async function saveInvoice(invoiceId: string, input: SaveInvoiceInput) {
       due_date: input.due_date,
       gst_mode: input.gst_mode,
       notes: input.notes || null,
+      email_message: input.email_message || null,
       recurring: input.recurring,
       subtotal: totals.subtotal,
       gst: totals.gst,
@@ -129,14 +136,43 @@ export async function sendInvoice(invoiceId: string) {
     .update({ status: "sent", sent_at: new Date().toISOString() })
     .eq("id", invoiceId);
 
-  const { data: users } = await supabase
-    .from("client_users")
-    .select("clerk_user_id, email")
-    .eq("client_id", invoice.client_id)
-    .eq("role", "client");
+  const [{ data: clientRow }, { data: settings }, { data: users }] =
+    await Promise.all([
+      supabase
+        .from("clients")
+        .select("business_name")
+        .eq("id", invoice.client_id)
+        .maybeSingle(),
+      supabase
+        .from("business_settings")
+        .select("invoice_email_message")
+        .eq("id", 1)
+        .maybeSingle(),
+      supabase
+        .from("client_users")
+        .select("clerk_user_id, email")
+        .eq("client_id", invoice.client_id)
+        .eq("role", "client"),
+    ]);
 
-  const title = `New invoice ${invoice.invoice_number} for ${formatMoney(invoice.total)}`;
-  const body = `Due ${prettyDate(invoice.due_date)}.`;
+  const clientName =
+    (clientRow as { business_name?: string } | null)?.business_name ?? "there";
+  const template =
+    invoice.email_message ||
+    (settings as { invoice_email_message?: string | null } | null)
+      ?.invoice_email_message ||
+    DEFAULT_INVOICE_EMAIL;
+  const messageHtml = renderMessage(template, {
+    client: clientName,
+    invoice: invoice.invoice_number,
+    amount: formatMoney(invoice.total),
+    "due date": prettyDate(invoice.due_date),
+  });
+
+  // Subject keeps the invoice number but not the amount (Kyle's preference).
+  const subject = `New invoice ${invoice.invoice_number}`;
+  const notifTitle = `New invoice ${invoice.invoice_number} for ${formatMoney(invoice.total)}`;
+  const notifBody = `Due ${prettyDate(invoice.due_date)}.`;
   const now = new Date().toISOString();
 
   for (const u of (users as { clerk_user_id: string; email: string | null }[] | null) ?? []) {
@@ -145,8 +181,8 @@ export async function sendInvoice(invoiceId: string) {
       recipient_user_id: u.clerk_user_id,
       client_id: invoice.client_id,
       type: "invoice",
-      title,
-      body,
+      title: notifTitle,
+      body: notifBody,
       link: `/invoices/${invoiceId}`,
       channel: "instant",
       emailed_at: now,
@@ -154,11 +190,11 @@ export async function sendInvoice(invoiceId: string) {
     if (u.email) {
       const html = emailLayout(
         `New invoice — ${invoice.invoice_number}`,
-        `<p>Hi,</p><p>A new invoice for <strong>${formatMoney(invoice.total)}</strong> is ready in your portal, due on ${prettyDate(invoice.due_date)}.</p>`,
+        messageHtml,
         "View invoice",
         `/invoices/${invoiceId}`,
       );
-      await sendEmail({ to: u.email, subject: title, html });
+      await sendEmail({ to: u.email, subject, html });
     }
   }
 

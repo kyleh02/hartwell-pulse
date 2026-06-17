@@ -1,6 +1,11 @@
 // Client-safe invoice helpers (GST maths, money formatting). No server imports.
 import type { GstMode, Invoice, InvoiceLineItem, Client } from "@/lib/types/database";
 
+// Default body for invoice emails, used until a custom one is set in Settings or
+// on the invoice itself. Placeholders in {braces} are filled in when sent.
+export const DEFAULT_INVOICE_EMAIL =
+  "Hi {client},\n\nA new invoice ({invoice}) for {amount} is ready in your portal, due {due date}. You can view it any time using the button below.\n\nThanks,\nKyle";
+
 export interface LineDraft {
   id: string;
   description: string;

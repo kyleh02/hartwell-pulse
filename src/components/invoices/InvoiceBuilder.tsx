@@ -11,7 +11,12 @@ import type {
   PricingItem,
 } from "@/lib/types/database";
 import type { InvoiceBundle, LineDraft } from "@/lib/invoices-shared";
-import { computeTotals, lineAmount, formatMoney } from "@/lib/invoices-shared";
+import {
+  computeTotals,
+  lineAmount,
+  formatMoney,
+  DEFAULT_INVOICE_EMAIL,
+} from "@/lib/invoices-shared";
 import {
   saveInvoice,
   sendInvoice,
@@ -56,6 +61,12 @@ export function InvoiceBuilder({
   const [dueDate, setDueDate] = useState(invoice.due_date.slice(0, 10));
   const [gstMode, setGstMode] = useState<GstMode>(invoice.gst_mode);
   const [notes, setNotes] = useState(invoice.notes ?? "");
+  const [emailMessage, setEmailMessage] = useState(
+    () =>
+      invoice.email_message ??
+      business?.invoice_email_message ??
+      DEFAULT_INVOICE_EMAIL,
+  );
   const [recurring, setRecurring] = useState(invoice.recurring);
   const [status, setStatus] = useState<InvoiceStatus>(invoice.status);
   const [saved, setSaved] = useState(true);
@@ -100,6 +111,7 @@ export function InvoiceBuilder({
       due_date: dueDate,
       gst_mode: gstMode,
       notes,
+      email_message: emailMessage,
       recurring,
       lines: lines.map((l) => ({
         description: l.description,
@@ -373,6 +385,24 @@ export function InvoiceBuilder({
               placeholder="Anything the client should know (optional)."
               className={fieldCls}
             />
+          </label>
+
+          <label className="flex flex-col gap-1">
+            <span className="mono-label">Email message to client</span>
+            <textarea
+              value={emailMessage}
+              disabled={!editable}
+              onChange={(e) => {
+                setEmailMessage(e.target.value);
+                touch();
+              }}
+              rows={6}
+              className={fieldCls}
+            />
+            <span className="text-[11px] text-pulse-text-mute">
+              What the client receives in the invoice email. {"{client}"},{" "}
+              {"{invoice}"}, {"{amount}"} and {"{due date}"} fill in automatically.
+            </span>
           </label>
         </div>
 

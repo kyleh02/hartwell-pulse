@@ -208,6 +208,7 @@ export interface BusinessSettings {
   bank_account: string | null;
   payment_terms_days: number;
   gst_mode: GstMode;
+  invoice_email_message: string | null;
   updated_at: string;
 }
 
@@ -240,6 +241,7 @@ export interface Invoice {
   paid_at: string | null;
   recurring: boolean;
   reminder_sent_at: string | null;
+  email_message: string | null;
   created_at: string;
   updated_at: string;
 }

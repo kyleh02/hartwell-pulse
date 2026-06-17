@@ -61,3 +61,24 @@ export function emailLayout(
     <p style="font-size:12px;color:#999;margin-top:28px">Hartwell Digital</p>
   </div>`;
 }
+
+/**
+ * Turn a plain-text message (with {placeholders}) into safe HTML paragraphs.
+ * The template and every value are HTML-escaped, so a client name with an "&"
+ * or a stray "<" can never break the email or inject markup.
+ */
+export function renderMessage(
+  template: string,
+  vars: Record<string, string>,
+): string {
+  let s = escapeHtml(template);
+  for (const [k, v] of Object.entries(vars)) {
+    s = s.split(`{${k}}`).join(escapeHtml(v));
+  }
+  return s
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => `<p style="margin:0 0 12px">${p.replace(/\n/g, "<br>")}</p>`)
+    .join("");
+}

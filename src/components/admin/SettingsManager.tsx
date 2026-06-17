@@ -19,6 +19,7 @@ function defaultBusiness(): BusinessSettings {
     bank_account: null,
     payment_terms_days: 14,
     gst_mode: "add",
+    invoice_email_message: null,
     updated_at: "",
   };
 }
@@ -55,6 +56,7 @@ export function SettingsManager({
         bank_account: biz.bank_account,
         payment_terms_days: biz.payment_terms_days,
         gst_mode: biz.gst_mode,
+        invoice_email_message: biz.invoice_email_message,
       })
       .eq("id", 1);
     setSavedBiz(true);
@@ -145,6 +147,21 @@ export function SettingsManager({
               <option value="inclusive">Prices include GST</option>
               <option value="none">No GST</option>
             </select>
+          </label>
+          <label className="flex flex-col gap-1 sm:col-span-2">
+            <span className="mono-label">Invoice email message</span>
+            <textarea
+              className={field}
+              rows={5}
+              value={biz.invoice_email_message ?? ""}
+              onChange={(e) => setField("invoice_email_message", e.target.value)}
+              placeholder="Hi {client}, a new invoice ({invoice}) for {amount} is ready, due {due date}..."
+            />
+            <span className="text-[11px] text-pulse-text-mute">
+              The default message for invoice emails. Placeholders {"{client}"},{" "}
+              {"{invoice}"}, {"{amount}"} and {"{due date}"} fill in automatically;
+              you can also tweak it per invoice before sending.
+            </span>
           </label>
         </div>
       </section>
