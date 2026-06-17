@@ -8,16 +8,19 @@ export const dynamic = "force-dynamic";
 const GRACE_DAYS = 30;
 
 /**
- * Permanently purges the PORTAL data of clients that have been soft-deleted for
- * more than 30 days.
+ * Permanently purges the PORTAL data of clients soft-deleted for more than 30
+ * days.
  *
- * Deliberately NEVER touched, so historical records survive:
+ * Deliberately NEVER touched, so financial records survive:
  *   - public.invoices
  *   - public.invoice_line_items
- *   - the public.clients row itself (kept as an anonymous-but-named invoice
- *     anchor; we only stamp purged_at + park its status)
+ *   - the public.clients row itself (kept as a named invoice anchor; we only
+ *     stamp purged_at + park its status)
  *
- * Everything else belonging to the client is removed, children before parents.
+ * Every write uses .throwOnError() so a query-level failure aborts that client's
+ * purge with purged_at still null — it is retried on the next run rather than
+ * being left half-purged and silently skipped forever (Supabase returns errors
+ * rather than throwing, so without this a failed delete would be invisible).
  */
 export async function GET(req: NextRequest) {
   const auth = cronAuthorized(req);
@@ -31,21 +34,28 @@ export async function GET(req: NextRequest) {
   const supabase = createAdminSupabase();
   const cutoff = new Date(Date.now() - GRACE_DAYS * 86_400_000).toISOString();
 
-  const { data: due } = await supabase
+  const { data: due, error: dueErr } = await supabase
     .from("clients")
     .select("id")
     .lt("deleted_at", cutoff)
     .is("purged_at", null);
+  if (dueErr) {
+    return new Response(`Could not list clients to purge: ${dueErr.message}`, {
+      status: 500,
+    });
+  }
   const clients = (due as { id: string }[] | null) ?? [];
 
   let purged = 0;
+  let failed = 0;
   for (const { id } of clients) {
     try {
       // 1) Remove the client's login(s) from Clerk.
-      const { data: users } = await supabase
+      const { data: users, error: usersErr } = await supabase
         .from("client_users")
         .select("clerk_user_id")
         .eq("client_id", id);
+      if (usersErr) throw new Error(usersErr.message);
       const clerk = await clerkClient();
       for (const u of (users as { clerk_user_id: string }[] | null) ?? []) {
         try {
@@ -55,35 +65,37 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      // 2) Delete the client's portal data — children first to respect FKs.
-      //    NOTE: invoices and invoice_line_items are intentionally absent.
-      await supabase.from("message_reactions").delete().eq("client_id", id);
-      await supabase.from("asset_comments").delete().eq("client_id", id);
-      await supabase.from("report_sections").delete().eq("client_id", id);
-      await supabase.from("messages").delete().eq("client_id", id);
-      await supabase.from("assets").delete().eq("client_id", id);
-      await supabase.from("reports").delete().eq("client_id", id);
-      await supabase.from("metrics").delete().eq("client_id", id);
-      await supabase.from("services").delete().eq("client_id", id);
-      await supabase.from("api_connections").delete().eq("client_id", id);
-      await supabase.from("board_cards").delete().eq("client_id", id);
-      await supabase.from("notifications").delete().eq("client_id", id);
-      await supabase.from("client_users").delete().eq("client_id", id);
+      // 2) Delete the client's portal data, children first. INVOICES AND
+      //    INVOICE_LINE_ITEMS ARE INTENTIONALLY ABSENT. .throwOnError() makes a
+      //    query failure abort this client (caught below) with purged_at null.
+      await supabase.from("message_reactions").delete().eq("client_id", id).throwOnError();
+      await supabase.from("asset_comments").delete().eq("client_id", id).throwOnError();
+      await supabase.from("report_sections").delete().eq("client_id", id).throwOnError();
+      await supabase.from("messages").delete().eq("client_id", id).throwOnError();
+      await supabase.from("assets").delete().eq("client_id", id).throwOnError();
+      await supabase.from("reports").delete().eq("client_id", id).throwOnError();
+      await supabase.from("metrics").delete().eq("client_id", id).throwOnError();
+      await supabase.from("services").delete().eq("client_id", id).throwOnError();
+      await supabase.from("api_connections").delete().eq("client_id", id).throwOnError();
+      await supabase.from("board_cards").delete().eq("client_id", id).throwOnError();
+      await supabase.from("notifications").delete().eq("client_id", id).throwOnError();
+      await supabase.from("client_users").delete().eq("client_id", id).throwOnError();
 
-      // 3) Keep the clients row as an invoice anchor (business_name retained so
-      //    old invoices still show who they were for). Stamp purged_at so we
-      //    don't reprocess it, and park its status.
+      // 3) Only once every delete above has succeeded, keep the clients row as
+      //    an invoice anchor and stamp purged_at so we don't reprocess it.
       await supabase
         .from("clients")
         .update({ purged_at: new Date().toISOString(), status: "paused" })
-        .eq("id", id);
+        .eq("id", id)
+        .throwOnError();
 
       purged++;
     } catch {
-      // Leave purged_at null so this client is retried on the next run rather
-      // than half-purged silently.
+      // A failure leaves purged_at null, so this client is retried next run.
+      // Re-deleting already-absent rows on retry is a harmless no-op.
+      failed++;
     }
   }
 
-  return Response.json({ candidates: clients.length, purged });
+  return Response.json({ candidates: clients.length, purged, failed });
 }
