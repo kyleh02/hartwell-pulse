@@ -55,6 +55,8 @@ export interface Client {
   service_tier: string;
   status: ClientStatus;
   created_at: string;
+  deleted_at: string | null;
+  purged_at: string | null;
 }
 
 export interface ClientUser {

@@ -134,3 +134,58 @@ export async function createClient(
   revalidatePath("/admin/clients");
   return { email, password };
 }
+
+async function requireAdmin() {
+  const session = await getPulseSession();
+  if (session?.role !== "admin") throw new Error("Not authorised");
+}
+
+/**
+ * Move a client between the Active list (status 'active') and the Inactive list
+ * (status 'paused'). Purely organisational — no data is deleted and their login
+ * is unchanged, so a parked client can be brought back at any time.
+ */
+export async function setClientStatus(
+  clientId: string,
+  status: "active" | "paused",
+) {
+  await requireAdmin();
+  const supabase = createAdminSupabase();
+  const { error } = await supabase
+    .from("clients")
+    .update({ status })
+    .eq("id", clientId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/admin/clients");
+}
+
+/**
+ * Soft-delete: hides the client and cuts their portal access immediately, but
+ * keeps every byte of their data. Reversible for 30 days via restoreClient,
+ * after which /api/cron/purge-clients removes their portal data — never their
+ * invoices.
+ */
+export async function deleteClient(clientId: string) {
+  await requireAdmin();
+  const supabase = createAdminSupabase();
+  const { error } = await supabase
+    .from("clients")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", clientId)
+    .is("deleted_at", null);
+  if (error) throw new Error(error.message);
+  revalidatePath("/admin/clients");
+}
+
+/** Undo a soft-delete within the 30-day grace window. */
+export async function restoreClient(clientId: string) {
+  await requireAdmin();
+  const supabase = createAdminSupabase();
+  const { error } = await supabase
+    .from("clients")
+    .update({ deleted_at: null })
+    .eq("id", clientId)
+    .is("purged_at", null);
+  if (error) throw new Error(error.message);
+  revalidatePath("/admin/clients");
+}
