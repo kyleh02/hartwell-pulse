@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getPulseSession } from "@/lib/auth/session";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { createAdminSupabase } from "@/lib/supabase/admin";
 import { getInvoiceBundle, getBusinessSettings } from "@/lib/invoices";
 import { InvoiceDocument } from "@/components/invoices/InvoiceDocument";
 import { PrintButton } from "@/components/invoices/PrintButton";
@@ -19,8 +20,12 @@ export default async function ClientInvoicePage({
 
   const supabase = await createServerSupabase();
   const [bundle, business] = await Promise.all([
+    // The invoice itself stays RLS-scoped, so a client can only load their own.
     getInvoiceBundle(supabase, invoiceId),
-    getBusinessSettings(supabase),
+    // business_settings is admin-only under RLS, but the invoice letterhead and
+    // bank details are meant for the client. Read them with the service role —
+    // only invoice-relevant fields are rendered (this is a server component).
+    getBusinessSettings(createAdminSupabase()),
   ]);
 
   if (
