@@ -14,7 +14,10 @@ export function NotificationBell() {
   const router = useRouter();
   const [items, setItems] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
+  const [perm, setPerm] = useState<NotificationPermission | "unsupported">("default");
   const ref = useRef<HTMLDivElement>(null);
+  const seenRef = useRef<Set<string>>(new Set());
+  const initializedRef = useRef(false);
 
   useEffect(() => {
     if (!userId) return;
@@ -26,7 +29,38 @@ export function NotificationBell() {
         .eq("recipient_user_id", userId)
         .order("created_at", { ascending: false })
         .limit(20);
-      if (active) setItems((data as Notification[] | null) ?? []);
+      if (!active) return;
+      const fresh = (data as Notification[] | null) ?? [];
+      // After the first poll, pop a desktop alert for any newly arrived, still
+      // unread message. The first poll only seeds the baseline so we don't fire
+      // for the existing backlog.
+      if (
+        initializedRef.current &&
+        typeof window !== "undefined" &&
+        "Notification" in window &&
+        window.Notification.permission === "granted"
+      ) {
+        for (const n of fresh) {
+          if (n.type === "message" && !n.read_at && !seenRef.current.has(n.id)) {
+            try {
+              const dn = new window.Notification(n.title, {
+                body: n.body ?? undefined,
+                tag: n.id,
+              });
+              dn.onclick = () => {
+                window.focus();
+                if (n.link) window.location.href = n.link;
+                dn.close();
+              };
+            } catch {
+              // some platforms throw on construction; ignore
+            }
+          }
+        }
+      }
+      for (const n of fresh) seenRef.current.add(n.id);
+      initializedRef.current = true;
+      setItems(fresh);
     };
     void load();
     const t = setInterval(() => void load(), 15000);
@@ -43,6 +77,23 @@ export function NotificationBell() {
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      setPerm("unsupported");
+    } else {
+      setPerm(window.Notification.permission);
+    }
+  }, []);
+
+  async function enableDesktop() {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    try {
+      setPerm(await window.Notification.requestPermission());
+    } catch {
+      // ignore
+    }
+  }
 
   const unread = items.filter((i) => !i.read_at).length;
   const now = () => new Date().toISOString();
@@ -136,6 +187,27 @@ export function NotificationBell() {
               ))
             )}
           </div>
+          {perm !== "unsupported" && (
+            <div className="border-t border-pulse-border px-3 py-2">
+              {perm === "granted" ? (
+                <p className="text-[11px] text-pulse-text-mute">
+                  Desktop alerts are on for new messages.
+                </p>
+              ) : perm === "denied" ? (
+                <p className="text-[11px] text-pulse-text-mute">
+                  Desktop alerts are blocked in your browser settings.
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={enableDesktop}
+                  className="text-[11px] text-pulse-gold hover:underline"
+                >
+                  Enable desktop alerts for new messages
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
