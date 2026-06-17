@@ -8,6 +8,28 @@ import { useSupabaseClient } from "@/lib/supabase/client";
 import type { Notification } from "@/lib/types/database";
 import { cn } from "@/lib/utils/cn";
 
+// The "Gentle chime" — a soft two-note rise, synthesised so there's no audio
+// asset to load. Kept deliberately quiet so it's pleasant, not naggy, for clients.
+function playGentleChime(ctx: AudioContext) {
+  if (ctx.state === "suspended") void ctx.resume().catch(() => {});
+  const tone = (freq: number, start: number, dur: number, peak: number) => {
+    const t = ctx.currentTime + start;
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(peak, t + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + dur + 0.05);
+  };
+  tone(587.33, 0, 0.9, 0.18);
+  tone(880, 0.12, 0.95, 0.16);
+}
+
 export function NotificationBell() {
   const supabase = useSupabaseClient();
   const { userId } = useAuth();
@@ -18,6 +40,9 @@ export function NotificationBell() {
   const ref = useRef<HTMLDivElement>(null);
   const seenRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
+  const [soundOn, setSoundOn] = useState(true);
+  const soundOnRef = useRef(true);
+  const audioRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
     if (!userId) return;
@@ -31,17 +56,29 @@ export function NotificationBell() {
         .limit(20);
       if (!active) return;
       const fresh = (data as Notification[] | null) ?? [];
-      // After the first poll, pop a desktop alert for any newly arrived, still
-      // unread message. The first poll only seeds the baseline so we don't fire
-      // for the existing backlog.
-      if (
-        initializedRef.current &&
-        typeof window !== "undefined" &&
-        "Notification" in window &&
-        window.Notification.permission === "granted"
-      ) {
-        for (const n of fresh) {
-          if (n.type === "message" && !n.read_at && !seenRef.current.has(n.id)) {
+      // Newly arrived, still-unread notifications since the last poll. The first
+      // poll only seeds the baseline so we don't react to the existing backlog.
+      const newOnes = fresh.filter(
+        (n) => !n.read_at && !seenRef.current.has(n.id),
+      );
+      if (initializedRef.current && newOnes.length > 0) {
+        // Soft chime for any new notification.
+        if (soundOnRef.current && typeof window !== "undefined") {
+          try {
+            if (!audioRef.current) audioRef.current = new window.AudioContext();
+            playGentleChime(audioRef.current);
+          } catch {
+            // audio unavailable / blocked — stay silent
+          }
+        }
+        // Desktop pop-up specifically for new messages.
+        if (
+          typeof window !== "undefined" &&
+          "Notification" in window &&
+          window.Notification.permission === "granted"
+        ) {
+          for (const n of newOnes) {
+            if (n.type !== "message") continue;
             try {
               const dn = new window.Notification(n.title, {
                 body: n.body ?? undefined,
@@ -85,6 +122,55 @@ export function NotificationBell() {
       setPerm(window.Notification.permission);
     }
   }, []);
+
+  // Load the saved sound preference, and unlock the audio context on the first
+  // user gesture (browsers block audio until the user has interacted).
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("pulse-sound") === "off") setSoundOn(false);
+    } catch {
+      // ignore
+    }
+    const unlock = () => {
+      try {
+        if (!audioRef.current) audioRef.current = new window.AudioContext();
+        void audioRef.current.resume().catch(() => {});
+      } catch {
+        // ignore
+      }
+    };
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+
+  useEffect(() => {
+    soundOnRef.current = soundOn;
+  }, [soundOn]);
+
+  function toggleSound() {
+    setSoundOn((on) => {
+      const next = !on;
+      try {
+        localStorage.setItem("pulse-sound", next ? "on" : "off");
+      } catch {
+        // ignore
+      }
+      // Play a quick preview when switching on (this click also unlocks audio).
+      if (next && typeof window !== "undefined") {
+        try {
+          if (!audioRef.current) audioRef.current = new window.AudioContext();
+          playGentleChime(audioRef.current);
+        } catch {
+          // ignore
+        }
+      }
+      return next;
+    });
+  }
 
   async function enableDesktop() {
     if (typeof window === "undefined" || !("Notification" in window)) return;
@@ -186,6 +272,18 @@ export function NotificationBell() {
                 </button>
               ))
             )}
+          </div>
+          <div className="flex items-center justify-between border-t border-pulse-border px-3 py-2">
+            <span className="text-[11px] text-pulse-text-mute">
+              Notification sound
+            </span>
+            <button
+              type="button"
+              onClick={toggleSound}
+              className="text-[11px] text-pulse-gold hover:underline"
+            >
+              {soundOn ? "On" : "Off"}
+            </button>
           </div>
           {perm !== "unsupported" && (
             <div className="border-t border-pulse-border px-3 py-2">
