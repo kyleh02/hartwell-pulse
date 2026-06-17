@@ -22,7 +22,12 @@ export const metadata: Metadata = {
   },
   description:
     "Your marketing, in one place. Check the pulse of your campaigns with Hartwell Digital.",
-  icons: { icon: "/favicon.ico" },
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+  },
 };
 
 export const viewport: Viewport = {
