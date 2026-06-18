@@ -33,11 +33,6 @@ export async function sendInvoiceWith(
   if (!inv) throw new Error("Invoice not found");
   const invoice = inv as Invoice;
 
-  await supabase
-    .from("invoices")
-    .update({ status: "sent", sent_at: new Date().toISOString() })
-    .eq("id", invoiceId);
-
   const [{ data: clientRow }, { data: settings }, { data: users }] =
     await Promise.all([
       supabase
@@ -115,4 +110,12 @@ export async function sendInvoiceWith(
       });
     }
   }
+
+  // Flip to "sent" only after the email + notifications have been dispatched, so
+  // a hard failure mid-send leaves the invoice as a draft. The recurring cron
+  // re-attempts the send for an existing un-sent invoice rather than skipping it.
+  await supabase
+    .from("invoices")
+    .update({ status: "sent", sent_at: new Date().toISOString() })
+    .eq("id", invoiceId);
 }

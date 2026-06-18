@@ -10,10 +10,24 @@ function fmt(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-// Daily reconciliation: for every ACTIVE recurring template whose billing day is
-// today, materialise this month's invoice and AUTO-SEND it. Idempotent — the
-// unique (recurring_source_id, recurring_period) index means a duplicate or
-// retried run can never double-bill, and a missed day self-heals the next day.
+// Today's calendar date in the business timezone (QLD — no daylight saving), so a
+// billing day matches what the admin set regardless of the cron's UTC runtime.
+function businessToday(): { y: number; m: number; d: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Australia/Brisbane",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
+  return { y: get("year"), m: get("month"), d: get("day") };
+}
+
+// Daily reconciliation: for every ACTIVE recurring template that is DUE this month
+// and not yet billed, materialise this month's invoice and AUTO-SEND it. "Due" =
+// the billing day has arrived (anchor <= today), so a missed cron day self-heals on
+// the next run; the unique (recurring_source_id, recurring_period) index keeps it to
+// exactly one invoice per template per month.
 export async function GET(req: NextRequest) {
   const auth = cronAuthorized(req);
   if (!auth.ok) {
@@ -24,12 +38,11 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = createAdminSupabase();
-  const now = new Date();
-  const today = now.getDate();
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const period = fmt(new Date(now.getFullYear(), now.getMonth(), 1)); // 1st of this month
+  const { y, m, d } = businessToday();
+  const today = d;
+  const period = fmt(new Date(y, m - 1, 1)); // 1st of this month
+  const issueStr = fmt(new Date(y, m - 1, d));
 
-  // Active templates + their client's lifecycle state (inner join on the client).
   const { data: templates, error: tErr } = await supabase
     .from("invoices")
     .select("*, clients!inner(status, deleted_at)")
@@ -62,19 +75,21 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      // Billing-day check, with a last-day fallback so an anchor never overshoots
-      // a short month (shouldn't happen given the 1..28 cap, but safe).
       const anchor = t.recurring_anchor_day ?? Number(t.issue_date.slice(8, 10));
-      const dueToday = anchor === today || (today === lastDay && anchor > lastDay);
-      if (!dueToday) {
-        results.push({ template: t.id, status: "not-due-today" });
+      const anchorDateStr = fmt(new Date(y, m - 1, anchor)); // this month's billing day
+      // Due once the billing day has arrived this month (<= today, so a missed day
+      // self-heals on a later run), but never back-bill a period whose billing day
+      // predates when the template was set up.
+      const dueNow = today >= anchor && anchorDateStr >= t.issue_date.slice(0, 10);
+      if (!dueNow) {
+        results.push({ template: t.id, status: "not-due" });
         continue;
       }
 
       const { data: number, error: numErr } = await supabase.rpc("next_invoice_number");
       if (numErr || !number) throw new Error(numErr?.message ?? "no invoice number");
 
-      const due = new Date(now);
+      const due = new Date(y, m - 1, d);
       due.setDate(due.getDate() + terms);
 
       // Dedup: the unique index makes a repeat insert for (template, period) fail
@@ -85,7 +100,7 @@ export async function GET(req: NextRequest) {
           client_id: t.client_id,
           invoice_number: number as unknown as string,
           status: "draft",
-          issue_date: fmt(now),
+          issue_date: issueStr,
           due_date: fmt(due),
           gst_mode: t.gst_mode,
           subtotal: t.subtotal,
@@ -101,13 +116,25 @@ export async function GET(req: NextRequest) {
         .single();
 
       if (insErr) {
-        results.push({
-          template: t.id,
-          status:
-            (insErr as { code?: string }).code === "23505"
-              ? "already-billed"
-              : `error:${insErr.message}`,
-        });
+        if ((insErr as { code?: string }).code === "23505") {
+          // Already created this period. If a prior run created it but never
+          // finished sending (still a draft), finish the send now; else it's done.
+          const { data: existing } = await supabase
+            .from("invoices")
+            .select("id, status")
+            .eq("recurring_source_id", t.id)
+            .eq("recurring_period", period)
+            .maybeSingle();
+          const ex = existing as { id: string; status: string } | null;
+          if (ex && ex.status === "draft") {
+            await sendInvoiceWith(supabase, ex.id, { adminNotice: true });
+            results.push({ template: t.id, status: "recovered-send" });
+          } else {
+            results.push({ template: t.id, status: "already-billed" });
+          }
+        } else {
+          results.push({ template: t.id, status: `error:${insErr.message}` });
+        }
         continue;
       }
 
@@ -127,8 +154,8 @@ export async function GET(req: NextRequest) {
       }));
       if (rows.length > 0) await supabase.from("invoice_line_items").insert(rows);
 
-      // Reuse the exact manual-send path (status -> sent, email, notify) and add
-      // an admin heads-up so the auto-send isn't silent.
+      // Reuse the manual-send path (email, notify, then status -> sent) and add an
+      // admin heads-up so the auto-send isn't silent.
       await sendInvoiceWith(supabase, newId, { adminNotice: true });
       results.push({ template: t.id, status: "sent" });
     } catch (e) {
