@@ -4,14 +4,9 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getPulseSession } from "@/lib/auth/session";
 import { createServerSupabase } from "@/lib/supabase/server";
-import {
-  computeTotals,
-  lineAmount,
-  formatMoney,
-  DEFAULT_INVOICE_EMAIL,
-} from "@/lib/invoices-shared";
-import { sendEmail, emailLayout, renderMessage } from "@/lib/email";
-import type { GstMode, Invoice, InvoiceStatus } from "@/lib/types/database";
+import { computeTotals, lineAmount } from "@/lib/invoices-shared";
+import { sendInvoiceWith } from "@/lib/invoices-send";
+import type { GstMode, InvoiceStatus } from "@/lib/types/database";
 
 async function adminSupabase() {
   const session = await getPulseSession();
@@ -21,13 +16,6 @@ async function adminSupabase() {
 
 function fmtDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-function prettyDate(iso: string): string {
-  return new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString("en-AU", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
 }
 
 export async function createInvoice(clientId: string) {
@@ -41,10 +29,10 @@ export async function createInvoice(clientId: string) {
   const terms = (settings as { payment_terms_days?: number } | null)?.payment_terms_days ?? 14;
   const gstMode = ((settings as { gst_mode?: GstMode } | null)?.gst_mode ?? "add") as GstMode;
 
-  const { count } = await supabase
-    .from("invoices")
-    .select("*", { count: "exact", head: true });
-  const number = `INV-${String((count ?? 0) + 1).padStart(4, "0")}`;
+  const { data: number, error: numErr } = await supabase.rpc("next_invoice_number");
+  if (numErr || !number) {
+    throw new Error(numErr?.message ?? "Could not allocate an invoice number");
+  }
 
   const issue = new Date();
   const due = new Date(issue);
@@ -74,7 +62,8 @@ export interface SaveInvoiceInput {
   gst_mode: GstMode;
   notes: string;
   email_message: string;
-  recurring: boolean;
+  recurring_active: boolean;
+  recurring_anchor_day: number;
   lines: { description: string; quantity: number; unit_amount: number }[];
 }
 
@@ -97,7 +86,10 @@ export async function saveInvoice(invoiceId: string, input: SaveInvoiceInput) {
       gst_mode: input.gst_mode,
       notes: input.notes || null,
       email_message: input.email_message || null,
-      recurring: input.recurring,
+      recurring_active: input.recurring_active,
+      recurring_anchor_day: input.recurring_active
+        ? input.recurring_anchor_day
+        : null,
       subtotal: totals.subtotal,
       gst: totals.gst,
       total: totals.total,
@@ -123,81 +115,7 @@ export async function saveInvoice(invoiceId: string, input: SaveInvoiceInput) {
 
 export async function sendInvoice(invoiceId: string) {
   const { supabase } = await adminSupabase();
-  const { data: inv } = await supabase
-    .from("invoices")
-    .select("*")
-    .eq("id", invoiceId)
-    .maybeSingle();
-  if (!inv) throw new Error("Invoice not found");
-  const invoice = inv as Invoice;
-
-  await supabase
-    .from("invoices")
-    .update({ status: "sent", sent_at: new Date().toISOString() })
-    .eq("id", invoiceId);
-
-  const [{ data: clientRow }, { data: settings }, { data: users }] =
-    await Promise.all([
-      supabase
-        .from("clients")
-        .select("business_name")
-        .eq("id", invoice.client_id)
-        .maybeSingle(),
-      supabase
-        .from("business_settings")
-        .select("invoice_email_message")
-        .eq("id", 1)
-        .maybeSingle(),
-      supabase
-        .from("client_users")
-        .select("clerk_user_id, email")
-        .eq("client_id", invoice.client_id)
-        .eq("role", "client"),
-    ]);
-
-  const clientName =
-    (clientRow as { business_name?: string } | null)?.business_name ?? "there";
-  const template =
-    invoice.email_message ||
-    (settings as { invoice_email_message?: string | null } | null)
-      ?.invoice_email_message ||
-    DEFAULT_INVOICE_EMAIL;
-  const messageHtml = renderMessage(template, {
-    client: clientName,
-    invoice: invoice.invoice_number,
-    amount: formatMoney(invoice.total),
-    "due date": prettyDate(invoice.due_date),
-  });
-
-  // Subject keeps the invoice number but not the amount (Kyle's preference).
-  const subject = `New invoice ${invoice.invoice_number}`;
-  const notifTitle = `New invoice ${invoice.invoice_number} for ${formatMoney(invoice.total)}`;
-  const notifBody = `Due ${prettyDate(invoice.due_date)}.`;
-  const now = new Date().toISOString();
-
-  for (const u of (users as { clerk_user_id: string; email: string | null }[] | null) ?? []) {
-    // notification, marked emailed because we send the email here directly
-    await supabase.from("notifications").insert({
-      recipient_user_id: u.clerk_user_id,
-      client_id: invoice.client_id,
-      type: "invoice",
-      title: notifTitle,
-      body: notifBody,
-      link: `/invoices/${invoiceId}`,
-      channel: "instant",
-      emailed_at: now,
-    });
-    if (u.email) {
-      const html = emailLayout(
-        `New invoice — ${invoice.invoice_number}`,
-        messageHtml,
-        "View invoice",
-        `/invoices/${invoiceId}`,
-      );
-      await sendEmail({ to: u.email, subject, html });
-    }
-  }
-
+  await sendInvoiceWith(supabase, invoiceId);
   revalidatePath("/admin/invoices");
   revalidatePath(`/admin/invoices/${invoiceId}`);
 }

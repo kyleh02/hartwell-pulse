@@ -242,6 +242,10 @@ export interface Invoice {
   recurring: boolean;
   reminder_sent_at: string | null;
   email_message: string | null;
+  recurring_active: boolean | null;
+  recurring_anchor_day: number | null;
+  recurring_source_id: string | null;
+  recurring_period: string | null;
   created_at: string;
   updated_at: string;
 }

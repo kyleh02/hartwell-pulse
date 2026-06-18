@@ -136,9 +136,9 @@ export function InvoicesLibrary({
                     <div className="min-w-0">
                       <p className="font-medium text-pulse-text">
                         {inv.client_name}
-                        {inv.recurring && (
+                        {inv.recurring_active && (
                           <span className="data-mono ml-2 text-[10px] uppercase tracking-wider text-pulse-gold">
-                            recurring
+                            retainer
                           </span>
                         )}
                       </p>

@@ -67,7 +67,10 @@ export function InvoiceBuilder({
       business?.invoice_email_message ??
       DEFAULT_INVOICE_EMAIL,
   );
-  const [recurring, setRecurring] = useState(invoice.recurring);
+  const [recurringActive, setRecurringActive] = useState(
+    invoice.recurring_active ?? false,
+  );
+  const [anchorDay, setAnchorDay] = useState(invoice.recurring_anchor_day ?? 1);
   const [status, setStatus] = useState<InvoiceStatus>(invoice.status);
   const [saved, setSaved] = useState(true);
   const [pending, startTransition] = useTransition();
@@ -112,7 +115,8 @@ export function InvoiceBuilder({
       gst_mode: gstMode,
       notes,
       email_message: emailMessage,
-      recurring,
+      recurring_active: recurringActive,
+      recurring_anchor_day: anchorDay,
       lines: lines.map((l) => ({
         description: l.description,
         quantity: Number(l.quantity) || 0,
@@ -213,9 +217,15 @@ export function InvoiceBuilder({
               <Button variant="secondary" size="sm" onClick={save} disabled={pending}>
                 Save
               </Button>
-              <Button size="sm" onClick={send} disabled={pending || lines.length === 0}>
-                <Send size={14} /> Send
-              </Button>
+              {recurringActive ? (
+                <span className="data-mono text-[11px] text-pulse-gold">
+                  auto-sends monthly
+                </span>
+              ) : (
+                <Button size="sm" onClick={send} disabled={pending || lines.length === 0}>
+                  <Send size={14} /> Send
+                </Button>
+              )}
             </>
           ) : status === "sent" ? (
             <>
@@ -283,18 +293,38 @@ export function InvoiceBuilder({
             </select>
           </label>
 
-          <label className="flex items-center gap-2 text-sm text-pulse-text-dim">
-            <input
-              type="checkbox"
-              checked={recurring}
-              disabled={!editable}
-              onChange={(e) => {
-                setRecurring(e.target.checked);
-                touch();
-              }}
-            />
-            Recurring monthly — auto-create next month&apos;s draft
-          </label>
+          <div className="flex flex-col gap-1.5">
+            <label className="flex items-center gap-2 text-sm text-pulse-text-dim">
+              <input
+                type="checkbox"
+                checked={recurringActive}
+                disabled={!editable}
+                onChange={(e) => {
+                  setRecurringActive(e.target.checked);
+                  touch();
+                }}
+              />
+              Recurring monthly — auto-generate and send each month
+            </label>
+            {recurringActive && (
+              <label className="flex items-center gap-2 pl-6 text-xs text-pulse-text-mute">
+                Bill on day
+                <input
+                  type="number"
+                  min={1}
+                  max={28}
+                  value={anchorDay}
+                  disabled={!editable}
+                  onChange={(e) => {
+                    setAnchorDay(Number(e.target.value));
+                    touch();
+                  }}
+                  className={`${fieldCls} w-16 text-right`}
+                />
+                of each month (auto-sends until you switch this off)
+              </label>
+            )}
+          </div>
 
           <div className="rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-3">
             <p className="mono-label mb-2">Line items</p>
