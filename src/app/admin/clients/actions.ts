@@ -189,3 +189,29 @@ export async function restoreClient(clientId: string) {
   if (error) throw new Error(error.message);
   revalidatePath("/admin/clients");
 }
+
+/**
+ * Edit a client's company details. The business name is read live everywhere
+ * (invoices, assets, dashboards), so changing it here renames the client across
+ * the whole portal. The slug stays fixed — it's a stable internal identifier, not
+ * a display name. Admin only.
+ */
+export async function updateClient(
+  clientId: string,
+  input: { businessName: string; serviceTier: string },
+): Promise<void> {
+  await requireAdmin();
+  const businessName = input.businessName.trim();
+  const serviceTier = input.serviceTier.trim() || "growth";
+  if (!businessName) throw new Error("Business name is required.");
+
+  const supabase = createAdminSupabase();
+  const { error } = await supabase
+    .from("clients")
+    .update({ business_name: businessName, service_tier: serviceTier })
+    .eq("id", clientId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/admin/clients");
+  revalidatePath("/admin");
+}

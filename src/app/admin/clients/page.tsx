@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/Badge";
 import { buttonClasses } from "@/components/ui/Button";
 import { NewClientForm } from "@/components/admin/NewClientForm";
 import { ClientActions } from "@/components/admin/ClientActions";
+import { EditClientForm } from "@/components/admin/EditClientForm";
 
 export const metadata = { title: "Clients" };
 
@@ -150,12 +151,19 @@ function ClientCard({ client: c, section }: { client: Client; section: Section }
       <p className="data-mono mt-1 text-xs text-pulse-text-mute">{c.service_tier}</p>
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {section !== "deleted" && (
-          <Link
-            href={`/admin/clients/${c.id}/preview`}
-            className={buttonClasses("secondary", "sm")}
-          >
-            Preview
-          </Link>
+          <>
+            <Link
+              href={`/admin/clients/${c.id}/preview`}
+              className={buttonClasses("secondary", "sm")}
+            >
+              Preview
+            </Link>
+            <EditClientForm
+              clientId={c.id}
+              businessName={c.business_name}
+              serviceTier={c.service_tier}
+            />
+          </>
         )}
         <ClientActions
           clientId={c.id}
