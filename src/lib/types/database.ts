@@ -161,7 +161,53 @@ export interface AssetFolder {
   client_id: string;
   parent_id: string | null;
   name: string;
+  client_editable: boolean;
   created_by: string | null;
+  created_at: string;
+}
+
+export interface Share {
+  id: string;
+  client_id: string;
+  asset_id: string | null;
+  folder_id: string | null;
+  created_by: string;
+  access: "view";
+  require_login: boolean;
+  expires_at: string | null;
+  max_uses: number | null;
+  use_count: number;
+  revoked_at: string | null;
+  last_accessed_at: string | null;
+  created_at: string;
+}
+
+export type CopyDocStatus =
+  | "draft"
+  | "submitted"
+  | "approved"
+  | "changes_requested";
+
+export interface CopyDocument {
+  id: string;
+  client_id: string;
+  folder_id: string | null;
+  title: string;
+  body_json: unknown;
+  body_html: string | null;
+  review_note: string | null;
+  status: CopyDocStatus;
+  created_by: string;
+  updated_at: string;
+  created_at: string;
+}
+
+export interface CopyDocumentVersion {
+  id: string;
+  document_id: string;
+  body_json: unknown;
+  label: string | null;
+  created_by: string;
   created_at: string;
 }
 

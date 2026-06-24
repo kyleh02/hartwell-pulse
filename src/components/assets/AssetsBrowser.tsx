@@ -10,6 +10,7 @@ import {
   ChevronRight,
   MoreVertical,
   Home,
+  EyeOff,
 } from "lucide-react";
 import { useSupabaseClient } from "@/lib/supabase/client";
 import type { AssetFolder } from "@/lib/types/database";
@@ -17,7 +18,8 @@ import type { FolderView } from "@/lib/folders";
 import type { AssetWithUrl } from "@/lib/assets-shared";
 import { TAG_TONE, formatBytes, isImageMime } from "@/lib/assets-shared";
 import { AssetUploader } from "@/components/assets/AssetUploader";
-import { AssetDetail } from "@/components/assets/AssetDetail";
+import { AssetViewer } from "@/components/assets/AssetViewer";
+import { createShare } from "@/lib/actions/shares";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils/cn";
@@ -80,10 +82,11 @@ export function AssetsBrowser({
 }) {
   const supabase = useSupabaseClient();
   const router = useRouter();
-  const [selected, setSelected] = useState<AssetWithUrl | null>(null);
+  const [viewerId, setViewerId] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [moving, setMoving] = useState<AssetFolder | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
 
   const base = role === "admin" ? "/admin/assets" : "/assets";
   const clientParam = role === "admin" ? clientId : null;
@@ -153,6 +156,24 @@ export function AssetsBrowser({
     const { error: e } = await supabase
       .from("asset_folders")
       .update({ parent_id: targetId })
+      .eq("id", f.id);
+    if (e) return setError(describeError(e));
+    router.refresh();
+  }
+
+  async function shareFolder(f: AssetFolder) {
+    setMenuFor(null);
+    setError(null);
+    const res = await createShare({ folderId: f.id, expiresInDays: 7 });
+    if (res.ok) setShareUrl(`${window.location.origin}/share/${res.token}`);
+    else setError(res.error);
+  }
+
+  async function toggleFolderEditable(f: AssetFolder) {
+    setMenuFor(null);
+    const { error: e } = await supabase
+      .from("asset_folders")
+      .update({ client_editable: !f.client_editable })
       .eq("id", f.id);
     if (e) return setError(describeError(e));
     router.refresh();
@@ -238,10 +259,15 @@ export function AssetsBrowser({
               <div key={f.id} className="relative">
                 <Link
                   href={buildHref(base, clientParam, f.id)}
-                  className="flex items-center gap-2.5 rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-3 transition-colors hover:border-pulse-border-strong"
+                  className="flex items-center gap-2.5 rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-3 pr-8 transition-colors hover:border-pulse-border-strong"
                 >
                   <Folder size={18} className="shrink-0 text-pulse-gold" />
-                  <span className="truncate text-sm text-pulse-text">{f.name}</span>
+                  <span className="flex-1 truncate text-sm text-pulse-text">
+                    {f.name}
+                  </span>
+                  {!f.client_editable && (
+                    <EyeOff size={13} className="shrink-0 text-pulse-text-mute" />
+                  )}
                 </Link>
                 <button
                   type="button"
@@ -279,6 +305,22 @@ export function AssetsBrowser({
                     </button>
                     <button
                       type="button"
+                      onClick={() => shareFolder(f)}
+                      className="block w-full px-3 py-1.5 text-left text-xs text-pulse-text-dim hover:bg-pulse-surface hover:text-pulse-text"
+                    >
+                      Share
+                    </button>
+                    {role === "admin" && (
+                      <button
+                        type="button"
+                        onClick={() => toggleFolderEditable(f)}
+                        className="block w-full px-3 py-1.5 text-left text-xs text-pulse-text-dim hover:bg-pulse-surface hover:text-pulse-text"
+                      >
+                        {f.client_editable ? "Make view-only" : "Make editable"}
+                      </button>
+                    )}
+                    <button
+                      type="button"
                       onClick={() => deleteFolder(f)}
                       className="block w-full px-3 py-1.5 text-left text-xs text-pulse-danger hover:bg-pulse-surface"
                     >
@@ -313,14 +355,14 @@ export function AssetsBrowser({
                   <button
                     key={a.id}
                     type="button"
-                    onClick={() => setSelected(a)}
+                    onClick={() => setViewerId(a.id)}
                     className="group text-left"
                   >
                     <div className="aspect-square overflow-hidden rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface-2">
-                      {a.url && (
+                      {(a.thumb_url || a.url) && (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={a.url}
+                          src={a.thumb_url ?? a.url ?? ""}
                           alt={a.name}
                           loading="lazy"
                           className="h-full w-full object-cover transition-opacity group-hover:opacity-90"
@@ -345,7 +387,7 @@ export function AssetsBrowser({
                   <button
                     key={a.id}
                     type="button"
-                    onClick={() => setSelected(a)}
+                    onClick={() => setViewerId(a.id)}
                     className="flex w-full items-center gap-3 rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface p-3 text-left transition-colors hover:border-pulse-border-strong"
                   >
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-input)] bg-pulse-surface-2 text-pulse-text-mute">
@@ -415,13 +457,55 @@ export function AssetsBrowser({
         </div>
       )}
 
-      {selected && (
-        <AssetDetail
-          asset={selected}
+      {shareUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            aria-label="Close"
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setShareUrl(null)}
+          />
+          <div className="relative w-full max-w-sm rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-5">
+            <p className="text-sm font-medium text-pulse-text">
+              Share link created
+            </p>
+            <p className="mt-1 text-xs text-pulse-text-mute">
+              Private · sign-in required · expires in 7 days
+            </p>
+            <div className="mt-3 flex items-center gap-1">
+              <input
+                readOnly
+                value={shareUrl}
+                onFocus={(e) => e.currentTarget.select()}
+                className="min-w-0 flex-1 rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 px-2 py-1.5 text-xs text-pulse-text-dim focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => navigator.clipboard?.writeText(shareUrl)}
+                className="shrink-0 rounded-[var(--radius-input)] border border-pulse-border px-3 py-1.5 text-xs text-pulse-gold hover:border-pulse-border-strong"
+              >
+                Copy
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShareUrl(null)}
+              className="mt-4 text-xs text-pulse-text-mute hover:text-pulse-text"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
+      {viewerId && assets.some((a) => a.id === viewerId) && (
+        <AssetViewer
+          assets={assets}
+          index={assets.findIndex((a) => a.id === viewerId)}
+          onIndexChange={(i) => setViewerId(assets[i].id)}
           role={role}
           currentUserId={currentUserId}
           folders={view.allFolders}
-          onClose={() => setSelected(null)}
+          onClose={() => setViewerId(null)}
         />
       )}
     </div>

@@ -12,6 +12,32 @@ function newId() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+/**
+ * Make a small WebP thumbnail in the browser (no paid Supabase transforms, no
+ * Vercel optimiser). Returns null on any failure — thumbnails are best-effort.
+ */
+async function makeThumb(file: File): Promise<Blob | null> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const max = 480;
+    const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * scale));
+    const h = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    bitmap.close?.();
+    return await new Promise((resolve) =>
+      canvas.toBlob((b) => resolve(b), "image/webp", 0.8),
+    );
+  } catch {
+    return null;
+  }
+}
+
 export function AssetUploader({
   clientId,
   role,
@@ -38,8 +64,9 @@ export function AssetUploader({
     setError(null);
     try {
       for (const file of list) {
+        const id = newId();
         const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-        const path = `${clientId}/${folderId ?? "root"}/${newId()}-${safe}`;
+        const path = `${clientId}/${folderId ?? "root"}/${id}-${safe}`;
         const up = await supabase.storage
           .from("pulse-assets")
           .upload(path, file, {
@@ -47,12 +74,26 @@ export function AssetUploader({
           });
         if (up.error) throw new Error(up.error.message);
 
+        // Best-effort thumbnail for images, stored alongside under _thumb/.
+        let thumbPath: string | null = null;
+        if ((file.type || "").startsWith("image/")) {
+          const thumb = await makeThumb(file);
+          if (thumb) {
+            const tp = `${clientId}/_thumb/${id}.webp`;
+            const tup = await supabase.storage
+              .from("pulse-assets")
+              .upload(tp, thumb, { contentType: "image/webp" });
+            if (!tup.error) thumbPath = tp;
+          }
+        }
+
         const ins = await supabase.from("assets").insert({
           client_id: clientId,
           uploaded_by: userId,
           uploader_role: role,
           name: file.name,
           storage_path: path,
+          thumb_path: thumbPath,
           mime_type: file.type || null,
           size_bytes: file.size,
           kind: kindFromMime(file.type),

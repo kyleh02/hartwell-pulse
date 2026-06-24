@@ -4,6 +4,8 @@ import type { Asset } from "@/lib/types/database";
 export interface AssetWithUrl extends Asset {
   /** A short-lived signed URL for previews/downloads (null if unresolved). */
   url: string | null;
+  /** Signed URL for the small WebP thumbnail, if one was generated at upload. */
+  thumb_url: string | null;
   /** Client business name, attached for the admin's all-clients view. */
   client_name?: string | null;
 }
