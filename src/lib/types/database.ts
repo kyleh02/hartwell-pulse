@@ -148,8 +148,20 @@ export interface Asset {
   size_bytes: number | null;
   kind: AssetKind;
   folder: string | null;
+  folder_id: string | null;
+  thumb_path: string | null;
+  locked: boolean;
   tags: string[];
   status: AssetStatus | null;
+  created_at: string;
+}
+
+export interface AssetFolder {
+  id: string;
+  client_id: string;
+  parent_id: string | null;
+  name: string;
+  created_by: string | null;
   created_at: string;
 }
 
