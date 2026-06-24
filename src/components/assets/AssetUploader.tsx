@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { UploadCloud } from "lucide-react";
 import { useSupabaseClient } from "@/lib/supabase/client";
-import { kindFromMime, folderSlug } from "@/lib/assets-shared";
+import { kindFromMime } from "@/lib/assets-shared";
 import { cn } from "@/lib/utils/cn";
 
 function newId() {
@@ -15,11 +15,13 @@ function newId() {
 export function AssetUploader({
   clientId,
   role,
-  folder,
+  folderId,
+  folderName,
 }: {
   clientId: string;
   role: "client" | "admin";
-  folder: string;
+  folderId: string | null;
+  folderName: string;
 }) {
   const supabase = useSupabaseClient();
   const { userId } = useAuth();
@@ -37,7 +39,7 @@ export function AssetUploader({
     try {
       for (const file of list) {
         const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-        const path = `${clientId}/${folderSlug(folder)}/${newId()}-${safe}`;
+        const path = `${clientId}/${folderId ?? "root"}/${newId()}-${safe}`;
         const up = await supabase.storage
           .from("pulse-assets")
           .upload(path, file, {
@@ -54,7 +56,8 @@ export function AssetUploader({
           mime_type: file.type || null,
           size_bytes: file.size,
           kind: kindFromMime(file.type),
-          folder,
+          folder_id: folderId,
+          folder: folderId ? folderName : null,
           tags: [],
         });
         if (ins.error) throw new Error(ins.error.message);
@@ -101,7 +104,7 @@ export function AssetUploader({
         )}
       </p>
       <p className="mt-1 text-xs text-pulse-text-mute">
-        Into {folder} · images, documents and copy
+        Into {folderName} · images, documents and copy
       </p>
       {error && <p className="mt-2 text-xs text-pulse-danger">{error}</p>}
       <input

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { X, Download, Trash2, FileText } from "lucide-react";
 import { useSupabaseClient } from "@/lib/supabase/client";
 import type { AssetWithUrl } from "@/lib/assets-shared";
+import type { AssetFolder } from "@/lib/types/database";
 import {
   ASSET_TAGS,
   TAG_TONE,
@@ -26,11 +27,13 @@ export function AssetDetail({
   asset,
   role,
   currentUserId,
+  folders,
   onClose,
 }: {
   asset: AssetWithUrl;
   role: "client" | "admin";
   currentUserId: string;
+  folders: AssetFolder[];
   onClose: () => void;
 }) {
   const supabase = useSupabaseClient();
@@ -45,6 +48,18 @@ export function AssetDetail({
       : [...tags, tag];
     setTags(next);
     await supabase.from("assets").update({ tags: next }).eq("id", asset.id);
+  }
+
+  async function moveTo(folderId: string | null) {
+    if (!canEdit) return;
+    const name = folderId
+      ? (folders.find((f) => f.id === folderId)?.name ?? null)
+      : null;
+    await supabase
+      .from("assets")
+      .update({ folder_id: folderId, folder: name })
+      .eq("id", asset.id);
+    router.refresh();
   }
 
   async function remove() {
@@ -106,6 +121,24 @@ export function AssetDetail({
               </a>
             )}
           </div>
+
+          {canEdit && (
+            <div>
+              <p className="mono-label mb-2">Folder</p>
+              <select
+                value={asset.folder_id ?? ""}
+                onChange={(e) => moveTo(e.target.value || null)}
+                className="w-full rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 px-3 py-2 text-sm text-pulse-text-dim focus:outline-none"
+              >
+                <option value="">Top level</option>
+                {folders.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <p className="mono-label mb-2">Tags</p>
