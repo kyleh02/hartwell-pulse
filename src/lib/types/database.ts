@@ -291,6 +291,8 @@ export interface Invoice {
   due_date: string;
   gst_mode: GstMode;
   subtotal: number;
+  discount: number;
+  discount_label: string | null;
   gst: number;
   total: number;
   notes: string | null;

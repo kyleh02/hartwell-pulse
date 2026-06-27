@@ -103,6 +103,8 @@ export async function GET(req: NextRequest) {
           issue_date: issueStr,
           due_date: fmt(due),
           gst_mode: t.gst_mode,
+          discount: t.discount,
+          discount_label: t.discount_label,
           subtotal: t.subtotal,
           gst: t.gst,
           total: t.total,

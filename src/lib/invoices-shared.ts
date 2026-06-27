@@ -14,7 +14,10 @@ export interface LineDraft {
 }
 
 export interface InvoiceTotals {
+  /** Gross sum of the line items, before any discount. */
   subtotal: number;
+  /** Discount applied (never more than the subtotal). */
+  discount: number;
   gst: number;
   total: number;
 }
@@ -27,20 +30,29 @@ export function lineAmount(l: { quantity: number; unit_amount: number }): number
   return round((l.quantity || 0) * (l.unit_amount || 0));
 }
 
+/**
+ * Compute the invoice totals. A discount (fixed dollars) comes off the line sum
+ * before GST is worked out, and is capped at the subtotal so a total can never go
+ * negative. `subtotal` is always the gross line sum; the document renders the
+ * discount as its own row.
+ */
 export function computeTotals(
   lines: { quantity: number; unit_amount: number }[],
   gstMode: GstMode,
+  discount = 0,
 ): InvoiceTotals {
-  const sum = lines.reduce((s, l) => s + lineAmount(l), 0);
+  const gross = round(lines.reduce((s, l) => s + lineAmount(l), 0));
+  const disc = round(Math.min(Math.max(discount || 0, 0), gross));
+  const net = round(gross - disc);
   if (gstMode === "add") {
-    const gst = round(sum * 0.1);
-    return { subtotal: round(sum), gst, total: round(sum + gst) };
+    const gst = round(net * 0.1);
+    return { subtotal: gross, discount: disc, gst, total: round(net + gst) };
   }
   if (gstMode === "inclusive") {
-    const gst = round(sum - sum / 1.1);
-    return { subtotal: round(sum - gst), gst, total: round(sum) };
+    const gst = round(net - net / 1.1);
+    return { subtotal: gross, discount: disc, gst, total: net };
   }
-  return { subtotal: round(sum), gst: 0, total: round(sum) };
+  return { subtotal: gross, discount: disc, gst: 0, total: net };
 }
 
 export function formatMoney(n: number): string {

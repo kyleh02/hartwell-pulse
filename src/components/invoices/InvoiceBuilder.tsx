@@ -71,12 +71,14 @@ export function InvoiceBuilder({
     invoice.recurring_active ?? false,
   );
   const [anchorDay, setAnchorDay] = useState(invoice.recurring_anchor_day ?? 1);
+  const [discount, setDiscount] = useState(Number(invoice.discount ?? 0));
+  const [discountLabel, setDiscountLabel] = useState(invoice.discount_label ?? "");
   const [status, setStatus] = useState<InvoiceStatus>(invoice.status);
   const [saved, setSaved] = useState(true);
   const [pending, startTransition] = useTransition();
 
   const editable = status === "draft";
-  const totals = computeTotals(lines, gstMode);
+  const totals = computeTotals(lines, gstMode, discount);
 
   function touch() {
     setSaved(false);
@@ -113,6 +115,8 @@ export function InvoiceBuilder({
       issue_date: issueDate,
       due_date: dueDate,
       gst_mode: gstMode,
+      discount: Number(discount) || 0,
+      discount_label: discountLabel,
       notes,
       email_message: emailMessage,
       recurring_active: recurringActive,
@@ -165,6 +169,8 @@ export function InvoiceBuilder({
       due_date: dueDate,
       gst_mode: gstMode,
       notes: notes || null,
+      discount: totals.discount,
+      discount_label: discountLabel.trim() || null,
       subtotal: totals.subtotal,
       gst: totals.gst,
       total: totals.total,
@@ -400,6 +406,36 @@ export function InvoiceBuilder({
                 )}
               </div>
             )}
+          </div>
+
+          <div className="grid grid-cols-[1fr_8rem] gap-3">
+            <label className="flex flex-col gap-1">
+              <span className="mono-label">Discount label (optional)</span>
+              <input
+                value={discountLabel}
+                disabled={!editable}
+                onChange={(e) => {
+                  setDiscountLabel(e.target.value);
+                  touch();
+                }}
+                placeholder="Website build discount"
+                className={fieldCls}
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="mono-label">Discount ($)</span>
+              <input
+                type="number"
+                min={0}
+                value={discount}
+                disabled={!editable}
+                onChange={(e) => {
+                  setDiscount(Number(e.target.value));
+                  touch();
+                }}
+                className={`${fieldCls} text-right`}
+              />
+            </label>
           </div>
 
           <label className="flex flex-col gap-1">

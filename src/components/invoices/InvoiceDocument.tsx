@@ -100,6 +100,12 @@ export function InvoiceDocument({
             <span>Subtotal</span>
             <span className="data-mono">{formatMoney(invoice.subtotal)}</span>
           </div>
+          {invoice.discount > 0 && (
+            <div className="flex justify-between text-pulse-text-dim">
+              <span>{invoice.discount_label || "Discount"}</span>
+              <span className="data-mono">−{formatMoney(invoice.discount)}</span>
+            </div>
+          )}
           {invoice.gst_mode !== "none" && (
             <div className="flex justify-between text-pulse-text-dim">
               <span>{gstLabel(invoice.gst_mode)}</span>
