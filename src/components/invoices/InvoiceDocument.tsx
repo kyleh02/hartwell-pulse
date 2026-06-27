@@ -20,6 +20,9 @@ export function InvoiceDocument({
 }) {
   const { invoice, client, lines } = bundle;
   const isTaxInvoice = invoice.gst_mode !== "none";
+  // Flat-fee work is almost always qty 1, where Unit == Amount — so show the
+  // Qty/Unit columns only when a line actually has a quantity other than 1.
+  const showRate = lines.some((l) => Number(l.quantity) !== 1);
 
   return (
     <div className="rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-6 sm:p-8">
@@ -62,23 +65,36 @@ export function InvoiceDocument({
       <table className="w-full text-sm">
         <thead>
           <tr className="mono-label border-b border-pulse-border text-left">
-            <th className="py-2 font-medium">Description</th>
-            <th className="py-2 text-right font-medium">Qty</th>
-            <th className="py-2 text-right font-medium">Unit</th>
-            <th className="py-2 text-right font-medium">Amount</th>
+            <th className="w-full py-2 pr-4 font-medium">Description</th>
+            {showRate && (
+              <>
+                <th className="whitespace-nowrap py-2 pl-4 text-right font-medium">
+                  Qty
+                </th>
+                <th className="whitespace-nowrap py-2 pl-4 text-right font-medium">
+                  Unit
+                </th>
+              </>
+            )}
+            <th className="whitespace-nowrap py-2 pl-4 text-right font-medium">
+              Amount
+            </th>
           </tr>
         </thead>
         <tbody>
           {lines.length === 0 ? (
             <tr>
-              <td colSpan={4} className="py-4 text-center text-xs text-pulse-text-mute">
+              <td
+                colSpan={showRate ? 4 : 2}
+                className="py-4 text-center text-xs text-pulse-text-mute"
+              >
                 No line items.
               </td>
             </tr>
           ) : (
             lines.map((l) => (
               <tr key={l.id} className="border-b border-pulse-border">
-                <td className="py-2.5 pr-3 align-top text-pulse-text-dim">
+                <td className="w-full py-2.5 pr-4 align-top text-pulse-text-dim">
                   {l.title && (
                     <span className="block font-medium text-pulse-text">
                       {l.title}
@@ -89,14 +105,18 @@ export function InvoiceDocument({
                   )}
                   {!l.title && !l.description && <span>—</span>}
                 </td>
-                <td className="data-mono py-2.5 text-right align-top text-pulse-text-dim">
-                  {l.quantity}
-                </td>
-                <td className="data-mono py-2.5 text-right align-top text-pulse-text-dim">
-                  {formatMoney(l.unit_amount)}
-                </td>
+                {showRate && (
+                  <>
+                    <td className="data-mono whitespace-nowrap py-2.5 pl-4 text-right align-top text-pulse-text-dim">
+                      {l.quantity}
+                    </td>
+                    <td className="data-mono whitespace-nowrap py-2.5 pl-4 text-right align-top text-pulse-text-dim">
+                      {formatMoney(l.unit_amount)}
+                    </td>
+                  </>
+                )}
                 <td
-                  className={`data-mono py-2.5 text-right align-top ${l.amount < 0 ? "text-pulse-text-mute" : "text-pulse-text"}`}
+                  className={`data-mono whitespace-nowrap py-2.5 pl-4 text-right align-top ${l.amount < 0 ? "text-pulse-text-mute" : "text-pulse-text"}`}
                 >
                   {formatMoney(l.amount)}
                 </td>
