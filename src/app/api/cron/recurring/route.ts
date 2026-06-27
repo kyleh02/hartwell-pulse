@@ -148,6 +148,7 @@ export async function GET(req: NextRequest) {
       const rows = ((lines as InvoiceLineItem[] | null) ?? []).map((l) => ({
         invoice_id: newId,
         client_id: t.client_id,
+        title: l.title,
         description: l.description,
         quantity: l.quantity,
         unit_amount: l.unit_amount,

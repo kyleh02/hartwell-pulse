@@ -78,8 +78,16 @@ export function InvoiceDocument({
           ) : (
             lines.map((l) => (
               <tr key={l.id} className="border-b border-pulse-border">
-                <td className="py-2.5 pr-3 align-top whitespace-pre-wrap text-pulse-text-dim">
-                  {l.description}
+                <td className="py-2.5 pr-3 align-top text-pulse-text-dim">
+                  {l.title && (
+                    <span className="block font-medium text-pulse-text">
+                      {l.title}
+                    </span>
+                  )}
+                  {l.description && (
+                    <span className="block whitespace-pre-wrap">{l.description}</span>
+                  )}
+                  {!l.title && !l.description && <span>—</span>}
                 </td>
                 <td className="data-mono py-2.5 text-right align-top text-pulse-text-dim">
                   {l.quantity}

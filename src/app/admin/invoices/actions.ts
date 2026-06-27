@@ -64,7 +64,12 @@ export interface SaveInvoiceInput {
   email_message: string;
   recurring_active: boolean;
   recurring_anchor_day: number;
-  lines: { description: string; quantity: number; unit_amount: number }[];
+  lines: {
+    title: string;
+    description: string;
+    quantity: number;
+    unit_amount: number;
+  }[];
 }
 
 export async function saveInvoice(invoiceId: string, input: SaveInvoiceInput) {
@@ -102,6 +107,7 @@ export async function saveInvoice(invoiceId: string, input: SaveInvoiceInput) {
     const rows = input.lines.map((l, i) => ({
       invoice_id: invoiceId,
       client_id: clientId,
+      title: l.title.trim() || null,
       description: l.description,
       quantity: l.quantity,
       unit_amount: l.unit_amount,

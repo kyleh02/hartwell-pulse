@@ -314,6 +314,7 @@ export interface InvoiceLineItem {
   id: string;
   invoice_id: string;
   client_id: string;
+  title: string | null;
   description: string;
   quantity: number;
   unit_amount: number;

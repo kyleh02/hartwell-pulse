@@ -52,6 +52,7 @@ export function InvoiceBuilder({
   const [lines, setLines] = useState<LineDraft[]>(() =>
     bundle.lines.map((l) => ({
       id: l.id,
+      title: l.title ?? "",
       description: l.description,
       quantity: Number(l.quantity),
       unit_amount: Number(l.unit_amount),
@@ -82,14 +83,17 @@ export function InvoiceBuilder({
     setSaved(false);
   }
   function addBlank() {
-    setLines((p) => [...p, { id: newId(), description: "", quantity: 1, unit_amount: 0 }]);
+    setLines((p) => [
+      ...p,
+      { id: newId(), title: "", description: "", quantity: 1, unit_amount: 0 },
+    ]);
     touch();
   }
   function addDiscount() {
     // A discount is just a line with a negative amount — enter the amount as e.g. -500.
     setLines((p) => [
       ...p,
-      { id: newId(), description: "Discount", quantity: 1, unit_amount: 0 },
+      { id: newId(), title: "Discount", description: "", quantity: 1, unit_amount: 0 },
     ]);
     touch();
   }
@@ -100,7 +104,8 @@ export function InvoiceBuilder({
       ...p,
       {
         id: newId(),
-        description: it.tier ? `${it.name} — ${it.tier}` : it.name,
+        title: it.name,
+        description: it.tier ?? "",
         quantity: 1,
         unit_amount: Number(it.default_amount),
       },
@@ -126,6 +131,7 @@ export function InvoiceBuilder({
       recurring_active: recurringActive,
       recurring_anchor_day: anchorDay,
       lines: lines.map((l) => ({
+        title: l.title,
         description: l.description,
         quantity: Number(l.quantity) || 0,
         unit_amount: Number(l.unit_amount) || 0,
@@ -184,7 +190,8 @@ export function InvoiceBuilder({
       id: l.id,
       invoice_id: invoice.id,
       client_id: bundle.client.id,
-      description: l.description || "—",
+      title: l.title || null,
+      description: l.description,
       quantity: Number(l.quantity) || 0,
       unit_amount: Number(l.unit_amount) || 0,
       amount: lineAmount(l),
@@ -341,17 +348,24 @@ export function InvoiceBuilder({
               {lines.map((l) => (
                 <div
                   key={l.id}
-                  className="rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2/30 p-2"
+                  className="space-y-2 rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2/30 p-2"
                 >
+                  <input
+                    value={l.title}
+                    disabled={!editable}
+                    onChange={(e) => updateLine(l.id, { title: e.target.value })}
+                    placeholder="Title — e.g. Custom website design & build"
+                    className={`${fieldCls} w-full font-medium`}
+                  />
                   <textarea
                     value={l.description}
                     disabled={!editable}
                     onChange={(e) => updateLine(l.id, { description: e.target.value })}
-                    placeholder="Describe the work — what they're getting and why it's worth it. Be specific; this shows on the invoice."
+                    placeholder="Description (optional) — what they're getting and why it's worth it. Shows beneath the title."
                     rows={2}
                     className={`${fieldCls} w-full resize-y`}
                   />
-                  <div className="mt-2 flex items-center justify-end gap-2">
+                  <div className="flex items-center justify-end gap-2">
                     <span className="mono-label">Qty</span>
                     <input
                       type="number"

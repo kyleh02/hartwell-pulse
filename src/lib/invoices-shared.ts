@@ -8,6 +8,7 @@ export const DEFAULT_INVOICE_EMAIL =
 
 export interface LineDraft {
   id: string;
+  title: string;
   description: string;
   quantity: number;
   unit_amount: number;
