@@ -336,41 +336,51 @@ export function InvoiceBuilder({
             <p className="mono-label mb-2">Line items</p>
             <div className="space-y-2">
               {lines.map((l) => (
-                <div key={l.id} className="flex items-center gap-2">
-                  <input
+                <div
+                  key={l.id}
+                  className="rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2/30 p-2"
+                >
+                  <textarea
                     value={l.description}
                     disabled={!editable}
                     onChange={(e) => updateLine(l.id, { description: e.target.value })}
-                    placeholder="Description"
-                    className={`${fieldCls} flex-1`}
+                    placeholder="Describe the work — what they're getting and why it's worth it. Be specific; this shows on the invoice."
+                    rows={2}
+                    className={`${fieldCls} w-full resize-y`}
                   />
-                  <input
-                    type="number"
-                    value={l.quantity}
-                    disabled={!editable}
-                    onChange={(e) => updateLine(l.id, { quantity: Number(e.target.value) })}
-                    className={`${fieldCls} w-14 text-right`}
-                  />
-                  <input
-                    type="number"
-                    value={l.unit_amount}
-                    disabled={!editable}
-                    onChange={(e) => updateLine(l.id, { unit_amount: Number(e.target.value) })}
-                    className={`${fieldCls} w-24 text-right`}
-                  />
-                  <span className="data-mono w-24 text-right text-sm text-pulse-text">
-                    {formatMoney(lineAmount(l))}
-                  </span>
-                  {editable && (
-                    <button
-                      type="button"
-                      onClick={() => removeLine(l.id)}
-                      aria-label="Remove line"
-                      className="text-pulse-text-mute hover:text-pulse-danger"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
+                  <div className="mt-2 flex items-center justify-end gap-2">
+                    <span className="mono-label">Qty</span>
+                    <input
+                      type="number"
+                      value={l.quantity}
+                      disabled={!editable}
+                      onChange={(e) => updateLine(l.id, { quantity: Number(e.target.value) })}
+                      className={`${fieldCls} w-14 text-right`}
+                    />
+                    <span className="mono-label">Unit</span>
+                    <input
+                      type="number"
+                      value={l.unit_amount}
+                      disabled={!editable}
+                      onChange={(e) =>
+                        updateLine(l.id, { unit_amount: Number(e.target.value) })
+                      }
+                      className={`${fieldCls} w-24 text-right`}
+                    />
+                    <span className="data-mono w-24 text-right text-sm text-pulse-text">
+                      {formatMoney(lineAmount(l))}
+                    </span>
+                    {editable && (
+                      <button
+                        type="button"
+                        onClick={() => removeLine(l.id)}
+                        aria-label="Remove line"
+                        className="text-pulse-text-mute hover:text-pulse-danger"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
