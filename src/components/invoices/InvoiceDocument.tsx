@@ -87,7 +87,9 @@ export function InvoiceDocument({
                 <td className="data-mono py-2.5 text-right align-top text-pulse-text-dim">
                   {formatMoney(l.unit_amount)}
                 </td>
-                <td className="data-mono py-2.5 text-right align-top text-pulse-text">
+                <td
+                  className={`data-mono py-2.5 text-right align-top ${l.amount < 0 ? "text-pulse-text-mute" : "text-pulse-text"}`}
+                >
                   {formatMoney(l.amount)}
                 </td>
               </tr>

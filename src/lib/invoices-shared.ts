@@ -14,9 +14,9 @@ export interface LineDraft {
 }
 
 export interface InvoiceTotals {
-  /** Gross sum of the line items, before any discount. */
+  /** Sum of the charge (positive) lines, before discounts. */
   subtotal: number;
-  /** Discount applied (never more than the subtotal). */
+  /** Total of the discount (negative) lines, as a positive number. */
   discount: number;
   gst: number;
   total: number;
@@ -31,28 +31,35 @@ export function lineAmount(l: { quantity: number; unit_amount: number }): number
 }
 
 /**
- * Compute the invoice totals. A discount (fixed dollars) comes off the line sum
- * before GST is worked out, and is capped at the subtotal so a total can never go
- * negative. `subtotal` is always the gross line sum; the document renders the
- * discount as its own row.
+ * Compute the invoice totals. Discounts are entered as negative line items, so we
+ * split the lines: positive amounts make up the subtotal of charges, negative
+ * amounts sum into the discount. GST is worked out on the net, and the discount is
+ * capped at the subtotal so a total can never go negative. The document shows the
+ * discount lines in the table AND a netted Discount row in the totals.
  */
 export function computeTotals(
   lines: { quantity: number; unit_amount: number }[],
   gstMode: GstMode,
-  discount = 0,
 ): InvoiceTotals {
-  const gross = round(lines.reduce((s, l) => s + lineAmount(l), 0));
-  const disc = round(Math.min(Math.max(discount || 0, 0), gross));
-  const net = round(gross - disc);
+  let charges = 0;
+  let discounts = 0;
+  for (const l of lines) {
+    const amt = lineAmount(l);
+    if (amt < 0) discounts += -amt;
+    else charges += amt;
+  }
+  const subtotal = round(charges);
+  const disc = round(Math.min(discounts, charges));
+  const net = round(subtotal - disc);
   if (gstMode === "add") {
     const gst = round(net * 0.1);
-    return { subtotal: gross, discount: disc, gst, total: round(net + gst) };
+    return { subtotal, discount: disc, gst, total: round(net + gst) };
   }
   if (gstMode === "inclusive") {
     const gst = round(net - net / 1.1);
-    return { subtotal: gross, discount: disc, gst, total: net };
+    return { subtotal, discount: disc, gst, total: net };
   }
-  return { subtotal: gross, discount: disc, gst: 0, total: net };
+  return { subtotal, discount: disc, gst: 0, total: net };
 }
 
 export function formatMoney(n: number): string {

@@ -60,8 +60,6 @@ export interface SaveInvoiceInput {
   issue_date: string;
   due_date: string;
   gst_mode: GstMode;
-  discount: number;
-  discount_label: string;
   notes: string;
   email_message: string;
   recurring_active: boolean;
@@ -79,7 +77,7 @@ export async function saveInvoice(invoiceId: string, input: SaveInvoiceInput) {
   if (!inv) throw new Error("Invoice not found");
   const clientId = (inv as { client_id: string }).client_id;
 
-  const totals = computeTotals(input.lines, input.gst_mode, input.discount);
+  const totals = computeTotals(input.lines, input.gst_mode);
   await supabase
     .from("invoices")
     .update({
@@ -93,7 +91,6 @@ export async function saveInvoice(invoiceId: string, input: SaveInvoiceInput) {
         ? input.recurring_anchor_day
         : null,
       discount: totals.discount,
-      discount_label: input.discount_label.trim() || null,
       subtotal: totals.subtotal,
       gst: totals.gst,
       total: totals.total,

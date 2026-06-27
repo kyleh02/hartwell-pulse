@@ -71,20 +71,26 @@ export function InvoiceBuilder({
     invoice.recurring_active ?? false,
   );
   const [anchorDay, setAnchorDay] = useState(invoice.recurring_anchor_day ?? 1);
-  const [discount, setDiscount] = useState(Number(invoice.discount ?? 0));
-  const [discountLabel, setDiscountLabel] = useState(invoice.discount_label ?? "");
   const [status, setStatus] = useState<InvoiceStatus>(invoice.status);
   const [saved, setSaved] = useState(true);
   const [pending, startTransition] = useTransition();
 
   const editable = status === "draft";
-  const totals = computeTotals(lines, gstMode, discount);
+  const totals = computeTotals(lines, gstMode);
 
   function touch() {
     setSaved(false);
   }
   function addBlank() {
     setLines((p) => [...p, { id: newId(), description: "", quantity: 1, unit_amount: 0 }]);
+    touch();
+  }
+  function addDiscount() {
+    // A discount is just a line with a negative amount — enter the amount as e.g. -500.
+    setLines((p) => [
+      ...p,
+      { id: newId(), description: "Discount", quantity: 1, unit_amount: 0 },
+    ]);
     touch();
   }
   function addFromCatalogue(itemId: string) {
@@ -115,8 +121,6 @@ export function InvoiceBuilder({
       issue_date: issueDate,
       due_date: dueDate,
       gst_mode: gstMode,
-      discount: Number(discount) || 0,
-      discount_label: discountLabel,
       notes,
       email_message: emailMessage,
       recurring_active: recurringActive,
@@ -170,7 +174,6 @@ export function InvoiceBuilder({
       gst_mode: gstMode,
       notes: notes || null,
       discount: totals.discount,
-      discount_label: discountLabel.trim() || null,
       subtotal: totals.subtotal,
       gst: totals.gst,
       total: totals.total,
@@ -394,6 +397,13 @@ export function InvoiceBuilder({
                 >
                   <Plus size={13} /> Line
                 </button>
+                <button
+                  type="button"
+                  onClick={addDiscount}
+                  className="inline-flex items-center gap-1 rounded-[var(--radius-input)] border border-dashed border-pulse-border px-2.5 py-1.5 text-xs text-pulse-text-dim hover:text-pulse-text"
+                >
+                  <Plus size={13} /> Discount
+                </button>
                 {pricingItems.length > 0 && (
                   <select
                     value=""
@@ -416,36 +426,6 @@ export function InvoiceBuilder({
                 )}
               </div>
             )}
-          </div>
-
-          <div className="grid grid-cols-[1fr_8rem] gap-3">
-            <label className="flex flex-col gap-1">
-              <span className="mono-label">Discount label (optional)</span>
-              <input
-                value={discountLabel}
-                disabled={!editable}
-                onChange={(e) => {
-                  setDiscountLabel(e.target.value);
-                  touch();
-                }}
-                placeholder="Website build discount"
-                className={fieldCls}
-              />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="mono-label">Discount ($)</span>
-              <input
-                type="number"
-                min={0}
-                value={discount}
-                disabled={!editable}
-                onChange={(e) => {
-                  setDiscount(Number(e.target.value));
-                  touch();
-                }}
-                className={`${fieldCls} text-right`}
-              />
-            </label>
           </div>
 
           <label className="flex flex-col gap-1">
