@@ -30,16 +30,21 @@ create index if not exists shares_token_idx on public.shares(token_hash);
 grant select, insert, update, delete on public.shares to authenticated;
 alter table public.shares enable row level security;
 
+drop policy if exists shares_admin_all on public.shares;
 create policy shares_admin_all on public.shares
   for all to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists shares_client_read on public.shares;
 create policy shares_client_read on public.shares
   for select to authenticated using (client_id = public.current_client_id());
+drop policy if exists shares_client_insert on public.shares;
 create policy shares_client_insert on public.shares
   for insert to authenticated
   with check (client_id = public.current_client_id() and created_by = public.clerk_user_id());
+drop policy if exists shares_client_update on public.shares;
 create policy shares_client_update on public.shares
   for update to authenticated
   using (client_id = public.current_client_id())
   with check (client_id = public.current_client_id());
+drop policy if exists shares_client_delete on public.shares;
 create policy shares_client_delete on public.shares
   for delete to authenticated using (client_id = public.current_client_id());

@@ -37,21 +37,27 @@ grant select, insert, update, delete on public.copy_document_versions to authent
 alter table public.copy_documents enable row level security;
 alter table public.copy_document_versions enable row level security;
 
+drop policy if exists copy_docs_admin_all on public.copy_documents;
 create policy copy_docs_admin_all on public.copy_documents
   for all to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists copy_docs_client_read on public.copy_documents;
 create policy copy_docs_client_read on public.copy_documents
   for select to authenticated using (client_id = public.current_client_id());
+drop policy if exists copy_docs_client_write on public.copy_documents;
 create policy copy_docs_client_write on public.copy_documents
   for all to authenticated
   using (client_id = public.current_client_id())
   with check (client_id = public.current_client_id());
 
+drop policy if exists copy_ver_admin_all on public.copy_document_versions;
 create policy copy_ver_admin_all on public.copy_document_versions
   for all to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists copy_ver_client_read on public.copy_document_versions;
 create policy copy_ver_client_read on public.copy_document_versions
   for select to authenticated
   using (exists (select 1 from public.copy_documents d
                  where d.id = document_id and d.client_id = public.current_client_id()));
+drop policy if exists copy_ver_client_insert on public.copy_document_versions;
 create policy copy_ver_client_insert on public.copy_document_versions
   for insert to authenticated
   with check (exists (select 1 from public.copy_documents d
