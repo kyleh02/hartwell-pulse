@@ -198,17 +198,21 @@ export async function restoreClient(clientId: string) {
  */
 export async function updateClient(
   clientId: string,
-  input: { businessName: string; serviceTier: string },
+  input: { businessName: string; serviceTier: string; status: string },
 ): Promise<void> {
   await requireAdmin();
   const businessName = input.businessName.trim();
   const serviceTier = input.serviceTier.trim() || "growth";
+  const status = input.status;
   if (!businessName) throw new Error("Business name is required.");
+  if (!["onboarding", "active", "paused"].includes(status)) {
+    throw new Error("Invalid status.");
+  }
 
   const supabase = createAdminSupabase();
   const { error } = await supabase
     .from("clients")
-    .update({ business_name: businessName, service_tier: serviceTier })
+    .update({ business_name: businessName, service_tier: serviceTier, status })
     .eq("id", clientId);
   if (error) throw new Error(error.message);
 

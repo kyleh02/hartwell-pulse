@@ -55,6 +55,8 @@ export function ChatThread({
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const didInitialScroll = useRef(false);
 
   const load = useCallback(async () => {
     const [{ data: msgs }, { data: rx }] = await Promise.all([
@@ -111,7 +113,16 @@ export function ChatThread({
   }, [load]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messages.length > 0) {
+      const el = listRef.current;
+      if (el && !didInitialScroll.current) {
+        // Open pinned to the very bottom (newest message), instantly — no animation.
+        el.scrollTop = el.scrollHeight;
+      } else {
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      }
+      didInitialScroll.current = true;
+    }
     // Mark messages read on open and whenever new ones arrive while you're here.
     void markRead();
   }, [messages.length, markRead]);
@@ -210,7 +221,7 @@ export function ChatThread({
 
   return (
     <div className="flex h-[72vh] flex-col overflow-hidden rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface">
-      <div className="flex-1 space-y-4 overflow-y-auto p-4">
+      <div ref={listRef} className="flex-1 space-y-4 overflow-y-auto p-4">
         {loading ? (
           <p className="text-center text-xs text-pulse-text-mute">Loading…</p>
         ) : messages.length === 0 ? (

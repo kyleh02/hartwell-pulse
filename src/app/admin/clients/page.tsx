@@ -162,6 +162,7 @@ function ClientCard({ client: c, section }: { client: Client; section: Section }
               clientId={c.id}
               businessName={c.business_name}
               serviceTier={c.service_tier}
+              status={c.status}
             />
           </>
         )}

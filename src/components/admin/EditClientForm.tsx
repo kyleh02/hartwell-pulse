@@ -13,21 +13,23 @@ export function EditClientForm({
   clientId,
   businessName,
   serviceTier,
+  status,
 }: {
   clientId: string;
   businessName: string;
   serviceTier: string;
+  status: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ businessName, serviceTier });
+  const [form, setForm] = useState({ businessName, serviceTier, status });
 
   function close() {
     setOpen(false);
     setError(null);
-    setForm({ businessName, serviceTier });
+    setForm({ businessName, serviceTier, status });
   }
 
   function submit(e: React.FormEvent) {
@@ -95,6 +97,18 @@ export function EditClientForm({
                   className={fieldCls}
                   placeholder="Growth"
                 />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="mono-label">Status</span>
+                <select
+                  value={form.status}
+                  onChange={(e) => setForm({ ...form, status: e.target.value })}
+                  className={fieldCls}
+                >
+                  <option value="onboarding">Onboarding</option>
+                  <option value="active">Active</option>
+                  <option value="paused">Paused (inactive)</option>
+                </select>
               </label>
 
               <p className="text-xs text-pulse-text-mute">
