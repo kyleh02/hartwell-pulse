@@ -54,9 +54,10 @@ export function ChatThread({
   const [pickerOpen, setPickerOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const didInitialScroll = useRef(false);
+  const innerRef = useRef<HTMLDivElement>(null);
+  // Pinned to the newest message until the user scrolls up to read history.
+  const stickRef = useRef(true);
 
   const load = useCallback(async () => {
     const [{ data: msgs }, { data: rx }] = await Promise.all([
@@ -112,17 +113,32 @@ export function ChatThread({
     return () => clearInterval(t);
   }, [load]);
 
+  // Keep the view pinned to the newest message while "stuck" to the bottom. A
+  // one-off scroll on open isn't enough: image attachments finish loading after
+  // the first paint, growing the thread and leaving the view stranded mid-way
+  // up. The ResizeObserver re-pins through every late layout shift; scrolling up
+  // to read history unpins, and returning to the bottom (or sending) re-pins.
   useEffect(() => {
-    if (messages.length > 0) {
-      const el = listRef.current;
-      if (el && !didInitialScroll.current) {
-        // Open pinned to the very bottom (newest message), instantly — no animation.
-        el.scrollTop = el.scrollHeight;
-      } else {
-        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-      }
-      didInitialScroll.current = true;
-    }
+    const el = listRef.current;
+    const inner = innerRef.current;
+    if (!el || !inner) return;
+    const ro = new ResizeObserver(() => {
+      if (stickRef.current) el.scrollTop = el.scrollHeight;
+    });
+    ro.observe(inner);
+    return () => ro.disconnect();
+  }, []);
+
+  function onListScroll() {
+    const el = listRef.current;
+    if (!el) return;
+    // Within ~80px of the bottom counts as "at the bottom".
+    stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  }
+
+  useEffect(() => {
+    const el = listRef.current;
+    if (el && stickRef.current) el.scrollTop = el.scrollHeight;
     // Mark messages read on open and whenever new ones arrive while you're here.
     void markRead();
   }, [messages.length, markRead]);
@@ -146,6 +162,7 @@ export function ChatThread({
   async function send() {
     const text = body.trim();
     if (!text || !userId || busy) return;
+    stickRef.current = true; // your own message always brings you to the bottom
     setBusy(true);
     setBody("");
     setPickerOpen(false);
@@ -161,6 +178,7 @@ export function ChatThread({
 
   async function attach(file: File) {
     if (!userId) return;
+    stickRef.current = true;
     setBusy(true);
     const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const path = `${clientId}/messages/${newId()}-${safe}`;
@@ -221,7 +239,12 @@ export function ChatThread({
 
   return (
     <div className="flex h-[72vh] flex-col overflow-hidden rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface">
-      <div ref={listRef} className="flex-1 space-y-4 overflow-y-auto p-4">
+      <div
+        ref={listRef}
+        onScroll={onListScroll}
+        className="flex-1 overflow-y-auto p-4"
+      >
+        <div ref={innerRef} className="space-y-4">
         {loading ? (
           <p className="text-center text-xs text-pulse-text-mute">Loading…</p>
         ) : messages.length === 0 ? (
@@ -329,7 +352,7 @@ export function ChatThread({
             );
           })
         )}
-        <div ref={bottomRef} />
+        </div>
       </div>
 
       <div className="flex items-end gap-2 border-t border-pulse-border p-3">
