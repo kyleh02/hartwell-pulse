@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { Trash2 } from "lucide-react";
+import { Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import type { AdminInvoiceRow } from "@/lib/invoices";
 import type { InvoiceStatus } from "@/lib/types/database";
 import { formatMoney } from "@/lib/invoices-shared";
@@ -25,7 +25,6 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: "sent", label: "Sent" },
   { key: "overdue", label: "Overdue" },
   { key: "paid", label: "Paid" },
-  { key: "void", label: "Void" },
 ];
 
 function pretty(iso: string) {
@@ -44,6 +43,7 @@ export function InvoicesLibrary({
   today: string;
 }) {
   const [filter, setFilter] = useState<Filter>("all");
+  const [showVoided, setShowVoided] = useState(false);
   const [pending, startTransition] = useTransition();
 
   function handleDelete(id: string) {
@@ -70,7 +70,11 @@ export function InvoicesLibrary({
     .reduce((s, i) => s + Number(i.total), 0);
   const overdueCount = invoices.filter(isOverdue).length;
 
-  const filtered = invoices.filter((inv) => {
+  // Voided invoices are kept for the record but tucked into their own section,
+  // out of the main list and the status filters.
+  const voided = invoices.filter((inv) => inv.status === "void");
+  const active = invoices.filter((inv) => inv.status !== "void");
+  const filtered = active.filter((inv) => {
     if (filter === "all") return true;
     if (filter === "overdue") return isOverdue(inv);
     return inv.status === filter;
@@ -173,6 +177,51 @@ export function InvoicesLibrary({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {voided.length > 0 && (
+        <div className="mt-8 border-t border-pulse-border pt-5">
+          <button
+            type="button"
+            onClick={() => setShowVoided((v) => !v)}
+            className="mono-label flex items-center gap-1.5 text-pulse-text-mute hover:text-pulse-text-dim"
+          >
+            {showVoided ? (
+              <ChevronDown size={13} />
+            ) : (
+              <ChevronRight size={13} />
+            )}
+            Voided ({voided.length})
+          </button>
+          {showVoided && (
+            <div className="mt-3 space-y-2">
+              {voided.map((inv) => (
+                <Link
+                  key={inv.id}
+                  href={`/admin/invoices/${inv.id}`}
+                  className="block"
+                >
+                  <Card className="flex items-center justify-between gap-3 p-4 opacity-70 transition-colors hover:border-pulse-border-strong">
+                    <div className="min-w-0">
+                      <p className="font-medium text-pulse-text-dim">
+                        {inv.client_name}
+                      </p>
+                      <p className="data-mono mt-0.5 truncate text-xs text-pulse-text-mute">
+                        {inv.invoice_number} · due {pretty(inv.due_date)}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <span className="data-mono text-sm text-pulse-text-mute">
+                        {formatMoney(inv.total)}
+                      </span>
+                      <Badge tone="danger">void</Badge>
+                    </div>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
