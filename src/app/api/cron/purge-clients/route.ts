@@ -97,5 +97,63 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return Response.json({ candidates: clients.length, purged, failed });
+  // ---- Conversations soft-deleted for more than 30 days: purge for good. ----
+  // Attachments first (their paths only live on the message rows), then rows,
+  // then the conversation itself — so a mid-purge failure retries next run.
+  const { data: convDue } = await supabase
+    .from("conversations")
+    .select("id, client_id")
+    .lt("deleted_at", cutoff);
+  const convs = (convDue as { id: string; client_id: string }[] | null) ?? [];
+
+  let convPurged = 0;
+  let convFailed = 0;
+  for (const cv of convs) {
+    try {
+      const { data: msgs } = await supabase
+        .from("messages")
+        .select("attachments")
+        .eq("client_id", cv.client_id)
+        .throwOnError();
+      const paths = ((msgs as { attachments: { path?: string }[] | null }[] | null) ?? [])
+        .flatMap((m) => m.attachments ?? [])
+        .map((a) => a.path)
+        .filter((p): p is string => !!p);
+      for (let i = 0; i < paths.length; i += 100) {
+        const { error: rmErr } = await supabase.storage
+          .from("pulse-assets")
+          .remove(paths.slice(i, i + 100));
+        if (rmErr) throw new Error(rmErr.message);
+      }
+
+      await supabase
+        .from("notifications")
+        .delete()
+        .eq("client_id", cv.client_id)
+        .eq("type", "message")
+        .throwOnError();
+      await supabase
+        .from("message_reactions")
+        .delete()
+        .eq("client_id", cv.client_id)
+        .throwOnError();
+      await supabase
+        .from("messages")
+        .delete()
+        .eq("client_id", cv.client_id)
+        .throwOnError();
+      await supabase.from("conversations").delete().eq("id", cv.id).throwOnError();
+      convPurged++;
+    } catch {
+      // Conversation row survives, so this purge is retried on the next run.
+      convFailed++;
+    }
+  }
+
+  return Response.json({
+    candidates: clients.length,
+    purged,
+    failed,
+    conversations: { candidates: convs.length, purged: convPurged, failed: convFailed },
+  });
 }

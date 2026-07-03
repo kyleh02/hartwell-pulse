@@ -221,6 +221,15 @@ export interface AssetComment {
   created_at: string;
 }
 
+export interface Conversation {
+  id: string;
+  client_id: string;
+  created_by: string | null;
+  created_at: string;
+  deleted_at: string | null;
+  deleted_by: string | null;
+}
+
 export interface Message {
   id: string;
   client_id: string;
