@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { Bell } from "lucide-react";
@@ -44,68 +44,87 @@ export function NotificationBell() {
   const soundOnRef = useRef(true);
   const audioRef = useRef<AudioContext | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!userId) return;
-    let active = true;
-    const load = async () => {
-      const { data } = await supabase
-        .from("notifications")
-        .select("*")
-        .eq("recipient_user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(20);
-      if (!active) return;
-      const fresh = (data as Notification[] | null) ?? [];
-      // Newly arrived, still-unread notifications since the last poll. The first
-      // poll only seeds the baseline so we don't react to the existing backlog.
-      const newOnes = fresh.filter(
-        (n) => !n.read_at && !seenRef.current.has(n.id),
-      );
-      if (initializedRef.current && newOnes.length > 0) {
-        // Soft chime for any new notification.
-        if (soundOnRef.current && typeof window !== "undefined") {
-          try {
-            if (!audioRef.current) audioRef.current = new window.AudioContext();
-            playGentleChime(audioRef.current);
-          } catch {
-            // audio unavailable / blocked — stay silent
-          }
+    const { data } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("recipient_user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    const fresh = (data as Notification[] | null) ?? [];
+    // Newly arrived, still-unread notifications since the last check. The first
+    // run only seeds the baseline so we don't react to the existing backlog.
+    const newOnes = fresh.filter(
+      (n) => !n.read_at && !seenRef.current.has(n.id),
+    );
+    if (initializedRef.current && newOnes.length > 0) {
+      // Soft chime for any new notification.
+      if (soundOnRef.current && typeof window !== "undefined") {
+        try {
+          if (!audioRef.current) audioRef.current = new window.AudioContext();
+          playGentleChime(audioRef.current);
+        } catch {
+          // audio unavailable / blocked — stay silent
         }
-        // Desktop pop-up specifically for new messages.
-        if (
-          typeof window !== "undefined" &&
-          "Notification" in window &&
-          window.Notification.permission === "granted"
-        ) {
-          for (const n of newOnes) {
-            if (n.type !== "message") continue;
-            try {
-              const dn = new window.Notification(n.title, {
-                body: n.body ?? undefined,
-                tag: n.id,
-              });
-              dn.onclick = () => {
-                window.focus();
-                if (n.link) window.location.href = n.link;
-                dn.close();
-              };
-            } catch {
-              // some platforms throw on construction; ignore
-            }
+      }
+      // Desktop pop-up specifically for new messages.
+      if (
+        typeof window !== "undefined" &&
+        "Notification" in window &&
+        window.Notification.permission === "granted"
+      ) {
+        for (const n of newOnes) {
+          if (n.type !== "message") continue;
+          try {
+            const dn = new window.Notification(n.title, {
+              body: n.body ?? undefined,
+              tag: n.id,
+            });
+            dn.onclick = () => {
+              window.focus();
+              if (n.link) window.location.href = n.link;
+              dn.close();
+            };
+          } catch {
+            // some platforms throw on construction; ignore
           }
         }
       }
-      for (const n of fresh) seenRef.current.add(n.id);
-      initializedRef.current = true;
-      setItems(fresh);
-    };
+    }
+    for (const n of fresh) seenRef.current.add(n.id);
+    initializedRef.current = true;
+    setItems(fresh);
+  }, [supabase, userId]);
+
+  // A 15s poll backstops anything missed (Chrome throttles/reconnects background
+  // tabs, so we always reconcile on a timer even with Realtime on).
+  useEffect(() => {
     void load();
     const t = setInterval(() => void load(), 15000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  // Realtime: fire the chime + desktop pop-up the instant a notification lands.
+  useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel(`pulse-notif-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `recipient_user_id=eq.${userId}`,
+        },
+        () => void load(),
+      )
+      .subscribe();
     return () => {
-      active = false;
-      clearInterval(t);
+      void supabase.removeChannel(channel);
     };
-  }, [supabase, userId]);
+  }, [supabase, userId, load]);
 
   useEffect(() => {
     function h(e: MouseEvent) {

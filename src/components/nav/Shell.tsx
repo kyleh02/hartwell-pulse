@@ -7,6 +7,7 @@ import { UserButton } from "@clerk/nextjs";
 import { Menu, X } from "lucide-react";
 import { Wordmark } from "@/components/brand/Wordmark";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { TabUnreadBadge } from "@/components/notifications/TabUnreadBadge";
 import { clientNav, adminNav, isNavActive, type NavItem } from "@/lib/nav";
 import { cn } from "@/lib/utils/cn";
 
@@ -141,6 +142,7 @@ export function Shell({
 
   return (
     <div className="min-h-screen bg-pulse-bg">
+      <TabUnreadBadge />
       {/* ---------- desktop sidebar ---------- */}
       <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-pulse-border bg-pulse-bg bg-grid lg:flex">
         <div className="flex h-16 items-center border-b border-pulse-border px-5">
