@@ -1,8 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { Paperclip, Send, SmilePlus, Smile, FileText } from "lucide-react";
+import {
+  Paperclip,
+  Send,
+  SmilePlus,
+  Smile,
+  FileText,
+  Search,
+  ChevronUp,
+  ChevronDown,
+  X,
+} from "lucide-react";
 import { useSupabaseClient } from "@/lib/supabase/client";
 import type { Message, MessageReaction } from "@/lib/types/database";
 import { isImageMime } from "@/lib/assets-shared";
@@ -33,6 +43,38 @@ function attachmentsOf(m: Message): Attachment[] {
   return (m.attachments as unknown as Attachment[] | null) ?? [];
 }
 
+/**
+ * Render text with every occurrence of q highlighted. Matches case-insensitively
+ * on the ORIGINAL string via regex, so indexes can't drift (toLowerCase changes
+ * string length for some Unicode characters).
+ */
+function renderHighlighted(text: string, q: string): React.ReactNode {
+  if (!q) return text;
+  const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+  let key = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m[0].length === 0) {
+      re.lastIndex++;
+      continue;
+    }
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    parts.push(
+      <mark
+        key={key++}
+        className="rounded-sm bg-pulse-gold/40 px-0.5 text-pulse-text"
+      >
+        {m[0]}
+      </mark>,
+    );
+    last = m.index + m[0].length;
+  }
+  parts.push(text.slice(last));
+  return parts;
+}
+
 export function ChatThread({
   clientId,
   role,
@@ -58,6 +100,64 @@ export function ChatThread({
   const innerRef = useRef<HTMLDivElement>(null);
   // Pinned to the newest message until the user scrolls up to read history.
   const stickRef = useRef(true);
+
+  // ---- in-conversation search ----
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [currentMatchId, setCurrentMatchId] = useState<string | null>(null);
+  const msgRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  const q = query.trim().toLowerCase();
+  const matches = useMemo(() => {
+    if (q.length < 2) return [] as Message[];
+    return messages.filter(
+      (m) =>
+        m.body.toLowerCase().includes(q) ||
+        attachmentsOf(m).some((a) => a.name.toLowerCase().includes(q)),
+    );
+  }, [messages, q]);
+  // Default to the newest match; arrows walk older/newer from there.
+  const matchIdx = matches.findIndex((m) => m.id === currentMatchId);
+  const effIdx = matchIdx >= 0 ? matchIdx : matches.length - 1;
+  const currentMatch = matches.length > 0 ? matches[effIdx] : null;
+  const currentMatchKey = currentMatch?.id ?? null;
+
+  function stepMatch(dir: 1 | -1) {
+    if (matches.length === 0) return;
+    const next = Math.min(Math.max(effIdx + dir, 0), matches.length - 1);
+    if (matches[next].id !== currentMatchKey) {
+      setCurrentMatchId(matches[next].id);
+    } else {
+      // Clamped at the end (or same match): re-centre it anyway — the user may
+      // have scrolled away since the last jump.
+      stickRef.current = false;
+      msgRefs.current
+        .get(matches[next].id)
+        ?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }
+
+  function closeSearch() {
+    setSearchOpen(false);
+    setQuery("");
+    setCurrentMatchId(null);
+  }
+
+  // Pan to the current match (typing pans to the newest hit, arrows walk the
+  // rest).
+  useEffect(() => {
+    if (!currentMatchKey) return;
+    // Release the bottom-pin BEFORE panning: the smooth scroll starts inside
+    // the "at the bottom" band, where the ResizeObserver / new-message re-pin
+    // would otherwise cancel the pan and snap the view straight back down.
+    stickRef.current = false;
+    // Latch the selection: null means "newest match once", not a live pointer —
+    // otherwise the 4s poll re-anchors it and yanks the view to any new hit.
+    setCurrentMatchId((prev) => prev ?? currentMatchKey);
+    msgRefs.current
+      .get(currentMatchKey)
+      ?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [currentMatchKey]);
 
   const load = useCallback(async () => {
     const [{ data: msgs }, { data: rx }] = await Promise.all([
@@ -238,7 +338,79 @@ export function ChatThread({
   }
 
   return (
-    <div className="flex h-[72vh] flex-col overflow-hidden rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface">
+    <div className="relative flex h-[72vh] flex-col overflow-hidden rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface">
+      {searchOpen ? (
+        <div className="flex items-center gap-2 border-b border-pulse-border px-3 py-2">
+          <Search size={14} className="shrink-0 text-pulse-text-mute" />
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setCurrentMatchId(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
+              if (e.key === "Escape") closeSearch();
+              else if (e.key === "Enter") {
+                e.preventDefault();
+                stepMatch(e.shiftKey ? 1 : -1);
+              }
+            }}
+            placeholder="Search this conversation…"
+            className="min-w-0 flex-1 bg-transparent text-sm text-pulse-text placeholder:text-pulse-text-mute focus:outline-none"
+          />
+          {q.length >= 2 && (
+            <span className="data-mono shrink-0 text-[11px] text-pulse-text-mute">
+              {matches.length === 0 ? "0/0" : `${effIdx + 1}/${matches.length}`}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => stepMatch(-1)}
+            disabled={matches.length === 0}
+            aria-label="Older match"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-input)] text-pulse-text-mute hover:text-pulse-text disabled:opacity-40"
+          >
+            <ChevronUp size={15} />
+          </button>
+          <button
+            type="button"
+            onClick={() => stepMatch(1)}
+            disabled={matches.length === 0}
+            aria-label="Newer match"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-input)] text-pulse-text-mute hover:text-pulse-text disabled:opacity-40"
+          >
+            <ChevronDown size={15} />
+          </button>
+          <button
+            type="button"
+            onClick={closeSearch}
+            aria-label="Close search"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-input)] text-pulse-text-mute hover:text-pulse-text"
+          >
+            <X size={15} />
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            setSearchOpen(true);
+            // The search bar pushes the thread down a touch; keep the newest
+            // message fully in view if we were pinned to the bottom.
+            requestAnimationFrame(() => {
+              const el = listRef.current;
+              if (el && stickRef.current) el.scrollTop = el.scrollHeight;
+            });
+          }}
+          aria-label="Search this conversation"
+          title="Search this conversation"
+          className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-pulse-border bg-pulse-surface/90 text-pulse-text-mute backdrop-blur transition-colors hover:text-pulse-text"
+        >
+          <Search size={15} />
+        </button>
+      )}
       <div
         ref={listRef}
         onScroll={onListScroll}
@@ -255,8 +427,16 @@ export function ChatThread({
           messages.map((m) => {
             const own = m.sender_user_id === userId;
             const rx = reactionsFor(m.id);
+            const isCurrentMatch = q.length >= 2 && currentMatchKey === m.id;
             return (
-              <div key={m.id} className={cn("flex", own ? "justify-end" : "justify-start")}>
+              <div
+                key={m.id}
+                ref={(el) => {
+                  if (el) msgRefs.current.set(m.id, el);
+                  else msgRefs.current.delete(m.id);
+                }}
+                className={cn("flex", own ? "justify-end" : "justify-start")}
+              >
                 <div className={cn("max-w-[78%]", own && "items-end")}>
                   <div
                     className={cn(
@@ -264,9 +444,14 @@ export function ChatThread({
                       own
                         ? "bg-pulse-gold/15 text-pulse-text"
                         : "bg-pulse-surface-2 text-pulse-text",
+                      isCurrentMatch && "ring-1 ring-pulse-gold",
                     )}
                   >
-                    {m.body && <p className="whitespace-pre-wrap">{m.body}</p>}
+                    {m.body && (
+                      <p className="whitespace-pre-wrap">
+                        {q.length >= 2 ? renderHighlighted(m.body, q) : m.body}
+                      </p>
+                    )}
                     {attachmentsOf(m).map((a) =>
                       isImageMime(a.mime) && urls[a.path] ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -284,7 +469,8 @@ export function ChatThread({
                           rel="noreferrer"
                           className="mt-1 inline-flex items-center gap-2 rounded-lg border border-pulse-border bg-pulse-surface px-3 py-2 text-xs text-pulse-text-dim hover:text-pulse-text"
                         >
-                          <FileText size={14} /> {a.name}
+                          <FileText size={14} />{" "}
+                          {q.length >= 2 ? renderHighlighted(a.name, q) : a.name}
                         </a>
                       ),
                     )}
