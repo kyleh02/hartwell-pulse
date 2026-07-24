@@ -218,6 +218,71 @@ export async function addClientUser(
 }
 
 /**
+ * Change a client user's login email. Updates Clerk (new address, verified and
+ * primary; old ones removed) and the client_users row, so their login, invoice
+ * emails and the portal display all follow. Password and sessions are
+ * untouched — they just sign in with the new address next time. Admin only.
+ */
+export async function updateClientUserEmail(
+  clerkUserId: string,
+  newEmail: string,
+): Promise<void> {
+  await requireAdmin();
+
+  const email = newEmail.trim().toLowerCase();
+  if (!email || !email.includes("@")) {
+    throw new Error("A valid email is required.");
+  }
+
+  const supabase = createAdminSupabase();
+  const { data: row, error: rErr } = await supabase
+    .from("client_users")
+    .select("id, email")
+    .eq("clerk_user_id", clerkUserId)
+    .eq("role", "client")
+    .maybeSingle();
+  if (rErr) throw new Error(rErr.message);
+  if (!row) throw new Error("That user doesn't exist.");
+  if ((row as { email: string | null }).email === email) return;
+
+  const clerk = await clerkClient();
+  const user = await clerk.users.getUser(clerkUserId);
+  const oldIds = user.emailAddresses.map((e) => e.id);
+
+  // Add the new address first (verified + primary), then drop the old ones —
+  // this order can never leave the account without a login email.
+  try {
+    await clerk.emailAddresses.createEmailAddress({
+      userId: clerkUserId,
+      emailAddress: email,
+      verified: true,
+      primary: true,
+    });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(
+      `Couldn't switch to ${email}. This usually means that email already has an account. (${msg})`,
+    );
+  }
+  for (const id of oldIds) {
+    try {
+      await clerk.emailAddresses.deleteEmailAddress(id);
+    } catch {
+      // An old address lingering as a secondary is harmless: the new one is
+      // primary, and the client_users row below is what the portal reads.
+    }
+  }
+
+  const { error: uErr } = await supabase
+    .from("client_users")
+    .update({ email })
+    .eq("clerk_user_id", clerkUserId);
+  if (uErr) throw new Error(uErr.message);
+
+  revalidatePath("/admin/clients");
+}
+
+/**
  * Move a client between the Active list (status 'active') and the Inactive list
  * (status 'paused'). Purely organisational — no data is deleted and their login
  * is unchanged, so a parked client can be brought back at any time.

@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Users, X, Copy, Check, Plus } from "lucide-react";
+import { Users, X, Copy, Check, Plus, Pencil } from "lucide-react";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import { useSupabaseClient } from "@/lib/supabase/client";
-import { addClientUser } from "@/app/admin/clients/actions";
+import { addClientUser, updateClientUserEmail } from "@/app/admin/clients/actions";
 
 const fieldCls =
   "w-full rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 px-3 py-2 text-sm text-pulse-text focus:border-pulse-border-strong focus:outline-none";
@@ -38,6 +38,9 @@ export function ClientUsersDialog({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ email: string; password: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editEmail, setEditEmail] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
 
   const loadUsers = useCallback(async () => {
     const { data } = await supabase
@@ -60,7 +63,31 @@ export function ClientUsersDialog({
     setError(null);
     setResult(null);
     setCopied(false);
+    setEditing(null);
+    setEditError(null);
     router.refresh();
+  }
+
+  function startEdit(u: UserRow) {
+    setEditing(u.clerk_user_id);
+    setEditEmail(u.email ?? "");
+    setEditError(null);
+  }
+
+  function saveEmail(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editing) return;
+    setEditError(null);
+    const target = editing;
+    startTransition(async () => {
+      try {
+        await updateClientUserEmail(target, editEmail);
+        setEditing(null);
+        void loadUsers();
+      } catch (err) {
+        setEditError(err instanceof Error ? err.message : "Something went wrong.");
+      }
+    });
   }
 
   function submit(e: React.FormEvent) {
@@ -161,19 +188,74 @@ export function ClientUsersDialog({
                   ) : users.length === 0 ? (
                     <p className="text-xs text-pulse-text-mute">No users yet.</p>
                   ) : (
-                    users.map((u) => (
-                      <div
-                        key={u.clerk_user_id}
-                        className="flex items-center justify-between gap-3 rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 px-3 py-2 text-sm"
-                      >
-                        <span className="truncate text-pulse-text">
-                          {u.full_name ?? "Unnamed user"}
-                        </span>
-                        <span className="data-mono truncate text-xs text-pulse-text-mute">
-                          {u.email}
-                        </span>
-                      </div>
-                    ))
+                    users.map((u) =>
+                      editing === u.clerk_user_id ? (
+                        <form
+                          key={u.clerk_user_id}
+                          onSubmit={saveEmail}
+                          className="space-y-2 rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 px-3 py-2"
+                        >
+                          <p className="text-sm text-pulse-text">
+                            {u.full_name ?? "Unnamed user"}
+                          </p>
+                          <input
+                            required
+                            autoFocus
+                            type="email"
+                            value={editEmail}
+                            onChange={(e) => setEditEmail(e.target.value)}
+                            className={fieldCls}
+                            placeholder="new@email.com.au"
+                          />
+                          <p className="text-xs text-pulse-text-mute">
+                            Their login email changes straight away; the password
+                            stays the same.
+                          </p>
+                          {editError && (
+                            <p className="rounded-[var(--radius-input)] border border-pulse-danger/40 bg-pulse-danger/10 px-3 py-2 text-xs text-pulse-danger">
+                              {editError}
+                            </p>
+                          )}
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setEditing(null)}
+                              disabled={pending}
+                            >
+                              Cancel
+                            </Button>
+                            <Button type="submit" size="sm" disabled={pending}>
+                              {pending ? "Saving…" : "Save"}
+                            </Button>
+                          </div>
+                        </form>
+                      ) : (
+                        <div
+                          key={u.clerk_user_id}
+                          className="flex items-center justify-between gap-3 rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 px-3 py-2 text-sm"
+                        >
+                          <span className="truncate text-pulse-text">
+                            {u.full_name ?? "Unnamed user"}
+                          </span>
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <span className="data-mono truncate text-xs text-pulse-text-mute">
+                              {u.email}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => startEdit(u)}
+                              aria-label={`Change email for ${u.full_name ?? u.email}`}
+                              title="Change email"
+                              className="shrink-0 text-pulse-text-mute transition-colors hover:text-pulse-text"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                          </span>
+                        </div>
+                      ),
+                    )
                   )}
                 </div>
 
