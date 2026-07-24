@@ -685,30 +685,8 @@ export function ChatThread({
                       >
                         <SmilePlus size={13} />
                       </button>
-                      {reactingTo === m.id && (
-                        <div
-                          className={cn(
-                            "absolute bottom-6 z-20 w-72 max-w-[80vw] rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface shadow-lg",
-                            own ? "right-0" : "left-0",
-                          )}
-                        >
-                          <div className="flex justify-between border-b border-pulse-border px-3 py-2">
-                            {QUICK_EMOJIS.map((e) => (
-                              <button
-                                key={e}
-                                type="button"
-                                onClick={() => toggleReaction(m.id, e)}
-                                className="text-lg leading-none hover:scale-110"
-                              >
-                                {e}
-                              </button>
-                            ))}
-                          </div>
-                          <EmojiPicker
-                            onPick={(e) => toggleReaction(m.id, e)}
-                          />
-                        </div>
-                      )}
+                      {/* The picker itself renders once at card level (below):
+                          anchored popovers clip inside the scrolling list. */}
                     </div>
                   </div>
 
@@ -724,6 +702,34 @@ export function ChatThread({
         )}
         </div>
       </div>
+
+      {/* Reaction picker: one overlay above the composer, never clipped by the
+          scroll area no matter where the message sits in the thread. */}
+      {reactingTo && (
+        <>
+          <button
+            type="button"
+            aria-label="Close emoji picker"
+            onClick={() => setReactingTo(null)}
+            className="absolute inset-0 z-20 cursor-default"
+          />
+          <div className="absolute inset-x-3 bottom-20 z-30 mx-auto max-w-sm rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface shadow-xl">
+            <div className="flex justify-between border-b border-pulse-border px-3 py-2">
+              {QUICK_EMOJIS.map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  onClick={() => toggleReaction(reactingTo, e)}
+                  className="text-lg leading-none hover:scale-110"
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+            <EmojiPicker onPick={(e) => toggleReaction(reactingTo, e)} />
+          </div>
+        </>
+      )}
 
       {attachError && (
         <p className="border-t border-pulse-border bg-pulse-danger/10 px-4 py-2 text-xs text-pulse-danger">
