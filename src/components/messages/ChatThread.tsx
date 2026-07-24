@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { useSupabaseClient } from "@/lib/supabase/client";
+import { EmojiPicker } from "@/components/messages/EmojiPicker";
 import type {
   ConversationKind,
   ConversationMember,
@@ -36,14 +37,6 @@ interface Attachment {
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
 const QUICK_EMOJIS = ["👍", "❤️", "🎉", "✅", "👀", "🙏"];
-
-// Larger palette for writing emojis into the message itself.
-const COMPOSER_EMOJIS = [
-  "😀", "😁", "😂", "🤣", "😊", "😍", "😘", "😎",
-  "🤔", "😅", "😉", "🙌", "👏", "👍", "👎", "🙏",
-  "💪", "🔥", "✨", "🎉", "❤️", "💛", "✅", "❌",
-  "👀", "💯", "🚀", "📈", "📉", "⭐", "👋", "💬",
-];
 
 function newId() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -693,17 +686,27 @@ export function ChatThread({
                         <SmilePlus size={13} />
                       </button>
                       {reactingTo === m.id && (
-                        <div className="absolute bottom-6 right-0 z-10 flex gap-1 rounded-full border border-pulse-border bg-pulse-surface px-2 py-1 shadow-lg">
-                          {QUICK_EMOJIS.map((e) => (
-                            <button
-                              key={e}
-                              type="button"
-                              onClick={() => toggleReaction(m.id, e)}
-                              className="text-sm hover:scale-110"
-                            >
-                              {e}
-                            </button>
-                          ))}
+                        <div
+                          className={cn(
+                            "absolute bottom-6 z-20 w-72 max-w-[80vw] rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface shadow-lg",
+                            own ? "right-0" : "left-0",
+                          )}
+                        >
+                          <div className="flex justify-between border-b border-pulse-border px-3 py-2">
+                            {QUICK_EMOJIS.map((e) => (
+                              <button
+                                key={e}
+                                type="button"
+                                onClick={() => toggleReaction(m.id, e)}
+                                className="text-lg leading-none hover:scale-110"
+                              >
+                                {e}
+                              </button>
+                            ))}
+                          </div>
+                          <EmojiPicker
+                            onPick={(e) => toggleReaction(m.id, e)}
+                          />
                         </div>
                       )}
                     </div>
@@ -756,17 +759,8 @@ export function ChatThread({
             <Smile size={18} />
           </button>
           {pickerOpen && (
-            <div className="absolute bottom-12 left-0 z-20 grid w-64 grid-cols-8 gap-0.5 rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-2 shadow-lg">
-              {COMPOSER_EMOJIS.map((e) => (
-                <button
-                  key={e}
-                  type="button"
-                  onClick={() => insertEmoji(e)}
-                  className="rounded p-1 text-lg hover:bg-pulse-surface-2"
-                >
-                  {e}
-                </button>
-              ))}
+            <div className="absolute bottom-12 left-0 z-20 w-72 max-w-[80vw] rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface shadow-lg">
+              <EmojiPicker onPick={insertEmoji} />
             </div>
           )}
         </div>
