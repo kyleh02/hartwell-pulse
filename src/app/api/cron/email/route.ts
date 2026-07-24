@@ -50,15 +50,16 @@ export async function GET(req: NextRequest) {
       .eq("id", n.id);
   }
 
-  // ---- Client messages left unread for 30+ minutes: nudge the admin by email ----
-  // notify_on_message files admin-facing message notifications as channel
-  // 'in_portal' (no instant email), so they only surface in the bell. If one of
-  // those is still unread after half an hour, email the admin so it isn't missed.
+  // ---- Client activity left unread for 30+ minutes: nudge the admin by email ----
+  // notify_on_message and notify_on_asset_upload file admin-facing
+  // notifications as channel 'in_portal' (no instant email), so they only
+  // surface in the bell. If one is still unread after half an hour, email the
+  // admin so nothing a client sends or uploads is missed.
   const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
   const { data: staleData } = await supabase
     .from("notifications")
     .select("*")
-    .eq("type", "message")
+    .in("type", ["message", "asset_uploaded"])
     .eq("channel", "in_portal")
     .is("read_at", null)
     .is("emailed_at", null)
@@ -67,7 +68,7 @@ export async function GET(req: NextRequest) {
     .limit(100);
   const stale = (staleData as Notification[] | null) ?? [];
 
-  // One email per recipient, summarising how many messages are waiting.
+  // One email per recipient, summarising what's waiting.
   const byRecipient = new Map<string, Notification[]>();
   for (const n of stale) {
     const arr = byRecipient.get(n.recipient_user_id) ?? [];
@@ -84,17 +85,24 @@ export async function GET(req: NextRequest) {
       .maybeSingle();
     const email = (cu as { email: string | null } | null)?.email;
     if (!email) continue; // no address on file yet — leave it to retry later
-    const count = group.length;
-    const plural = count === 1 ? "" : "s";
+    const msgCount = group.filter((n) => n.type === "message").length;
+    const upCount = group.length - msgCount;
+    const parts = [
+      msgCount > 0 && `${msgCount} client message${msgCount === 1 ? "" : "s"}`,
+      upCount > 0 && `${upCount} client upload${upCount === 1 ? "" : "s"}`,
+    ].filter(Boolean) as string[];
+    const what = parts.join(" and ");
     const subject =
-      count === 1
-        ? "A client message is waiting in Pulse"
-        : `${count} client messages are waiting in Pulse`;
+      group.length === 1
+        ? `A ${msgCount === 1 ? "client message" : "client upload"} is waiting in Pulse`
+        : `${what} are waiting in Pulse`;
+    const link =
+      upCount === 0 ? "/admin/messages" : msgCount === 0 ? "/admin/assets" : "/admin";
     const html = emailLayout(
       subject,
-      `<p>You have <strong>${count}</strong> unread client message${plural} in the portal that ${count === 1 ? "has" : "have"} been waiting for more than 30 minutes.</p>`,
-      "Open messages",
-      "/admin/messages",
+      `<p>You have <strong>${what}</strong> in the portal ${group.length === 1 ? "that has" : "that have"} been waiting for more than 30 minutes.</p>`,
+      upCount === 0 ? "Open messages" : msgCount === 0 ? "Open assets" : "Open Pulse",
+      link,
     );
     await sendEmail({ to: email, subject, html });
     await supabase

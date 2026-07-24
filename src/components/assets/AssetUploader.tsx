@@ -12,6 +12,10 @@ function newId() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+// Matches the bucket's hard cap (migration 0019) so nobody waits out a big
+// upload only to have the server bounce it at the end.
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+
 /**
  * Make a small WebP thumbnail in the browser (no paid Supabase transforms, no
  * Vercel optimiser). Returns null on any failure — thumbnails are best-effort.
@@ -64,6 +68,9 @@ export function AssetUploader({
     setError(null);
     try {
       for (const file of list) {
+        if (file.size > MAX_UPLOAD_BYTES) {
+          throw new Error(`"${file.name}" is over the 50 MB per-file limit.`);
+        }
         const id = newId();
         const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
         const path = `${clientId}/${folderId ?? "root"}/${id}-${safe}`;
@@ -145,7 +152,7 @@ export function AssetUploader({
         )}
       </p>
       <p className="mt-1 text-xs text-pulse-text-mute">
-        Into {folderName} · images, documents and copy
+        Into {folderName} · images, documents and copy · 50 MB max per file
       </p>
       {error && <p className="mt-2 text-xs text-pulse-danger">{error}</p>}
       <input

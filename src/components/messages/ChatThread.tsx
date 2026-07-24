@@ -11,6 +11,7 @@ import {
   Search,
   ChevronUp,
   ChevronDown,
+  Download,
   X,
 } from "lucide-react";
 import { useSupabaseClient } from "@/lib/supabase/client";
@@ -29,6 +30,10 @@ interface Attachment {
   mime: string | null;
   size: number | null;
 }
+
+// Chat attachments stay small so threads load fast (the bucket enforces a hard
+// 50 MB cap regardless; big files belong in Assets).
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
 const QUICK_EMOJIS = ["👍", "❤️", "🎉", "✅", "👀", "🙏"];
 
@@ -103,6 +108,7 @@ export function ChatThread({
   const [body, setBody] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [attachError, setAttachError] = useState<string | null>(null);
   const [reactingTo, setReactingTo] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -379,6 +385,14 @@ export function ChatThread({
 
   async function attach(file: File) {
     if (!userId) return;
+    setAttachError(null);
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      setAttachError(
+        `"${file.name}" is over the 25 MB chat limit. Pop bigger files in Assets instead.`,
+      );
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
     stickRef.current = true;
     setBusy(true);
     const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -386,14 +400,16 @@ export function ChatThread({
     const up = await supabase.storage
       .from("pulse-assets")
       .upload(path, file, { contentType: file.type || "application/octet-stream" });
-    if (!up.error) {
+    if (up.error) {
+      setAttachError(`Upload failed: ${up.error.message}`);
+    } else {
       const attachment: Attachment = {
         path,
         name: file.name,
         mime: file.type || null,
         size: file.size,
       };
-      await supabase.from("messages").insert({
+      const ins = await supabase.from("messages").insert({
         conversation_id: conversationId,
         client_id: clientId,
         sender_user_id: userId,
@@ -401,10 +417,26 @@ export function ChatThread({
         body: "",
         attachments: [attachment],
       });
+      if (ins.error) setAttachError(`Couldn't send that file: ${ins.error.message}`);
       await load();
     }
     setBusy(false);
     if (fileRef.current) fileRef.current.value = "";
+  }
+
+  // Force a real download (Content-Disposition: attachment) with the original
+  // file name, rather than opening the image in a tab.
+  async function download(a: Attachment) {
+    const { data } = await supabase.storage
+      .from("pulse-assets")
+      .createSignedUrl(a.path, 60, { download: a.name });
+    if (!data?.signedUrl) return;
+    const link = document.createElement("a");
+    link.href = data.signedUrl;
+    link.download = a.name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   }
 
   async function toggleReaction(messageId: string, emoji: string) {
@@ -587,13 +619,23 @@ export function ChatThread({
                     )}
                     {attachmentsOf(m).map((a) =>
                       isImageMime(a.mime) && urls[a.path] ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          key={a.path}
-                          src={urls[a.path]}
-                          alt={a.name}
-                          className="mt-1 max-h-60 rounded-lg border border-pulse-border"
-                        />
+                        <div key={a.path} className="relative mt-1 w-fit">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={urls[a.path]}
+                            alt={a.name}
+                            className="max-h-60 rounded-lg border border-pulse-border"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void download(a)}
+                            aria-label={`Download ${a.name}`}
+                            title={`Download ${a.name}`}
+                            className="absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center rounded-full border border-pulse-border bg-pulse-bg/75 text-pulse-text-dim backdrop-blur transition-colors hover:text-pulse-text"
+                          >
+                            <Download size={13} />
+                          </button>
+                        </div>
                       ) : (
                         <a
                           key={a.path}
@@ -680,6 +722,11 @@ export function ChatThread({
         </div>
       </div>
 
+      {attachError && (
+        <p className="border-t border-pulse-border bg-pulse-danger/10 px-4 py-2 text-xs text-pulse-danger">
+          {attachError}
+        </p>
+      )}
       <div className="flex items-end gap-2 border-t border-pulse-border p-3">
         <button
           type="button"
