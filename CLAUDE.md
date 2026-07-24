@@ -24,7 +24,7 @@ Live at https://portal.hartwelldigital.com
 - Write them idempotent: `add column if not exists`, `drop policy if exists`
   before `create policy` (Postgres has no CREATE POLICY IF NOT EXISTS),
   `drop trigger if exists`, guarded `do $$` blocks.
-- 0001–0017 are applied in production as of 2026-07-03.
+- 0001–0018 are applied in production as of 2026-07-24.
 
 ## Security model (do not weaken)
 - Helpers `is_admin()`, `current_client_id()`, `clerk_user_id()` read the Clerk
