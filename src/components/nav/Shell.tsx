@@ -8,6 +8,7 @@ import { Menu, X } from "lucide-react";
 import { Wordmark } from "@/components/brand/Wordmark";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { TabUnreadBadge } from "@/components/notifications/TabUnreadBadge";
+import { UnreadMessagesBadge } from "@/components/messages/UnreadMessagesBadge";
 import { clientNav, adminNav, isNavActive, type NavItem } from "@/lib/nav";
 import { cn } from "@/lib/utils/cn";
 
@@ -62,6 +63,7 @@ function NavLinks({
               <Icon size={18} strokeWidth={1.75} />
             </span>
             {item.label}
+            {item.badge === "messages" && <UnreadMessagesBadge />}
           </Link>
         );
       })}
@@ -237,7 +239,10 @@ export function Shell({
                   active ? "text-pulse-gold" : "text-pulse-text-mute",
                 )}
               >
-                <Icon size={20} strokeWidth={1.75} />
+                <span className="relative">
+                  <Icon size={20} strokeWidth={1.75} />
+                  {item.badge === "messages" && <UnreadMessagesBadge dot />}
+                </span>
                 {item.label}
               </Link>
             );

@@ -15,6 +15,8 @@ export interface NavItem {
   label: string;
   href: string;
   icon: LucideIcon;
+  /** Live indicator rendered next to the label (only "messages" so far). */
+  badge?: "messages";
 }
 
 export const clientNav: NavItem[] = [
@@ -22,7 +24,7 @@ export const clientNav: NavItem[] = [
   { label: "Reports", href: "/reports", icon: FileText },
   { label: "Assets", href: "/assets", icon: FolderOpen },
   { label: "Copy", href: "/copy", icon: PenLine },
-  { label: "Messages", href: "/messages", icon: MessageSquare },
+  { label: "Messages", href: "/messages", icon: MessageSquare, badge: "messages" },
   { label: "Invoices", href: "/invoices", icon: Receipt },
 ];
 
@@ -32,7 +34,7 @@ export const adminNav: NavItem[] = [
   { label: "Reports", href: "/admin/reports", icon: FileText },
   { label: "Assets", href: "/admin/assets", icon: FolderOpen },
   { label: "Copy", href: "/admin/copy", icon: PenLine },
-  { label: "Messages", href: "/admin/messages", icon: MessageSquare },
+  { label: "Messages", href: "/admin/messages", icon: MessageSquare, badge: "messages" },
   { label: "Invoices", href: "/admin/invoices", icon: Receipt },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];

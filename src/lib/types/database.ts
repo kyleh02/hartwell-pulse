@@ -221,18 +221,31 @@ export interface AssetComment {
   created_at: string;
 }
 
+export type ConversationKind = "direct" | "group";
+
 export interface Conversation {
   id: string;
   client_id: string;
+  kind: ConversationKind;
+  direct_user_id: string | null; // the client user of a 'direct' thread
+  title: string | null; // group threads only
   created_by: string | null;
   created_at: string;
   deleted_at: string | null;
   deleted_by: string | null;
 }
 
+export interface ConversationMember {
+  conversation_id: string;
+  clerk_user_id: string;
+  last_read_at: string | null; // the read receipt
+  created_at: string;
+}
+
 export interface Message {
   id: string;
   client_id: string;
+  conversation_id: string;
   sender_user_id: string;
   sender_role: Role;
   body: string;

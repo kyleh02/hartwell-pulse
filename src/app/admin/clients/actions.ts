@@ -141,6 +141,83 @@ async function requireAdmin() {
 }
 
 /**
+ * Add another user to an EXISTING client (e.g. a business partner). They get
+ * their own login and their own private thread with Kyle (created by a DB
+ * trigger), and share everything client-scoped: assets, invoices, reports.
+ * Returns one-time login details for Kyle to hand over. Admin only.
+ */
+export async function addClientUser(
+  clientId: string,
+  input: { contactName: string; email: string },
+): Promise<{ email: string; password: string }> {
+  await requireAdmin();
+
+  const contactName = input.contactName.trim();
+  const email = input.email.trim().toLowerCase();
+  if (!email || !email.includes("@")) {
+    throw new Error("A valid email is required.");
+  }
+
+  const supabase = createAdminSupabase();
+  const { data: client, error: cErr } = await supabase
+    .from("clients")
+    .select("id, deleted_at")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (cErr) throw new Error(cErr.message);
+  if (!client || (client as { deleted_at: string | null }).deleted_at) {
+    throw new Error("That client doesn't exist (or is deleted).");
+  }
+
+  const password = tempPassword();
+
+  // Same pattern as createClient: Backend-API emails are auto-verified, so the
+  // new user can sign in immediately with email + password.
+  const clerk = await clerkClient();
+  let userId: string;
+  try {
+    const parts = contactName.split(/\s+/).filter(Boolean);
+    const created = await clerk.users.createUser({
+      emailAddress: [email],
+      password,
+      skipPasswordChecks: true,
+      firstName: parts[0] || undefined,
+      lastName: parts.length > 1 ? parts.slice(1).join(" ") : undefined,
+    });
+    userId = created.id;
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(
+      `Couldn't create a login for ${email}. This usually means that email already has an account. (${msg})`,
+    );
+  }
+
+  try {
+    const { error: uErr } = await supabase.from("client_users").insert({
+      clerk_user_id: userId,
+      client_id: clientId,
+      role: "client",
+      full_name: contactName || null,
+      email,
+    });
+    if (uErr) throw new Error(uErr.message);
+  } catch (e) {
+    try {
+      await clerk.users.deleteUser(userId);
+    } catch {
+      // best-effort cleanup; surface the original failure below
+    }
+    throw e instanceof Error
+      ? e
+      : new Error("Could not finish adding the user.");
+  }
+
+  revalidatePath("/admin/clients");
+  revalidatePath("/admin/messages");
+  return { email, password };
+}
+
+/**
  * Move a client between the Active list (status 'active') and the Inactive list
  * (status 'paused'). Purely organisational — no data is deleted and their login
  * is unchanged, so a parked client can be brought back at any time.

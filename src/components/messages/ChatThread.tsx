@@ -14,7 +14,12 @@ import {
   X,
 } from "lucide-react";
 import { useSupabaseClient } from "@/lib/supabase/client";
-import type { Message, MessageReaction } from "@/lib/types/database";
+import type {
+  ConversationKind,
+  ConversationMember,
+  Message,
+  MessageReaction,
+} from "@/lib/types/database";
 import { isImageMime } from "@/lib/assets-shared";
 import { cn } from "@/lib/utils/cn";
 
@@ -76,17 +81,23 @@ function renderHighlighted(text: string, q: string): React.ReactNode {
 }
 
 export function ChatThread({
+  conversationId,
   clientId,
+  kind,
   role,
   peerName,
 }: {
+  conversationId: string;
   clientId: string;
+  kind: ConversationKind;
   role: "client" | "admin";
   peerName: string;
 }) {
   const supabase = useSupabaseClient();
   const { userId } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
+  const [members, setMembers] = useState<ConversationMember[]>([]);
+  const [names, setNames] = useState<Map<string, string>>(new Map());
   const [reactions, setReactions] = useState<MessageReaction[]>([]);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [body, setBody] = useState("");
@@ -160,17 +171,38 @@ export function ChatThread({
   }, [currentMatchKey]);
 
   const load = useCallback(async () => {
-    const [{ data: msgs }, { data: rx }] = await Promise.all([
-      supabase
-        .from("messages")
-        .select("*")
-        .eq("client_id", clientId)
-        .order("created_at", { ascending: true }),
-      supabase.from("message_reactions").select("*").eq("client_id", clientId),
-    ]);
+    const [{ data: msgs }, { data: rx }, { data: mem }, { data: users }] =
+      await Promise.all([
+        supabase
+          .from("messages")
+          .select("*")
+          .eq("conversation_id", conversationId)
+          .order("created_at", { ascending: true }),
+        supabase.from("message_reactions").select("*").eq("client_id", clientId),
+        supabase
+          .from("conversation_members")
+          .select("*")
+          .eq("conversation_id", conversationId),
+        // Sender names + receipt names. Clients see their own client's users
+        // (peer policy); Kyle's row isn't in it, so admin senders fall back to
+        // "Kyle" below.
+        supabase
+          .from("client_users")
+          .select("clerk_user_id, full_name")
+          .eq("client_id", clientId),
+      ]);
     const list = (msgs as Message[] | null) ?? [];
     setMessages(list);
     setReactions((rx as MessageReaction[] | null) ?? []);
+    setMembers((mem as ConversationMember[] | null) ?? []);
+    setNames(
+      new Map(
+        (
+          (users as { clerk_user_id: string; full_name: string | null }[] | null) ??
+          []
+        ).map((u) => [u.clerk_user_id, u.full_name ?? "Teammate"]),
+      ),
+    );
 
     const paths = list.flatMap((m) => attachmentsOf(m).map((a) => a.path)).filter(Boolean);
     if (paths.length > 0) {
@@ -186,32 +218,100 @@ export function ChatThread({
       });
     }
     setLoading(false);
-  }, [supabase, clientId]);
+  }, [supabase, conversationId, clientId]);
 
-  // Viewing a conversation is the read receipt: clear this user's unread message
-  // notifications for this client. That's what stops the 30-minute unread-message
-  // email reminder from firing for messages you've already seen on the page.
+  // The read receipt. Advancing last_read_at is what the other side sees as
+  // "Seen", so it only moves when this thread is genuinely being looked at:
+  // tab visible, window focused, and pinned to the newest message (scrolled-up
+  // history reading doesn't count). Clearing the unread message notifications
+  // keeps the bell honest and stops the 30-minute reminder email.
   const markRead = useCallback(async () => {
     if (!userId) return;
-    await supabase
-      .from("notifications")
-      .update({ read_at: new Date().toISOString() })
-      .eq("recipient_user_id", userId)
-      .eq("client_id", clientId)
-      .eq("type", "message")
-      .is("read_at", null);
-  }, [supabase, userId, clientId]);
+    if (document.visibilityState !== "visible" || !document.hasFocus()) return;
+    if (!stickRef.current) return;
+    const now = new Date().toISOString();
+    const receipt =
+      role === "admin"
+        ? // Kyle's member row may not exist yet on older threads.
+          supabase.from("conversation_members").upsert(
+            {
+              conversation_id: conversationId,
+              clerk_user_id: userId,
+              last_read_at: now,
+            },
+            { onConflict: "conversation_id,clerk_user_id" },
+          )
+        : // A client's row always exists; RLS only lets them touch their own.
+          supabase
+            .from("conversation_members")
+            .update({ last_read_at: now })
+            .eq("conversation_id", conversationId)
+            .eq("clerk_user_id", userId);
+    await Promise.all([
+      receipt,
+      supabase
+        .from("notifications")
+        .update({ read_at: now })
+        .eq("recipient_user_id", userId)
+        .eq("client_id", clientId)
+        .eq("type", "message")
+        .is("read_at", null),
+    ]);
+  }, [supabase, userId, role, conversationId, clientId]);
 
   useEffect(() => {
     setLoading(true);
     void load();
   }, [load]);
 
-  // light polling keeps the conversation live without extra Supabase config
+  // Realtime: new messages and read receipts land the moment they happen. RLS
+  // scopes the events, so a client only ever hears about their own threads.
+  useEffect(() => {
+    const channel = supabase
+      .channel(`pulse-conv-${conversationId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        () => void load(),
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "conversation_members",
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        () => void load(),
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [supabase, conversationId, load]);
+
+  // Polling backstops realtime (Chrome throttles background tabs and sockets
+  // drop), so the thread reconciles every few seconds regardless.
   useEffect(() => {
     const t = setInterval(() => void load(), 4000);
     return () => clearInterval(t);
   }, [load]);
+
+  // Coming back to the tab or window counts as reading whatever is on screen.
+  useEffect(() => {
+    const h = () => void markRead();
+    window.addEventListener("focus", h);
+    document.addEventListener("visibilitychange", h);
+    return () => {
+      window.removeEventListener("focus", h);
+      document.removeEventListener("visibilitychange", h);
+    };
+  }, [markRead]);
 
   // Keep the view pinned to the newest message while "stuck" to the bottom. A
   // one-off scroll on open isn't enough: image attachments finish loading after
@@ -267,6 +367,7 @@ export function ChatThread({
     setBody("");
     setPickerOpen(false);
     const { error } = await supabase.from("messages").insert({
+      conversation_id: conversationId,
       client_id: clientId,
       sender_user_id: userId,
       sender_role: role,
@@ -293,6 +394,7 @@ export function ChatThread({
         size: file.size,
       };
       await supabase.from("messages").insert({
+        conversation_id: conversationId,
         client_id: clientId,
         sender_user_id: userId,
         sender_role: role,
@@ -323,6 +425,35 @@ export function ChatThread({
       });
       await load();
     }
+  }
+
+  function senderLabel(m: Message): string {
+    if (m.sender_user_id === userId) return "You";
+    if (m.sender_role === "admin") return "Kyle";
+    return names.get(m.sender_user_id) ?? peerName;
+  }
+
+  // Only the newest of your own messages carries the receipt (everything above
+  // it is implied read once that one is).
+  const lastOwnId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].sender_user_id === userId) return messages[i].id;
+    }
+    return null;
+  }, [messages, userId]);
+
+  function seenByFor(m: Message): string | null {
+    const seen = members.filter(
+      (x) =>
+        x.clerk_user_id !== userId &&
+        x.last_read_at &&
+        new Date(x.last_read_at).getTime() >= new Date(m.created_at).getTime(),
+    );
+    if (seen.length === 0) return null;
+    if (kind === "direct") return "Seen";
+    return `Seen by ${seen
+      .map((s) => names.get(s.clerk_user_id) ?? "Kyle")
+      .join(", ")}`;
   }
 
   function reactionsFor(messageId: string) {
@@ -428,6 +559,8 @@ export function ChatThread({
             const own = m.sender_user_id === userId;
             const rx = reactionsFor(m.id);
             const isCurrentMatch = q.length >= 2 && currentMatchKey === m.id;
+            const seenText =
+              own && m.id === lastOwnId ? seenByFor(m) : null;
             return (
               <div
                 key={m.id}
@@ -498,7 +631,7 @@ export function ChatThread({
                       </button>
                     ))}
                     <span className="data-mono text-[10px] text-pulse-text-mute">
-                      {own ? "You" : peerName} ·{" "}
+                      {senderLabel(m)} ·{" "}
                       {new Date(m.created_at).toLocaleString("en-AU", {
                         day: "numeric",
                         month: "short",
@@ -533,6 +666,12 @@ export function ChatThread({
                       )}
                     </div>
                   </div>
+
+                  {seenText && (
+                    <p className="data-mono mt-0.5 text-right text-[10px] text-pulse-gold/80">
+                      {seenText}
+                    </p>
+                  )}
                 </div>
               </div>
             );

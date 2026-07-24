@@ -98,8 +98,11 @@ export async function GET(req: NextRequest) {
   }
 
   // ---- Conversations soft-deleted for more than 30 days: purge for good. ----
-  // Attachments first (their paths only live on the message rows), then rows,
-  // then the conversation itself — so a mid-purge failure retries next run.
+  // Everything is scoped to THIS conversation — a client can now hold several
+  // threads (private per user + group), and purging one must never touch the
+  // others. Attachments first (their paths only live on the message rows), then
+  // the conversation row: messages, reactions and member rows go with it via FK
+  // cascade. Old unread alerts were already cleared at soft-delete time.
   const { data: convDue } = await supabase
     .from("conversations")
     .select("id, client_id")
@@ -113,7 +116,7 @@ export async function GET(req: NextRequest) {
       const { data: msgs } = await supabase
         .from("messages")
         .select("attachments")
-        .eq("client_id", cv.client_id)
+        .eq("conversation_id", cv.id)
         .throwOnError();
       const paths = ((msgs as { attachments: { path?: string }[] | null }[] | null) ?? [])
         .flatMap((m) => m.attachments ?? [])
@@ -126,22 +129,6 @@ export async function GET(req: NextRequest) {
         if (rmErr) throw new Error(rmErr.message);
       }
 
-      await supabase
-        .from("notifications")
-        .delete()
-        .eq("client_id", cv.client_id)
-        .eq("type", "message")
-        .throwOnError();
-      await supabase
-        .from("message_reactions")
-        .delete()
-        .eq("client_id", cv.client_id)
-        .throwOnError();
-      await supabase
-        .from("messages")
-        .delete()
-        .eq("client_id", cv.client_id)
-        .throwOnError();
       await supabase.from("conversations").delete().eq("id", cv.id).throwOnError();
       convPurged++;
     } catch {

@@ -10,6 +10,7 @@ import { buttonClasses } from "@/components/ui/Button";
 import { NewClientForm } from "@/components/admin/NewClientForm";
 import { ClientActions } from "@/components/admin/ClientActions";
 import { EditClientForm } from "@/components/admin/EditClientForm";
+import { ClientUsersDialog } from "@/components/admin/ClientUsersDialog";
 
 export const metadata = { title: "Clients" };
 
@@ -164,6 +165,7 @@ function ClientCard({ client: c, section }: { client: Client; section: Section }
               serviceTier={c.service_tier}
               status={c.status}
             />
+            <ClientUsersDialog clientId={c.id} clientName={c.business_name} />
           </>
         )}
         <ClientActions
