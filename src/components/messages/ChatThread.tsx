@@ -417,6 +417,29 @@ export function ChatThread({
     if (fileRef.current) fileRef.current.value = "";
   }
 
+  // Screenshots and copied images land as clipboard files named "image.png";
+  // stamp them so downloads and the thread stay tellable-apart.
+  function onPaste(e: React.ClipboardEvent) {
+    const images = Array.from(e.clipboardData?.items ?? [])
+      .filter((it) => it.kind === "file" && it.type.startsWith("image/"))
+      .map((it) => it.getAsFile())
+      .filter((f): f is File => !!f);
+    if (images.length === 0) return; // plain text pastes as normal
+    e.preventDefault();
+    void (async () => {
+      for (const f of images) {
+        const ext = (f.type.split("/")[1] ?? "png").split("+")[0];
+        const stamp = new Date()
+          .toISOString()
+          .slice(0, 19)
+          .replace(/[T:]/g, "-");
+        await attach(
+          new File([f], `pasted-${stamp}.${ext}`, { type: f.type }),
+        );
+      }
+    })();
+  }
+
   // Force a real download (Content-Disposition: attachment) with the original
   // file name, rather than opening the image in a tab.
   async function download(a: Attachment) {
@@ -494,7 +517,10 @@ export function ChatThread({
   }
 
   return (
-    <div className="relative flex h-[72vh] flex-col overflow-hidden rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface">
+    <div
+      onPaste={onPaste}
+      className="relative flex h-[72vh] flex-col overflow-hidden rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface"
+    >
       {searchOpen ? (
         <div className="flex items-center gap-2 border-b border-pulse-border px-3 py-2">
           <Search size={14} className="shrink-0 text-pulse-text-mute" />
