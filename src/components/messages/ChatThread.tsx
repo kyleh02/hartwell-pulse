@@ -12,6 +12,7 @@ import {
   ChevronUp,
   ChevronDown,
   Download,
+  Trash2,
   X,
 } from "lucide-react";
 import { useSupabaseClient } from "@/lib/supabase/client";
@@ -443,6 +444,24 @@ export function ChatThread({
     })();
   }
 
+  // Admin-only: remove a message for everyone. RLS enforces the "only Kyle"
+  // part (clients have no delete policy on messages). Attachment files go too;
+  // reactions cascade away in the database.
+  async function deleteMessage(m: Message) {
+    if (role !== "admin") return;
+    if (!window.confirm("Delete this message for everyone? This can't be undone.")) {
+      return;
+    }
+    const paths = attachmentsOf(m)
+      .map((a) => a.path)
+      .filter(Boolean);
+    if (paths.length > 0) {
+      await supabase.storage.from("pulse-assets").remove(paths);
+    }
+    await supabase.from("messages").delete().eq("id", m.id);
+    await load();
+  }
+
   // Force a real download (Content-Disposition: attachment) with the original
   // file name, rather than opening the image in a tab.
   async function download(a: Attachment) {
@@ -622,7 +641,10 @@ export function ChatThread({
                   if (el) msgRefs.current.set(m.id, el);
                   else msgRefs.current.delete(m.id);
                 }}
-                className={cn("flex", own ? "justify-end" : "justify-start")}
+                className={cn(
+                  "group flex",
+                  own ? "justify-end" : "justify-start",
+                )}
               >
                 <div className={cn("max-w-[78%]", own && "items-end")}>
                   <div
@@ -717,6 +739,17 @@ export function ChatThread({
                       {/* The picker itself renders once at card level (below):
                           anchored popovers clip inside the scrolling list. */}
                     </div>
+                    {role === "admin" && (
+                      <button
+                        type="button"
+                        onClick={() => void deleteMessage(m)}
+                        aria-label="Delete message"
+                        title="Delete message"
+                        className="text-pulse-text-mute opacity-0 transition-opacity hover:text-pulse-danger focus:opacity-100 group-hover:opacity-100"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    )}
                   </div>
 
                   {seenText && (
