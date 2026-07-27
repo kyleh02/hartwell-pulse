@@ -146,7 +146,7 @@ export function Shell({
     <div className="min-h-screen bg-pulse-bg">
       <TabUnreadBadge />
       {/* ---------- desktop sidebar ---------- */}
-      <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-pulse-border bg-pulse-bg bg-grid lg:flex">
+      <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-pulse-border bg-pulse-bg bg-grid pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] lg:flex">
         <div className="flex h-16 items-center border-b border-pulse-border px-5">
           <Wordmark size="md" />
         </div>
@@ -164,7 +164,7 @@ export function Shell({
             className="absolute inset-0 bg-black/60"
             onClick={() => setDrawerOpen(false)}
           />
-          <div className="absolute inset-y-0 left-0 flex w-72 flex-col border-r border-pulse-border bg-pulse-bg bg-grid">
+          <div className="absolute inset-y-0 left-0 flex w-72 flex-col border-r border-pulse-border bg-pulse-bg bg-grid pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
             <div className="flex h-16 items-center justify-between border-b border-pulse-border px-5">
               <Wordmark size="md" />
               <button
@@ -189,7 +189,8 @@ export function Shell({
 
       {/* ---------- main column ---------- */}
       <div className="print-reset lg:pl-64">
-        <header className="no-print sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-pulse-border bg-pulse-bg/85 px-4 backdrop-blur sm:px-6">
+        <header className="no-print sticky top-0 z-20 border-b border-pulse-border bg-pulse-bg/85 px-4 pt-[env(safe-area-inset-top)] backdrop-blur sm:px-6">
+          <div className="flex h-16 items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <button
               aria-label="Open menu"
@@ -210,13 +211,16 @@ export function Shell({
             )}
             <NotificationBell />
           </div>
+          </div>
         </header>
 
         <main
           className={cn(
             "print-reset px-4 py-6 sm:px-6 lg:px-8 lg:py-8",
-            // leave room for the client bottom tab bar on mobile
-            variant === "client" && "pb-24 lg:pb-8",
+            // leave room for the client bottom tab bar (plus the iPhone home
+            // indicator) on mobile
+            variant === "client" &&
+              "pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-8",
           )}
         >
           {children}
@@ -225,7 +229,7 @@ export function Shell({
 
       {/* ---------- client bottom tab bar (mobile only) ---------- */}
       {variant === "client" && (
-        <nav className="no-print fixed inset-x-0 bottom-0 z-30 flex border-t border-pulse-border bg-pulse-bg/95 backdrop-blur lg:hidden">
+        <nav className="no-print fixed inset-x-0 bottom-0 z-30 flex border-t border-pulse-border bg-pulse-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
           {clientNav.map((item) => {
             const active = isNavActive(pathname, item.href);
             const Icon = item.icon;

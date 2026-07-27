@@ -54,6 +54,9 @@
 
   html {
     color-scheme: dark;
+    /* iOS inflates text in landscape unless this is pinned. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
   body {
@@ -62,6 +65,32 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+  }
+
+  /* iOS zooms the whole page when you focus a control smaller than 16px, and
+     never zooms back out. Bump every form control on small screens so tapping
+     a field can't throw the layout sideways. */
+  @media (max-width: 640px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
+
+  /* No grey flash box when tapping on iOS. */
+  a,
+  button,
+  [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Long URLs and unbroken strings should wrap, not stretch their container. */
+  p,
+  h1,
+  h2,
+  h3 {
+    overflow-wrap: break-word;
   }
 
   ::selection {

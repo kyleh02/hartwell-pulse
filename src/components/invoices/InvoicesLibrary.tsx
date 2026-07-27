@@ -82,7 +82,7 @@ export function InvoicesLibrary({
 
   return (
     <div>
-      <div className="mb-5 grid grid-cols-3 gap-3">
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Card className="p-4">
           <p className="mono-label">Outstanding</p>
           <p className="data-mono mt-1 text-xl text-pulse-text sm:text-2xl">

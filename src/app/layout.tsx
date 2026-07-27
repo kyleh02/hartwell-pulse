@@ -39,6 +39,9 @@ export const viewport: Viewport = {
   themeColor: "#0a0908",
   width: "device-width",
   initialScale: 1,
+  // Draw behind the notch and home indicator; the shell pads itself back out
+  // with env(safe-area-inset-*) so nothing hides under either.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

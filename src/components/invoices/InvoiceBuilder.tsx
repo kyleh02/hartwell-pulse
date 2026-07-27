@@ -263,7 +263,7 @@ export function InvoiceBuilder({
       <div className="grid gap-6 lg:grid-cols-2">
         {/* editor */}
         <div className="no-print space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1">
               <span className="mono-label">Issue date</span>
               <input

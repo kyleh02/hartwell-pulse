@@ -41,7 +41,9 @@ export function InvoiceDocument({
             </p>
           )}
         </div>
-        <div className="text-right">
+        {/* Right-aligning this block only reads correctly while it sits beside
+            the logo; once it wraps underneath on a phone, left is right. */}
+        <div className="text-left sm:text-right">
           <p className="mono-label">{isTaxInvoice ? "Tax Invoice" : "Invoice"}</p>
           <p className="data-mono mt-1 text-lg text-pulse-text">
             {invoice.invoice_number}
@@ -62,7 +64,10 @@ export function InvoiceDocument({
         </p>
       </div>
 
-      <table className="w-full text-sm">
+      {/* The money columns can't wrap, so on a phone the table scrolls inside
+          its own box rather than dragging the whole page sideways. */}
+      <div className="overflow-x-auto">
+      <table className="w-full min-w-[22rem] text-sm">
         <thead>
           <tr className="mono-label border-b border-pulse-border text-left">
             <th className="w-full py-2 pr-4 font-medium">Description</th>
@@ -125,9 +130,10 @@ export function InvoiceDocument({
           )}
         </tbody>
       </table>
+      </div>
 
       <div className="mt-4 flex justify-end">
-        <div className="w-56 space-y-1.5 text-sm">
+        <div className="w-full max-w-[14rem] space-y-1.5 text-sm">
           <div className="flex justify-between text-pulse-text-dim">
             <span>Subtotal</span>
             <span className="data-mono">{formatMoney(invoice.subtotal)}</span>

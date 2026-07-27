@@ -668,7 +668,7 @@ export function ChatThread({
   return (
     <div
       onPaste={onPaste}
-      className="relative flex h-[72vh] flex-col overflow-hidden rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface"
+      className="relative flex h-[70dvh] flex-col overflow-hidden rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface lg:h-[72vh]"
     >
       {searchOpen ? (
         <div className="flex items-center gap-2 border-b border-pulse-border px-3 py-2">
@@ -773,7 +773,10 @@ export function ChatThread({
                   own ? "justify-end" : "justify-start",
                 )}
               >
-                <div className={cn("max-w-[78%]", own && "items-end")}>
+                {/* min-w-0 is load-bearing: without it this flex item keeps its
+                    content's intrinsic width, and the meta row below (name,
+                    time, reactions, buttons) pushes the bubble off screen. */}
+                <div className={cn("min-w-0 max-w-[85%] sm:max-w-[78%]", own && "items-end")}>
                   <div
                     className={cn(
                       "rounded-2xl px-4 py-3 text-base leading-relaxed",
@@ -820,7 +823,7 @@ export function ChatThread({
                       </div>
                     ) : (
                       m.body && (
-                        <p className="whitespace-pre-wrap">
+                        <p className="whitespace-pre-wrap break-words">
                           {q.length >= 2 ? renderHighlighted(m.body, q) : m.body}
                         </p>
                       )
@@ -850,10 +853,12 @@ export function ChatThread({
                           href={urls[a.path] ?? "#"}
                           target="_blank"
                           rel="noreferrer"
-                          className="mt-1 inline-flex items-center gap-2 rounded-lg border border-pulse-border bg-pulse-surface px-3 py-2 text-xs text-pulse-text-dim hover:text-pulse-text"
+                          className="mt-1 flex max-w-full items-center gap-2 rounded-lg border border-pulse-border bg-pulse-surface px-3 py-2 text-xs text-pulse-text-dim hover:text-pulse-text"
                         >
-                          <FileText size={14} />{" "}
-                          {q.length >= 2 ? renderHighlighted(a.name, q) : a.name}
+                          <FileText size={14} className="shrink-0" />
+                          <span className="min-w-0 break-all">
+                            {q.length >= 2 ? renderHighlighted(a.name, q) : a.name}
+                          </span>
                         </a>
                       ),
                     )}
@@ -861,7 +866,7 @@ export function ChatThread({
 
                   <div
                     className={cn(
-                      "mt-1 flex items-center gap-2",
+                      "mt-1 flex flex-wrap items-center gap-x-2 gap-y-1",
                       own ? "justify-end" : "justify-start",
                     )}
                   >
