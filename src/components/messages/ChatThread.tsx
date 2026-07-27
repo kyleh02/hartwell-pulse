@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { useSupabaseClient } from "@/lib/supabase/client";
+import { notifyNewMessage } from "@/lib/actions/push";
 import { EmojiPicker } from "@/components/messages/EmojiPicker";
 import type {
   ConversationKind,
@@ -464,14 +465,23 @@ export function ChatThread({
     setBody("");
     setPickerOpen(false);
     broadcastTypingStop();
-    const { error } = await supabase.from("messages").insert({
-      conversation_id: conversationId,
-      client_id: clientId,
-      sender_user_id: userId,
-      sender_role: role,
-      body: text,
-    });
-    if (!error) await load();
+    const { data: inserted, error } = await supabase
+      .from("messages")
+      .insert({
+        conversation_id: conversationId,
+        client_id: clientId,
+        sender_user_id: userId,
+        sender_role: role,
+        body: text,
+      })
+      .select("id")
+      .single();
+    if (!error) {
+      // Fire and forget: a push failure must never hold up the thread.
+      const id = (inserted as { id: string } | null)?.id;
+      if (id) void notifyNewMessage(id).catch(() => {});
+      await load();
+    }
     setBusy(false);
   }
 
@@ -501,15 +511,21 @@ export function ChatThread({
         mime: file.type || null,
         size: file.size,
       };
-      const ins = await supabase.from("messages").insert({
-        conversation_id: conversationId,
-        client_id: clientId,
-        sender_user_id: userId,
-        sender_role: role,
-        body: "",
-        attachments: [attachment],
-      });
+      const ins = await supabase
+        .from("messages")
+        .insert({
+          conversation_id: conversationId,
+          client_id: clientId,
+          sender_user_id: userId,
+          sender_role: role,
+          body: "",
+          attachments: [attachment],
+        })
+        .select("id")
+        .single();
       if (ins.error) setAttachError(`Couldn't send that file: ${ins.error.message}`);
+      const id = (ins.data as { id: string } | null)?.id;
+      if (id) void notifyNewMessage(id).catch(() => {});
       await load();
     }
     setBusy(false);

@@ -3,6 +3,7 @@ import { getPulseSession } from "@/lib/auth/session";
 import { createServerSupabase } from "@/lib/supabase/server";
 import type { Conversation } from "@/lib/types/database";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { PushToggle } from "@/components/notifications/PushToggle";
 import {
   ClientMessages,
   type ClientConversationRow,
@@ -37,6 +38,7 @@ export default async function MessagesPage() {
         label={["Messages"]}
         title="Messages with Kyle"
         description="A direct line to Kyle. Ask a question, share a file, or just check in."
+        actions={<PushToggle />}
       />
       <ClientMessages
         conversations={conversations}

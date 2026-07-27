@@ -2,6 +2,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import type { Client, ClientUser, Conversation } from "@/lib/types/database";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { AdminMessages } from "@/components/messages/AdminMessages";
+import { PushToggle } from "@/components/notifications/PushToggle";
 
 export const metadata = { title: "Messages" };
 
@@ -100,6 +101,7 @@ export default async function AdminMessagesPage() {
         label={["Messages", "All Clients"]}
         title="Messages"
         description="Your client conversations: a private thread per person, plus group chats. Start one deliberately, reply, share files — or delete a thread (restorable for 30 days)."
+        actions={<PushToggle />}
       />
       <AdminMessages
         conversations={rows}

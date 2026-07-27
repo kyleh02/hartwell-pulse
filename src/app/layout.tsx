@@ -27,7 +27,12 @@ export const metadata: Metadata = {
       { url: "/favicon.svg", type: "image/svg+xml" },
       { url: "/favicon.ico", sizes: "any" },
     ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
   },
+  // Installable so iOS can grant push: Safari only allows web push for sites
+  // added to the Home Screen.
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "Pulse", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {

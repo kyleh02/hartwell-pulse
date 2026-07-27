@@ -1,0 +1,14 @@
+{
+  "name": "Hartwell Pulse",
+  "short_name": "Pulse",
+  "description": "Your marketing, in one place.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0a0908",
+  "theme_color": "#0a0908",
+  "icons": [
+    { "src": "/apple-touch-icon.png", "sizes": "180x180" },
+    { "src": "/logo.png", "sizes": "1080x1080" }
+  ]
+}
