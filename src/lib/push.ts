@@ -9,6 +9,14 @@ import { createAdminSupabase } from "@/lib/supabase/admin";
 
 let configured = false;
 
+/** Are the VAPID keys present on the server? Exposed so callers can tell
+ *  "nobody has subscribed" apart from "push isn't switched on yet". */
+export function pushConfigured(): boolean {
+  return !!(
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY
+  );
+}
+
 function ready(): boolean {
   const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;

@@ -138,12 +138,19 @@ export function PushToggle() {
     setBusy(true);
     setNote(null);
     try {
-      const { sent } = await sendTestPush();
+      const r = await sendTestPush();
+      const where = isStandalone() ? "this app" : "this browser";
       setNote(
-        sent > 0
-          ? "Sent — check your device."
-          : "No devices are registered for push yet.",
+        r.status === "not-configured"
+          ? "Push keys are missing on the server."
+          : r.status === "no-devices"
+            ? `No devices registered yet — turn notifications on from ${where}.`
+            : r.status === "none-delivered"
+              ? `${r.devices} device(s) registered, but all ${r.failed} sends were rejected.`
+              : `Sent to ${r.sent} of ${r.devices} registered device(s).`,
       );
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : "Test failed.");
     } finally {
       setBusy(false);
     }

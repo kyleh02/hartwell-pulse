@@ -2,7 +2,7 @@
 
 import { getPulseSession } from "@/lib/auth/session";
 import { createAdminSupabase } from "@/lib/supabase/admin";
-import { pushToUsers } from "@/lib/push";
+import { pushToUsers, pushConfigured } from "@/lib/push";
 
 interface SubscriptionInput {
   endpoint: string;
@@ -46,17 +46,46 @@ export async function removePushSubscription(endpoint: string) {
     .eq("clerk_user_id", session.clerkUserId);
 }
 
-/** Fire a test push to the caller's own devices, so they can prove it works. */
-export async function sendTestPush(): Promise<{ sent: number }> {
+/**
+ * Fire a test push to the caller's own devices. Reports precisely which step
+ * failed — "no devices" and "server not configured" look identical from the
+ * browser otherwise, and they need opposite fixes.
+ */
+export async function sendTestPush(): Promise<{
+  status: "sent" | "none-delivered" | "no-devices" | "not-configured";
+  devices: number;
+  sent: number;
+  failed: number;
+}> {
   const session = await getPulseSession();
   if (!session) throw new Error("Not signed in");
-  const { sent } = await pushToUsers([session.clerkUserId], {
+
+  if (!pushConfigured()) {
+    return { status: "not-configured", devices: 0, sent: 0, failed: 0 };
+  }
+
+  const supabase = createAdminSupabase();
+  const { count } = await supabase
+    .from("push_subscriptions")
+    .select("id", { count: "exact", head: true })
+    .eq("clerk_user_id", session.clerkUserId);
+  const devices = count ?? 0;
+  if (devices === 0) {
+    return { status: "no-devices", devices: 0, sent: 0, failed: 0 };
+  }
+
+  const { sent, failed } = await pushToUsers([session.clerkUserId], {
     title: "Hartwell Pulse",
     body: "Notifications are working. This is what a new message looks like.",
     url: session.role === "admin" ? "/admin/messages" : "/messages",
     tag: "pulse-test",
   });
-  return { sent };
+  return {
+    status: sent > 0 ? "sent" : "none-delivered",
+    devices,
+    sent,
+    failed,
+  };
 }
 
 /**
