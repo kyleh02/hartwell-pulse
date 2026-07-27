@@ -229,23 +229,26 @@ export function ChatThread({
     if (document.visibilityState !== "visible" || !document.hasFocus()) return;
     if (!stickRef.current) return;
     const now = new Date().toISOString();
-    const receipt =
-      role === "admin"
-        ? // Kyle's member row may not exist yet on older threads.
-          supabase.from("conversation_members").upsert(
-            {
-              conversation_id: conversationId,
-              clerk_user_id: userId,
-              last_read_at: now,
-            },
-            { onConflict: "conversation_id,clerk_user_id" },
-          )
-        : // A client's row always exists; RLS only lets them touch their own.
-          supabase
-            .from("conversation_members")
-            .update({ last_read_at: now })
-            .eq("conversation_id", conversationId)
-            .eq("clerk_user_id", userId);
+    // NEVER upsert here: only the last_read_at column is updatable by signed-in
+    // users (0018 locks the rest), and an upsert's conflict path updates every
+    // supplied column, so it is permission-denied whenever the row exists.
+    // Plain update first; insert only for admin rows that don't exist yet
+    // (threads from before the 0018 backfill).
+    const receipt = (async () => {
+      const { data: updated } = await supabase
+        .from("conversation_members")
+        .update({ last_read_at: now })
+        .eq("conversation_id", conversationId)
+        .eq("clerk_user_id", userId)
+        .select("conversation_id");
+      if (role === "admin" && (updated ?? []).length === 0) {
+        await supabase.from("conversation_members").insert({
+          conversation_id: conversationId,
+          clerk_user_id: userId,
+          last_read_at: now,
+        });
+      }
+    })();
     await Promise.all([
       receipt,
       supabase
