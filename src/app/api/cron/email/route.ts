@@ -6,6 +6,14 @@ import type { Notification } from "@/lib/types/database";
 
 export const dynamic = "force-dynamic";
 
+// Notification bodies are already capped at 140 chars by the DB triggers; trim
+// further for email so a preview stays a glance, not a wall of text.
+const PREVIEW_CHARS = 90;
+function preview(body: string): string {
+  const s = body.replace(/\s+/g, " ").trim();
+  return s.length > PREVIEW_CHARS ? `${s.slice(0, PREVIEW_CHARS)}…` : s;
+}
+
 // Emails any pending "instant" notifications (e.g. a message from Kyle).
 export async function GET(req: NextRequest) {
   const auth = cronAuthorized(req);
@@ -97,9 +105,13 @@ export async function GET(req: NextRequest) {
     const sections = Array.from(bySender.entries())
       .map(([title, list]) => {
         const latest = list[list.length - 1];
-        return `<p><strong>${escapeHtml(title)}</strong>${
+        return `<p style="margin:0 0 14px"><strong>${escapeHtml(title)}</strong>${
           list.length > 1 ? ` · ${list.length} messages` : ""
-        }${latest.body ? `<br/>${escapeHtml(latest.body)}` : ""}</p>`;
+        }${
+          latest.body
+            ? `<br/><span style="color:#777">${escapeHtml(preview(latest.body))}</span>`
+            : ""
+        }</p>`;
       })
       .join("");
     const subject =
@@ -198,12 +210,17 @@ export async function GET(req: NextRequest) {
         (c) => [c.id, c.business_name],
       ),
     );
-    const perClient = new Map<string, { msgs: number; ups: number }>();
+    const perClient = new Map<
+      string,
+      { msgs: number; ups: number; latest: string | null }
+    >();
     for (const n of group) {
       const name = clientNames.get(n.client_id ?? "") ?? "A client";
-      const entry = perClient.get(name) ?? { msgs: 0, ups: 0 };
+      const entry = perClient.get(name) ?? { msgs: 0, ups: 0, latest: null };
       if (n.type === "message") entry.msgs++;
       else entry.ups++;
+      // group is ordered oldest first, so the last body seen is the newest.
+      if (n.body) entry.latest = n.body;
       perClient.set(name, entry);
     }
     const breakdown = Array.from(perClient.entries())
@@ -212,7 +229,11 @@ export async function GET(req: NextRequest) {
           c.msgs > 0 && `${c.msgs} message${c.msgs === 1 ? "" : "s"}`,
           c.ups > 0 && `${c.ups} upload${c.ups === 1 ? "" : "s"}`,
         ].filter(Boolean);
-        return `<p><strong>${escapeHtml(name)}</strong> · ${bits.join(", ")}</p>`;
+        return `<p style="margin:0 0 14px"><strong>${escapeHtml(name)}</strong> · ${bits.join(", ")}${
+          c.latest
+            ? `<br/><span style="color:#777">${escapeHtml(preview(c.latest))}</span>`
+            : ""
+        }</p>`;
       })
       .join("");
 
