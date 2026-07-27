@@ -251,6 +251,7 @@ export interface Message {
   body: string;
   attachments: Record<string, unknown>[] | null;
   read_at: string | null;
+  edited_at: string | null;
   created_at: string;
 }
 

@@ -13,6 +13,7 @@ import {
   ChevronDown,
   Download,
   Trash2,
+  Pencil,
   X,
 } from "lucide-react";
 import { useSupabaseClient } from "@/lib/supabase/client";
@@ -103,6 +104,13 @@ export function ChatThread({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  // userId -> {name, until}: who is typing right now, with an expiry so a
+  // dropped "stop" event can never leave a ghost indicator.
+  const [typers, setTypers] = useState<Record<string, { name: string; until: number }>>({});
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const lastTypingSentRef = useRef(0);
   const [reactingTo, setReactingTo] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -267,8 +275,9 @@ export function ChatThread({
     void load();
   }, [load]);
 
-  // Realtime: new messages and read receipts land the moment they happen. RLS
-  // scopes the events, so a client only ever hears about their own threads.
+  // Realtime: new messages, edits and read receipts land the moment they
+  // happen (RLS scopes the events), and the same channel carries the ephemeral
+  // typing broadcasts — those never touch the database.
   useEffect(() => {
     const channel = supabase
       .channel(`pulse-conv-${conversationId}`)
@@ -276,6 +285,29 @@ export function ChatThread({
         "postgres_changes",
         {
           event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          // Their message arriving supersedes their typing bubble.
+          const sender = (payload.new as { sender_user_id?: string } | null)
+            ?.sender_user_id;
+          if (sender) {
+            setTypers((prev) => {
+              if (!(sender in prev)) return prev;
+              const next = { ...prev };
+              delete next[sender];
+              return next;
+            });
+          }
+          void load();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
           schema: "public",
           table: "messages",
           filter: `conversation_id=eq.${conversationId}`,
@@ -292,11 +324,48 @@ export function ChatThread({
         },
         () => void load(),
       )
+      .on("broadcast", { event: "typing" }, ({ payload }) => {
+        if (!payload?.userId || payload.userId === userId) return;
+        setTypers((prev) => ({
+          ...prev,
+          [payload.userId]: {
+            name: payload.name ?? "Someone",
+            until: Date.now() + 3500,
+          },
+        }));
+      })
+      .on("broadcast", { event: "typing_stop" }, ({ payload }) => {
+        if (!payload?.userId) return;
+        setTypers((prev) => {
+          if (!(payload.userId in prev)) return prev;
+          const next = { ...prev };
+          delete next[payload.userId];
+          return next;
+        });
+      })
       .subscribe();
+    channelRef.current = channel;
     return () => {
+      channelRef.current = null;
       void supabase.removeChannel(channel);
     };
-  }, [supabase, conversationId, load]);
+  }, [supabase, conversationId, userId, load]);
+
+  // Sweep expired typing entries so the indicator fades ~3.5s after the last
+  // keystroke even if the "stop" broadcast never arrives.
+  useEffect(() => {
+    if (Object.keys(typers).length === 0) return;
+    const t = setInterval(() => {
+      const now = Date.now();
+      setTypers((prev) => {
+        const live = Object.entries(prev).filter(([, v]) => v.until > now);
+        return live.length === Object.keys(prev).length
+          ? prev
+          : Object.fromEntries(live);
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [typers]);
 
   // Polling backstops realtime (Chrome throttles background tabs and sockets
   // drop), so the thread reconciles every few seconds regardless.
@@ -362,6 +431,31 @@ export function ChatThread({
     });
   }
 
+  // Throttled "I'm typing" ping; expiry on the receiving side handles fade-out.
+  function broadcastTyping() {
+    if (!userId) return;
+    const now = Date.now();
+    if (now - lastTypingSentRef.current < 2000) return;
+    lastTypingSentRef.current = now;
+    const name =
+      role === "admin" ? "Kyle" : (names.get(userId) ?? "Someone");
+    void channelRef.current?.send({
+      type: "broadcast",
+      event: "typing",
+      payload: { userId, name },
+    });
+  }
+
+  function broadcastTypingStop() {
+    if (!userId) return;
+    lastTypingSentRef.current = 0;
+    void channelRef.current?.send({
+      type: "broadcast",
+      event: "typing_stop",
+      payload: { userId },
+    });
+  }
+
   async function send() {
     const text = body.trim();
     if (!text || !userId || busy) return;
@@ -369,6 +463,7 @@ export function ChatThread({
     setBusy(true);
     setBody("");
     setPickerOpen(false);
+    broadcastTypingStop();
     const { error } = await supabase.from("messages").insert({
       conversation_id: conversationId,
       client_id: clientId,
@@ -442,6 +537,22 @@ export function ChatThread({
         );
       }
     })();
+  }
+
+  // Admin-only: edit your own message. The 0020 guard trigger stamps
+  // edited_at server-side whenever the body changes, so the "edited" tag can
+  // never be dodged. Clients have no update policy at all.
+  function startEditMessage(m: Message) {
+    setEditingId(m.id);
+    setEditText(m.body);
+  }
+
+  async function saveEdit() {
+    const text = editText.trim();
+    if (!editingId || !text) return;
+    await supabase.from("messages").update({ body: text }).eq("id", editingId);
+    setEditingId(null);
+    await load();
   }
 
   // Admin-only: remove a message for everyone. RLS enforces the "only Kyle"
@@ -656,10 +767,47 @@ export function ChatThread({
                       isCurrentMatch && "ring-1 ring-pulse-gold",
                     )}
                   >
-                    {m.body && (
-                      <p className="whitespace-pre-wrap">
-                        {q.length >= 2 ? renderHighlighted(m.body, q) : m.body}
-                      </p>
+                    {editingId === m.id ? (
+                      <div className="w-64 max-w-full space-y-2">
+                        <textarea
+                          autoFocus
+                          value={editText}
+                          onChange={(e) => setEditText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();
+                              void saveEdit();
+                            } else if (e.key === "Escape") {
+                              setEditingId(null);
+                            }
+                          }}
+                          rows={2}
+                          className="w-full resize-none rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface px-2 py-1.5 text-base text-pulse-text focus:border-pulse-border-strong focus:outline-none"
+                        />
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditingId(null)}
+                            className="text-xs text-pulse-text-mute hover:text-pulse-text"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void saveEdit()}
+                            disabled={!editText.trim()}
+                            className="rounded-[var(--radius-input)] bg-pulse-gold px-2.5 py-1 text-xs font-medium text-pulse-bg hover:bg-pulse-gold-light disabled:opacity-40"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      m.body && (
+                        <p className="whitespace-pre-wrap">
+                          {q.length >= 2 ? renderHighlighted(m.body, q) : m.body}
+                        </p>
+                      )
                     )}
                     {attachmentsOf(m).map((a) =>
                       isImageMime(a.mime) && urls[a.path] ? (
@@ -724,6 +872,7 @@ export function ChatThread({
                         hour: "2-digit",
                         minute: "2-digit",
                       })}
+                      {m.edited_at ? " · edited" : ""}
                     </span>
                     <div className="relative">
                       <button
@@ -739,6 +888,17 @@ export function ChatThread({
                       {/* The picker itself renders once at card level (below):
                           anchored popovers clip inside the scrolling list. */}
                     </div>
+                    {role === "admin" && own && m.body && (
+                      <button
+                        type="button"
+                        onClick={() => startEditMessage(m)}
+                        aria-label="Edit message"
+                        title="Edit message"
+                        className="text-pulse-text-mute opacity-0 transition-opacity hover:text-pulse-text focus:opacity-100 group-hover:opacity-100"
+                      >
+                        <Pencil size={12} />
+                      </button>
+                    )}
                     {role === "admin" && (
                       <button
                         type="button"
@@ -761,6 +921,14 @@ export function ChatThread({
               </div>
             );
           })
+        )}
+        {Object.keys(typers).length > 0 && (
+          <p className="text-xs text-pulse-text-mute">
+            {Object.values(typers)
+              .map((t) => t.name)
+              .join(" and ")}{" "}
+            {Object.keys(typers).length === 1 ? "is" : "are"} typing…
+          </p>
         )}
         </div>
       </div>
@@ -835,7 +1003,11 @@ export function ChatThread({
         <textarea
           ref={textareaRef}
           value={body}
-          onChange={(e) => setBody(e.target.value)}
+          onChange={(e) => {
+            setBody(e.target.value);
+            if (e.target.value.trim()) broadcastTyping();
+            else broadcastTypingStop();
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
