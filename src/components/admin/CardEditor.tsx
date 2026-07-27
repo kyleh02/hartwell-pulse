@@ -61,7 +61,7 @@ export function CardEditor({
         className="absolute inset-0 bg-black/60"
         onClick={onClose}
       />
-      <div className="relative w-full max-w-md rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface">
+      <div className="relative max-h-[85dvh] w-full max-w-md overflow-y-auto rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface">
         <div className="flex items-center justify-between border-b border-pulse-border px-4 py-3">
           <p className="text-sm font-medium text-pulse-text">
             {initial.id ? "Edit card" : "New card"}
@@ -85,7 +85,7 @@ export function CardEditor({
               placeholder="e.g. June report for Demo Co"
             />
           </label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="block">
               <span className="mono-label">Client</span>
               <select
@@ -116,7 +116,7 @@ export function CardEditor({
               </select>
             </label>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="block">
               <span className="mono-label">Column</span>
               <select

@@ -75,7 +75,7 @@ export function NewClientForm() {
           role="presentation"
         >
           <div
-            className="w-full max-w-md rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-5 shadow-xl"
+            className="max-h-[85dvh] w-full max-w-md overflow-y-auto rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">

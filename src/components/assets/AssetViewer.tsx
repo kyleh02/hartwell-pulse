@@ -140,7 +140,7 @@ export function AssetViewer({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-pulse-bg/95 lg:flex-row">
+    <div className="fixed inset-0 z-50 flex flex-col bg-pulse-bg/95 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] lg:flex-row">
       {/* Preview */}
       <div className="relative flex min-h-[45vh] flex-1 flex-col">
         <div className="flex items-center justify-between gap-2 px-4 py-3">

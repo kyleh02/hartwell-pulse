@@ -416,7 +416,7 @@ export function AssetsBrowser({
             className="absolute inset-0 bg-black/60"
             onClick={() => setMoving(null)}
           />
-          <div className="relative w-full max-w-sm rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-5">
+          <div className="relative max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-5">
             <p className="text-sm font-medium text-pulse-text">
               Move “{moving.name}”
             </p>
@@ -464,7 +464,7 @@ export function AssetsBrowser({
             className="absolute inset-0 bg-black/60"
             onClick={() => setShareUrl(null)}
           />
-          <div className="relative w-full max-w-sm rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-5">
+          <div className="relative max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-5">
             <p className="text-sm font-medium text-pulse-text">
               Share link created
             </p>
