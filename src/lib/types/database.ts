@@ -272,9 +272,22 @@ export type CrmChannel = "email" | "linkedin_note" | "linkedin_message" | "reply
 export type CrmSequenceStep = "email_1" | "linkedin_connect" | "email_2" | "ad_hoc" | "inbound";
 export type CrmTaskKind = "follow_up" | "linkedin_connect" | "reverify" | "annual_review" | "manual";
 
+export interface CrmList {
+  id: string;
+  brand: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  source_note: string | null; // where the names came from, and when
+  captured_on: string | null;
+  archived_at: string | null;
+  created_at: string;
+}
+
 export interface CrmOrganisation {
   id: string;
   brand: string; // 'ironpeak' today; the column exists so Hartwell can share
+  list_id: string | null; // which source list this prospect came from
   legal_name: string;
   trading_name: string | null;
   abn: string | null;
@@ -320,6 +333,8 @@ export interface CrmContact {
   email_as_published: string | null; // verbatim, never normalised
   email_source_url: string | null;
   email_verified_at: string | null;
+  direct_email: string | null; // given once you are talking; never overwrites the above
+  phone: string | null;
   screenshot_path: string | null;
   linkedin_url: string | null;
   no_opt_out_notice: boolean;

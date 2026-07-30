@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   CrmContact,
   CrmGrant,
+  CrmList,
   CrmMetrics,
   CrmOrganisation,
   CrmResearch,
@@ -17,6 +18,7 @@ import type {
 
 export interface ProspectRow {
   id: string;
+  list_id: string | null;
   legal_name: string;
   state: string | null;
   tier: string | null;
@@ -80,6 +82,7 @@ export async function listProspects(
     const name = [c?.first_name, c?.surname].filter(Boolean).join(" ");
     return {
       id: o.id,
+      list_id: o.list_id,
       legal_name: o.legal_name,
       state: o.state,
       tier: o.tier,
@@ -204,6 +207,22 @@ export async function listDueTasks(
     ...r,
     organisation_name: r.crm_organisations?.legal_name ?? null,
   }));
+}
+
+/** Source lists, newest first, with how many prospects each holds. */
+export async function listCrmLists(
+  supabase: SupabaseClient,
+): Promise<(CrmList & { count: number })[]> {
+  const [{ data: listData }, { data: orgData }] = await Promise.all([
+    supabase.from("crm_lists").select("*").order("created_at"),
+    supabase.from("crm_organisations").select("list_id"),
+  ]);
+  const lists = (listData as CrmList[] | null) ?? [];
+  const counts = new Map<string, number>();
+  for (const o of ((orgData as { list_id: string | null }[] | null) ?? [])) {
+    if (o.list_id) counts.set(o.list_id, (counts.get(o.list_id) ?? 0) + 1);
+  }
+  return lists.map((l) => ({ ...l, count: counts.get(l.id) ?? 0 }));
 }
 
 /** Counts per pipeline stage, for the summary strip. */

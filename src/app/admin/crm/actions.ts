@@ -34,11 +34,103 @@ export interface SaveContactInput {
   emailAsPublished: string;
   emailSourceUrl: string;
   emailVerifiedAt: string; // ISO date
+  directEmail: string;
+  phone: string;
   linkedinUrl: string;
   screenshotPath: string;
   noOptOutNotice: boolean;
   consentBasis: string;
   relevanceNote: string;
+}
+
+/**
+ * Create a source list. Where a prospect came from is what makes a first email
+ * specific, so a new batch of names gets its own list rather than being poured
+ * into the grant recipients.
+ */
+export async function createList(input: {
+  name: string;
+  description: string;
+  sourceNote: string;
+  capturedOn: string;
+}): Promise<string> {
+  const { supabase } = await adminSupabase();
+  const name = input.name.trim();
+  if (!name) throw new Error("Give the list a name.");
+
+  const base =
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 50) || "list";
+  let slug = base;
+  for (let n = 2; n < 100; n++) {
+    const { data: clash } = await supabase
+      .from("crm_lists")
+      .select("id")
+      .eq("slug", slug)
+      .maybeSingle();
+    if (!clash) break;
+    slug = `${base}-${n}`;
+  }
+
+  const { data, error } = await supabase
+    .from("crm_lists")
+    .insert({
+      brand: "ironpeak",
+      slug,
+      name,
+      description: input.description.trim() || null,
+      source_note: input.sourceNote.trim() || null,
+      captured_on: input.capturedOn || null,
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Could not create the list.");
+  revalidatePath("/admin/crm");
+  return (data as { id: string }).id;
+}
+
+/**
+ * Add a company to a list by hand, for prospects that did not arrive in a
+ * batch. It starts at researched like everything else: nothing has been
+ * verified against their site yet.
+ */
+export async function addProspect(input: {
+  listId: string;
+  legalName: string;
+  state: string;
+  websiteUrl: string;
+  headlinePurpose: string;
+}): Promise<string> {
+  const { supabase } = await adminSupabase();
+  const legalName = input.legalName.trim();
+  if (!legalName) throw new Error("Give the company a name.");
+
+  const { data: clash } = await supabase
+    .from("crm_organisations")
+    .select("id")
+    .eq("brand", "ironpeak")
+    .ilike("legal_name", legalName)
+    .maybeSingle();
+  if (clash) throw new Error(`${legalName} is already in the pipeline.`);
+
+  const { data, error } = await supabase
+    .from("crm_organisations")
+    .insert({
+      brand: "ironpeak",
+      list_id: input.listId,
+      legal_name: legalName,
+      state: input.state.trim() || null,
+      website_url: input.websiteUrl.trim() || null,
+      headline_purpose: input.headlinePurpose.trim() || null,
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Could not add the company.");
+  revalidatePath("/admin/crm");
+  return (data as { id: string }).id;
 }
 
 /**
@@ -63,6 +155,8 @@ export async function saveContact(
     email_as_published: input.emailAsPublished || null,
     email_source_url: input.emailSourceUrl.trim() || null,
     email_verified_at: input.emailVerifiedAt || null,
+    direct_email: input.directEmail.trim() || null,
+    phone: input.phone.trim() || null,
     linkedin_url: input.linkedinUrl.trim() || null,
     screenshot_path: input.screenshotPath.trim() || null,
     no_opt_out_notice: input.noOptOutNotice,

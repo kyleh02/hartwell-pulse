@@ -3,14 +3,14 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import {
   getCrmMetrics,
   getCrmSettings,
+  listCrmLists,
   listDueTasks,
   listProspects,
-  stageCounts,
 } from "@/lib/crm";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CrmHealth } from "@/components/crm/CrmHealth";
-import { ProspectTable, StageStrip } from "@/components/crm/ProspectTable";
+import { PipelineView } from "@/components/crm/PipelineView";
 import { ImportProspects } from "@/components/crm/ImportProspects";
 
 export const metadata = { title: "Pipeline" };
@@ -21,11 +21,12 @@ export default async function AdminCrmPage() {
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
-  const [rows, metrics, settings, dueTasks] = await Promise.all([
+  const [rows, metrics, settings, dueTasks, lists] = await Promise.all([
     listProspects(supabase),
     getCrmMetrics(supabase, 7),
     getCrmSettings(supabase),
     listDueTasks(supabase, today),
+    listCrmLists(supabase),
   ]);
 
   return (
@@ -33,7 +34,7 @@ export default async function AdminCrmPage() {
       <PageHeader
         label={["Ironpeak", "Outreach"]}
         title="Pipeline"
-        description="Defence Industry Development Grant recipients, and where each one sits. The rules are enforced rather than displayed: a send is blocked until its consent trail and its note are complete."
+        description="Who you are reaching out to, grouped by where the names came from, and where each one sits. The rules are enforced rather than displayed: a send is blocked until its consent trail and its note are complete."
       />
 
       {rows.length === 0 ? (
@@ -46,10 +47,7 @@ export default async function AdminCrmPage() {
       ) : (
         <>
           <CrmHealth metrics={metrics} settings={settings} dueTasks={dueTasks} />
-          <div>
-            <StageStrip counts={stageCounts(rows)} />
-            <ProspectTable rows={rows} />
-          </div>
+          <PipelineView lists={lists} rows={rows} />
         </>
       )}
     </div>

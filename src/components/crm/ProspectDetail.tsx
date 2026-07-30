@@ -579,6 +579,8 @@ function ContactForm({
     emailAsPublished: contact?.email_as_published ?? "",
     emailSourceUrl: contact?.email_source_url ?? "",
     emailVerifiedAt: contact?.email_verified_at?.slice(0, 10) ?? "",
+    directEmail: contact?.direct_email ?? "",
+    phone: contact?.phone ?? "",
     linkedinUrl: contact?.linkedin_url ?? "",
     screenshotPath: contact?.screenshot_path ?? "",
     noOptOutNotice: contact?.no_opt_out_notice ?? false,
@@ -673,6 +675,29 @@ function ContactForm({
         value={form.screenshotPath}
         onChange={(v) => set("screenshotPath", v)}
       />
+
+      <div className="rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2/40 p-3">
+        <p className="mono-label">// Once you are talking</p>
+        <p className="mt-0.5 text-[11px] text-pulse-text-mute">
+          A direct address or phone number they give you later. Kept separate
+          from the published address above, which stays as the consent evidence.
+        </p>
+        <div className="mt-2 grid gap-3 sm:grid-cols-2">
+          <Text
+            label="Direct email"
+            value={form.directEmail}
+            onChange={(v) => set("directEmail", v)}
+            mono
+          />
+          <Text
+            label="Phone"
+            value={form.phone}
+            onChange={(v) => set("phone", v)}
+            mono
+          />
+        </div>
+      </div>
+
       <Text label="LinkedIn URL" value={form.linkedinUrl} onChange={(v) => set("linkedinUrl", v)} />
 
       <label className="block">
