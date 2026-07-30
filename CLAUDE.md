@@ -24,7 +24,7 @@ Live at https://portal.hartwelldigital.com
 - Write them idempotent: `add column if not exists`, `drop policy if exists`
   before `create policy` (Postgres has no CREATE POLICY IF NOT EXISTS),
   `drop trigger if exists`, guarded `do $$` blocks.
-- 0001–0024 are applied in production as of 2026-07-30. The CRM prospect data
+- 0001–0025 are applied in production as of 2026-07-30. The CRM prospect data
   is NOT a migration: it imports in-app from Pipeline, because 30 KB of string
   literals proved unreliable to paste into the Supabase SQL editor.
 
@@ -50,7 +50,21 @@ Live at https://portal.hartwelldigital.com
   materialises + auto-sends one invoice per template per month (unique index
   dedup), evaluated in Australia/Brisbane time.
 
-## Ironpeak CRM (admin only)
+## CRM (admin only, two brands)
+- One CRM, two pipelines, toggled by `?brand=` on /admin/crm: **ironpeak** and
+  **hartwell**. Prospects, lists and metrics are all brand-scoped so a reply
+  rate from one client base never averages into the other.
+- **The rule sets differ, deliberately.** Ironpeak's gates (two-email cap,
+  technical-domain finding plus positive finding before a first email, nine
+  pre-send checks) are defence *playbook strategy* and fire only for
+  `brand = 'ironpeak'`. Applying them to Hartwell Digital's general client base
+  would make the CRM unusable for it.
+- **Universal for every brand, because it is law not strategy:** the Spam Act
+  2003 covers every commercial electronic message sent in Australia, so the
+  opt-out block and the full consent trail are required before any outbound
+  email is logged, whichever brand it is.
+
+## Ironpeak specifics
 - Ironpeak Consulting is a **registered business name against Hartwell Digital's
   ABN 44 286 503 049**, trading in defence only. Internal surfaces may say
   Hartwell is the parent; **client-facing output must not** — no "a business of
