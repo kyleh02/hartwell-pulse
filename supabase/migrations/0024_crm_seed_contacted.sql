@@ -89,7 +89,9 @@ select o.id, '2026-07-30',
     'copyright_year', '2025, a year stale',
     'homepage_weight', '1,037 KB carrying 1,123 characters of visible text',
     'capability_statement', 'none published',
-    'quality_certifications', 'none published; /quality and /certifications both 404'
+    -- chr(59) rather than a raw semicolon: the Supabase SQL editor splits
+    -- scripts on semicolons without respecting string literals.
+    'quality_certifications', 'none published' || chr(59) || ' /quality and /certifications both 404'
   )
 from public.crm_organisations o
 where o.brand = 'ironpeak' and lower(o.legal_name) = lower('NH Micro Pty Ltd')

@@ -6,11 +6,10 @@
 --
 -- The grant purpose is the load-bearing field. It is the public sentence
 -- describing exactly what each company was funded to build, which is what makes
--- an approach specific rather than generic.
---
--- Two statements, both guarded with "where not exists" rather than "on
--- conflict". Inferring an index from an expression like lower(legal_name) is
--- the fussiest thing this file could do, and it buys nothing here.
+-- an approach specific rather than generic. It is stored verbatim, so one
+-- purpose that genuinely contains a semicolon is assembled with chr(59): the
+-- Supabase SQL editor splits scripts on semicolons without respecting string
+-- literals, and a raw one cuts the statement in half.
 -- Run after 0022. Idempotent: re-running adds nothing.
 -- =============================================================================
 
@@ -55,7 +54,7 @@ from (values
   ('Rheon Systems Pty Ltd', 'Qld', 'C', 90402, 1, array['Sovereign Industrial Priorities']::text[], true, 'procure capital equipment to establish NATA-accredited pressure testing and calibration capability to support test, evaluation and certification activities of Defence systems'),
   ('Electronic & Electrical Solutions Pty Ltd', 'Qld', 'C', 73115, 1, array['Sovereign Industrial Priorities']::text[], true, 'acquire capital equipment to enhance the capacity and quality of manufacturing PCBs used across multiple defence platforms, particularly for guided-weapons production and the sustainment and enhancement of combined-arms land systems'),
   ('Amtech Precision Pty Ltd', 'ACT', 'C', 69750, 1, array['Sovereign Industrial Priorities']::text[], true, 'acquire a coordinate measuring machine and profile projector to enhance precision machining manufacturing capability in support of multiple capability domains'),
-  ('Ron Allum Deepsea Services Pty Ltd', 'NSW', 'C', 57634, 2, array['Exports','Skilling']::text[], true, 'upgrade its subsea test and evaluation system to support safe, repeatable, and production-scale testing of subsea systems; and obtain relevant ISO certification to remove export barriers'),
+  ('Ron Allum Deepsea Services Pty Ltd', 'NSW', 'C', 57634, 2, array['Exports','Skilling']::text[], true, 'upgrade its subsea test and evaluation system to support safe, repeatable, and production-scale testing of subsea systems' || chr(59) || ' and obtain relevant ISO certification to remove export barriers'),
   ('Arlula Pty Ltd', 'NSW', 'C', 56014, 1, array['Exports']::text[], true, 'achieve ISO27001, ISO 9001, and general data protection regulation certification to enable the secure handling of satellite data and overcome existing export barriers to access defence markets in US and Europe'),
   ('Blueroom Simulations Pty Ltd', 'Vic', 'C', 45800, 1, array['Exports']::text[], true, 'upgrade its mixed reality testing laboratory to allow personnel to develop complex skills through immersive and realistic virtual training environments and to leverage export opportunities'),
   ('U-Neek Bending Co. Pty Ltd', 'Vic', 'C', 34526, 1, array['Exports']::text[], true, 'obtain NADCAP certification and acquire advanced welding equipment to enhance the manufacture of critical welded components to support supply chains across aerospace, land and maritime domains.'),
@@ -83,7 +82,6 @@ where not exists (
   where o.brand = 'ironpeak' and lower(o.legal_name) = lower(v.legal_name)
 );
 
--- One statement for all 67 grants: a values list joined onto the companies.
 insert into public.crm_grants (organisation_id, amount, stream, purpose)
 select o.id, v.amount, v.stream, v.purpose
 from (values
@@ -138,7 +136,7 @@ from (values
   ('Amtech Precision Pty Ltd', 69750, 'Sovereign Industrial Priorities', 'acquire a coordinate measuring machine and profile projector to enhance precision machining manufacturing capability in support of multiple capability domains'),
   ('Micca Holdings Pty Ltd', 62419, 'Sovereign Industrial Priorities', 'acquire a rotary fibre laser cutting machine and a laser welding machine to uplift naval sustainment capability in Northern Australia.'),
   ('Arlula Pty Ltd', 56014, 'Exports', 'achieve ISO27001, ISO 9001, and general data protection regulation certification to enable the secure handling of satellite data and overcome existing export barriers to access defence markets in US and Europe'),
-  ('Ron Allum Deepsea Services Pty Ltd', 51609, 'Exports', 'upgrade its subsea test and evaluation system to support safe, repeatable, and production-scale testing of subsea systems; and obtain relevant ISO certification to remove export barriers'),
+  ('Ron Allum Deepsea Services Pty Ltd', 51609, 'Exports', 'upgrade its subsea test and evaluation system to support safe, repeatable, and production-scale testing of subsea systems' || chr(59) || ' and obtain relevant ISO certification to remove export barriers'),
   ('Automation and Process Control Services Pty Ltd', 51250, 'Security', 'uplift cybersecurity controls to meet Defence security requirements'),
   ('Micca Holdings Pty Ltd', 50000, 'Skilling', 'upskill staff through on-the-job training and the supervision of apprentices to support naval maintenance activities'),
   ('Blueroom Simulations Pty Ltd', 45800, 'Exports', 'upgrade its mixed reality testing laboratory to allow personnel to develop complex skills through immersive and realistic virtual training environments and to leverage export opportunities'),
@@ -160,4 +158,5 @@ join public.crm_organisations o
 where not exists (
   select 1 from public.crm_grants g
   where g.organisation_id = o.id and g.purpose = v.purpose
-);
+)
+;
