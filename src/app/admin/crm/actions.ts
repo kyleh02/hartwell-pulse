@@ -53,6 +53,7 @@ export async function createList(input: {
   description: string;
   sourceNote: string;
   capturedOn: string;
+  brand: string;
 }): Promise<string> {
   const { supabase } = await adminSupabase();
   const name = input.name.trim();
@@ -78,7 +79,7 @@ export async function createList(input: {
   const { data, error } = await supabase
     .from("crm_lists")
     .insert({
-      brand: "ironpeak",
+      brand: input.brand,
       slug,
       name,
       description: input.description.trim() || null,
@@ -103,6 +104,7 @@ export async function addProspect(input: {
   state: string;
   websiteUrl: string;
   headlinePurpose: string;
+  brand: string;
 }): Promise<string> {
   const { supabase } = await adminSupabase();
   const legalName = input.legalName.trim();
@@ -111,7 +113,7 @@ export async function addProspect(input: {
   const { data: clash } = await supabase
     .from("crm_organisations")
     .select("id")
-    .eq("brand", "ironpeak")
+    .eq("brand", input.brand)
     .ilike("legal_name", legalName)
     .maybeSingle();
   if (clash) throw new Error(`${legalName} is already in the pipeline.`);
@@ -119,7 +121,7 @@ export async function addProspect(input: {
   const { data, error } = await supabase
     .from("crm_organisations")
     .insert({
-      brand: "ironpeak",
+      brand: input.brand,
       list_id: input.listId,
       legal_name: legalName,
       state: input.state.trim() || null,

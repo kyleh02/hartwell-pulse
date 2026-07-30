@@ -18,10 +18,12 @@ const field =
  * to build, and someone met at a trade show does not.
  */
 export function ListSwitcher({
+  brand,
   lists,
   selected,
   onSelect,
 }: {
+  brand: string;
   lists: (CrmList & { count: number })[];
   selected: string | "all";
   onSelect: (id: string | "all") => void;
@@ -51,7 +53,7 @@ export function ListSwitcher({
     setError(null);
     startTransition(async () => {
       try {
-        const id = await createList(listForm);
+        const id = await createList({ ...listForm, brand });
         setListForm({ name: "", description: "", sourceNote: "", capturedOn: "" });
         setMode("none");
         onSelect(id);
@@ -70,7 +72,7 @@ export function ListSwitcher({
     }
     startTransition(async () => {
       try {
-        await addProspect({ listId: targetListId, ...prospectForm });
+        await addProspect({ listId: targetListId, brand, ...prospectForm });
         setProspectForm({ legalName: "", state: "", websiteUrl: "", headlinePurpose: "" });
         setMode("none");
         router.refresh();

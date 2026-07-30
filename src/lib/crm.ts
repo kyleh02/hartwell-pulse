@@ -38,12 +38,14 @@ export interface ProspectRow {
 /** The prospect list: one row per organisation with its outreach state folded in. */
 export async function listProspects(
   supabase: SupabaseClient,
+  brand = "ironpeak",
 ): Promise<ProspectRow[]> {
   const [{ data: orgData }, { data: contactData }, { data: touchData }] =
     await Promise.all([
       supabase
         .from("crm_organisations")
         .select("*")
+        .eq("brand", brand)
         .order("tier", { ascending: true })
         .order("grant_total_aud", { ascending: false }),
       supabase
@@ -162,8 +164,12 @@ export async function getProspect(
 export async function getCrmMetrics(
   supabase: SupabaseClient,
   days = 7,
+  brand = "ironpeak",
 ): Promise<CrmMetrics> {
-  const { data } = await supabase.rpc("crm_metrics", { p_days: days });
+  const { data } = await supabase.rpc("crm_metrics", {
+    p_days: days,
+    p_brand: brand,
+  });
   const row = (data as CrmMetrics[] | null)?.[0];
   return (
     row ?? {
@@ -212,10 +218,11 @@ export async function listDueTasks(
 /** Source lists, newest first, with how many prospects each holds. */
 export async function listCrmLists(
   supabase: SupabaseClient,
+  brand = "ironpeak",
 ): Promise<(CrmList & { count: number })[]> {
   const [{ data: listData }, { data: orgData }] = await Promise.all([
-    supabase.from("crm_lists").select("*").order("created_at"),
-    supabase.from("crm_organisations").select("list_id"),
+    supabase.from("crm_lists").select("*").eq("brand", brand).order("created_at"),
+    supabase.from("crm_organisations").select("list_id").eq("brand", brand),
   ]);
   const lists = (listData as CrmList[] | null) ?? [];
   const counts = new Map<string, number>();

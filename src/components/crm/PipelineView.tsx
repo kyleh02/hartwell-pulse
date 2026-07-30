@@ -13,9 +13,11 @@ import type { CrmList } from "@/lib/types/database";
  * averaging them tells you nothing useful.
  */
 export function PipelineView({
+  brand,
   lists,
   rows,
 }: {
+  brand: string;
   lists: (CrmList & { count: number })[];
   rows: ProspectRow[];
 }) {
@@ -30,11 +32,23 @@ export function PipelineView({
 
   return (
     <div className="space-y-4">
-      <ListSwitcher lists={lists} selected={selected} onSelect={setSelected} />
-      <div>
-        <StageStrip counts={stageCounts(visible)} />
-        <ProspectTable rows={visible} />
-      </div>
+      <ListSwitcher
+        brand={brand}
+        lists={lists}
+        selected={selected}
+        onSelect={setSelected}
+      />
+      {rows.length === 0 ? (
+        <p className="rounded-[var(--radius-card)] border border-dashed border-pulse-border bg-pulse-surface/40 px-6 py-10 text-center text-sm text-pulse-text-dim">
+          Nothing in this pipeline yet. Make a source list, then add the
+          companies you are reaching out to.
+        </p>
+      ) : (
+        <div>
+          <StageStrip counts={stageCounts(visible)} />
+          <ProspectTable rows={visible} />
+        </div>
+      )}
     </div>
   );
 }
