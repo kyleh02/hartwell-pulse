@@ -15,7 +15,16 @@
 -- Deviation from the brief worth knowing: the brief lists both a status and a
 -- pipeline stage on Organisation. Two overlapping state columns drift apart, so
 -- this uses one `stage` covering the whole pipeline including the terminals.
+--
+-- Structure: every table and column is created first, then every function and
+-- trigger. plpgsql resolves %ROWTYPE in a DECLARE block at COMPILE time, so a
+-- trigger function that referenced a table defined later in the file failed to
+-- create. Tables before functions, always.
 -- Run after 0021. Idempotent.
+-- =============================================================================
+
+-- =============================================================================
+-- TABLES
 -- =============================================================================
 
 -- ---------- organisations ----------
@@ -82,6 +91,7 @@ create table if not exists public.crm_contacts (
   role_title text,
   role_source text check (role_source in ('own_site', 'trade_press', 'linkedin', 'referral')),
   role_verified_at timestamptz,
+  role_confirmed boolean not null default false,
   -- Stored VERBATIM. Never trimmed, lowercased or canonicalised: the exact
   -- string as published is the evidence.
   email_as_published text,
@@ -89,6 +99,8 @@ create table if not exists public.crm_contacts (
   email_verified_at timestamptz,
   screenshot_path text,
   linkedin_url text,
+  -- Filter 6: their contact page carries no notice refusing cold approaches.
+  no_opt_out_notice boolean not null default false,
   consent_basis text not null default 'none'
     check (consent_basis in ('inferred_published', 'express', 'referral', 'none')),
   relevance_note text,
@@ -105,6 +117,34 @@ create unique index if not exists crm_contacts_one_per_org
   on public.crm_contacts (organisation_id)
   where is_sole_contact_for_org;
 create index if not exists crm_contacts_org_idx on public.crm_contacts (organisation_id);
+
+-- ---------- research: "the note" ----------
+-- The seven questions Kyle answers from public material only, plus the findings
+-- that decide whether an email may be sent at all. Two are gates, not notes:
+-- without a finding specific to their TECHNICAL domain (as opposed to their
+-- marketing), and at least one specific positive finding, a first email must
+-- not go. Both are enforced by crm_touch_guard below.
+create table if not exists public.crm_research (
+  id uuid primary key default gen_random_uuid(),
+  organisation_id uuid not null unique
+    references public.crm_organisations(id) on delete cascade,
+  verified_on date,
+  lead_finding text,
+  -- Method matters: naive keyword searching produced false positives on both
+  -- companies researched so far (matching "disp" inside "display" in a Wix
+  -- bundle being the worst), so recording the method stops a repeat.
+  lead_finding_method text,
+  technical_domain_finding text,
+  positive_finding text,
+  keep_out_of_first_email text,
+  blocker text,
+  -- [{ n, question, visibility: visible|partly_visible|not_findable, answer }]
+  seven_questions jsonb not null default '[]'::jsonb,
+  -- Free key/value observations: platform, page weight, copyright year, etc.
+  signals jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
 
 -- ---------- touches ----------
 create table if not exists public.crm_touches (
@@ -125,6 +165,10 @@ create table if not exists public.crm_touches (
   outcome text not null default 'none'
     check (outcome in ('none', 'reply_positive', 'reply_neutral', 'reply_negative', 'bounce', 'opt_out')),
   substantive boolean not null default false,
+  -- The nine pre-send checks, captured per send rather than as a global
+  -- checklist. The old tracker stored them once and reused them, which meant
+  -- they stopped being a real check after the first email.
+  presend_checks jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
 create index if not exists crm_touches_contact_idx on public.crm_touches (contact_id, sent_at);
@@ -206,6 +250,13 @@ create table if not exists public.crm_settings (
 );
 insert into public.crm_settings (id) values (true) on conflict (id) do nothing;
 
+-- Re-runnable safety for anyone who applied an earlier draft of this file.
+alter table public.crm_contacts
+  add column if not exists role_confirmed boolean not null default false,
+  add column if not exists no_opt_out_notice boolean not null default false;
+alter table public.crm_touches
+  add column if not exists presend_checks jsonb not null default '{}'::jsonb;
+
 -- =============================================================================
 -- RLS: admin only, on every table. Clients can never read a prospect.
 -- =============================================================================
@@ -213,9 +264,9 @@ do $$
 declare t text;
 begin
   foreach t in array array[
-    'crm_organisations', 'crm_grants', 'crm_contacts', 'crm_touches',
-    'crm_opportunities', 'crm_engagements', 'crm_tasks', 'crm_notes',
-    'crm_settings'
+    'crm_organisations', 'crm_grants', 'crm_contacts', 'crm_research',
+    'crm_touches', 'crm_opportunities', 'crm_engagements', 'crm_tasks',
+    'crm_notes', 'crm_settings'
   ] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('grant select, insert, update, delete on public.%I to authenticated', t);
@@ -226,9 +277,18 @@ begin
   end loop;
 end $$;
 
+-- CRM reminders are notifications addressed to Kyle, with no client attached.
+alter table public.notifications drop constraint if exists notifications_type_check;
+alter table public.notifications add constraint notifications_type_check
+  check (type in (
+    'message', 'report_ready', 'asset_feedback', 'asset_uploaded',
+    'status_change', 'invoice', 'crm_reminder'
+  ));
+
 -- =============================================================================
--- Hard rules. These live in the database because a rule enforced only in the
--- UI is a rule that gets clicked past.
+-- FUNCTIONS AND TRIGGERS
+-- Hard rules live here because a rule enforced only in the UI is a rule that
+-- gets clicked past.
 -- =============================================================================
 
 create or replace function public.crm_touch_guard()
@@ -236,7 +296,8 @@ returns trigger
 language plpgsql security definer set search_path = public as $$
 declare
   c public.crm_contacts%rowtype;
-  r public.crm_research%rowtype;
+  r_tech text;
+  r_pos text;
   prior_emails integer;
   had_reply boolean;
   ticked integer;
@@ -280,19 +341,17 @@ begin
       end if;
 
       -- 4. The gate. A first email needs a finding specific to their TECHNICAL
-      --    domain, not their marketing, plus a specific positive finding. If
-      --    the note has neither, it is not ready and must not go.
+      --    domain, not their marketing, plus a specific positive finding. A
+      --    missing research row leaves both null, which fails the same way.
       if new.sequence_step = 'email_1' then
-        select * into r from public.crm_research where organisation_id = c.organisation_id;
-        if r.id is null
-           or coalesce(r.technical_domain_finding, '') = ''
-           or coalesce(r.positive_finding, '') = '' then
+        select technical_domain_finding, positive_finding into r_tech, r_pos
+        from public.crm_research where organisation_id = c.organisation_id;
+        if coalesce(r_tech, '') = '' or coalesce(r_pos, '') = '' then
           raise exception 'The note is not ready: a first email needs a finding specific to their technical domain and at least one positive finding.';
         end if;
       end if;
 
-      -- 5. The nine pre-send checks, counted on this send. Held per touch, so
-      --    they are a real check every time rather than ticked once and reused.
+      -- 5. The nine pre-send checks, counted on this send.
       if new.sequence_step in ('email_1', 'email_2') then
         select count(*) into ticked
         from jsonb_each(new.presend_checks) where value = 'true'::jsonb;
@@ -337,55 +396,6 @@ create trigger crm_touch_after_trg
   after insert on public.crm_touches
   for each row execute function public.crm_touch_after();
 
--- =============================================================================
--- Research: "the note". The seven questions Kyle answers from public material
--- only, plus the findings that decide whether an email may be sent at all.
---
--- Two of these are gates, not notes. The playbook is explicit: if there is no
--- finding specific to their TECHNICAL domain (as opposed to their marketing),
--- do not send; and every note must carry at least one specific positive
--- finding with the reason it is good. Both are enforced below.
--- =============================================================================
-create table if not exists public.crm_research (
-  id uuid primary key default gen_random_uuid(),
-  organisation_id uuid not null unique
-    references public.crm_organisations(id) on delete cascade,
-  verified_on date,
-  -- The observation that opens the email, and how it was checked. Method
-  -- matters: naive keyword searching produced false positives on both
-  -- companies researched so far (matching "disp" inside "display" in a Wix
-  -- bundle being the worst), so recording the method stops a repeat.
-  lead_finding text,
-  lead_finding_method text,
-  technical_domain_finding text,
-  positive_finding text,
-  keep_out_of_first_email text,
-  blocker text,
-  -- [{ n, question, visibility: visible|partly_visible|not_findable, answer }]
-  seven_questions jsonb not null default '[]'::jsonb,
-  -- Free key/value observations: platform, page weight, copyright year, etc.
-  signals jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-alter table public.crm_research enable row level security;
-grant select, insert, update, delete on public.crm_research to authenticated;
-drop policy if exists crm_research_admin_all on public.crm_research;
-create policy crm_research_admin_all on public.crm_research
-  for all to authenticated using (public.is_admin()) with check (public.is_admin());
-
--- Contact fields the qualification filter needs beyond the consent trail.
-alter table public.crm_contacts
-  add column if not exists role_confirmed boolean not null default false,
-  add column if not exists no_opt_out_notice boolean not null default false;
-
--- The nine pre-send checks, captured per send rather than as a global
--- checklist. The old tracker stored these once and reused them, which meant
--- they stopped being a real check after the first email.
-alter table public.crm_touches
-  add column if not exists presend_checks jsonb not null default '{}'::jsonb;
-
 -- Keep updated_at honest using the helper from 0001.
 drop trigger if exists crm_org_set_updated_at on public.crm_organisations;
 create trigger crm_org_set_updated_at before update on public.crm_organisations
@@ -393,14 +403,6 @@ create trigger crm_org_set_updated_at before update on public.crm_organisations
 drop trigger if exists crm_research_set_updated_at on public.crm_research;
 create trigger crm_research_set_updated_at before update on public.crm_research
   for each row execute function public.set_updated_at();
-
--- CRM reminders are notifications addressed to Kyle, with no client attached.
-alter table public.notifications drop constraint if exists notifications_type_check;
-alter table public.notifications add constraint notifications_type_check
-  check (type in (
-    'message', 'report_ready', 'asset_feedback', 'asset_uploaded',
-    'status_change', 'invoice', 'crm_reminder'
-  ));
 
 -- =============================================================================
 -- Dashboard metrics. Opt-outs first: it is the health metric, not reply rate.
