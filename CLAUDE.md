@@ -24,7 +24,7 @@ Live at https://portal.hartwelldigital.com
 - Write them idempotent: `add column if not exists`, `drop policy if exists`
   before `create policy` (Postgres has no CREATE POLICY IF NOT EXISTS),
   `drop trigger if exists`, guarded `do $$` blocks.
-- 0001–0023 are applied in production as of 2026-07-30. The CRM prospect data
+- 0001–0024 are applied in production as of 2026-07-30. The CRM prospect data
   is NOT a migration: it imports in-app from Pipeline, because 30 KB of string
   literals proved unreliable to paste into the Supabase SQL editor.
 
@@ -59,6 +59,12 @@ Live at https://portal.hartwelldigital.com
 - `crm_*` tables are admin-only (`is_admin()`), so clients never see a prospect.
   The 59 DIDG grant recipients and their 67 grants live in
   `src/lib/crm-seed-data.ts` and load via the Import button on Pipeline.
+- Prospects belong to a **source list** (`crm_lists`). Provenance is what makes
+  a first email specific, and it stops reply rates from different sources being
+  averaged into one meaningless number. New batches get their own list.
+- `email_as_published` and `direct_email` are **different fields on purpose**.
+  The published one is the consent evidence and must never be overwritten by a
+  personal address given later.
 - The compliance trail is the point, not a nicety. Cold outreach relies on
   **inferred consent under the Spam Act 2003**, which only attaches to an
   address the business itself conspicuously published. `email_as_published` is
