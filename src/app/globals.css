@@ -1,5 +1,28 @@
 @import "tailwindcss";
 
+/* Clash Display, the Ironpeak display face. Self-hosted woff2, free for
+   commercial use from Fontshare. Used for the wordmark and headings on
+   Ironpeak surfaces only.
+
+   IMPORTANT: Clash Display has NO tabular figures, so font-variant-numeric is a
+   no-op on it. At weight 700 the digit 1 is 40.7px wide against 0 at 73.3px, so
+   a column of numbers set in it will not line up. Never use it for invoice
+   totals, amounts or dates: those go in Geist Mono. */
+@font-face {
+  font-family: "Clash Display";
+  src: url("/fonts/ClashDisplay-Semibold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Clash Display";
+  src: url("/fonts/ClashDisplay-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* =============================================================================
    Hartwell Pulse — design tokens
    A darker, premium take on the Hartwell Digital brand. Gold is an accent only;
@@ -49,6 +72,10 @@
 
   --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, "JetBrains Mono", "SFMono-Regular", monospace;
+  /* Ironpeak's three faces. Applied only on Ironpeak surfaces via .brand-ironpeak. */
+  --font-display: "Clash Display", var(--font-outfit), sans-serif;
+  --font-ip-body: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
+  --font-ip-mono: var(--font-geist-mono), ui-monospace, monospace;
 
   --radius-card: 12px;
   --radius-input: 8px;
@@ -154,6 +181,25 @@
     --pulse-gold-light: #7fa0c8;
     background-color: #ffffff;
     color: #0e0f12;
+  }
+
+  /* Ironpeak typography, scoped so it never leaks onto Hartwell surfaces.
+     Body is Hanken Grotesk, headings and the wordmark are Clash Display, and
+     every figure is Geist Mono because Clash has no tabular figures and a
+     column of numbers set in it will not align. */
+  .brand-ironpeak {
+    font-family: var(--font-ip-body);
+  }
+  .brand-ironpeak .font-display,
+  .brand-ironpeak h1,
+  .brand-ironpeak h2 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+  .brand-ironpeak .data-mono,
+  .brand-ironpeak .mono-label,
+  .brand-ironpeak table {
+    font-family: var(--font-ip-mono);
   }
 
   /* Monospace small-caps section header, e.g. PERFORMANCE / GOOGLE ADS */

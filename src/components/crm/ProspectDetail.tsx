@@ -21,6 +21,7 @@ import {
   isStale,
   stageLabel,
 } from "@/lib/crm-shared";
+import { ContactActions } from "@/components/crm/ContactActions";
 import type { ProspectDetail as Detail } from "@/lib/crm";
 import { cn } from "@/lib/utils/cn";
 
@@ -103,19 +104,28 @@ export function ProspectDetail({ detail }: { detail: Detail }) {
           )}
         </Card>
 
-        <Card className="p-4">
-          <p className="mono-label">// Funded to build</p>
-          <ul className="mt-2 space-y-2.5">
-            {grants.map((g) => (
-              <li key={g.id}>
-                <p className="data-mono text-xs text-pulse-steel">
-                  {formatAud(Number(g.amount))} · {g.stream}
-                </p>
-                <p className="mt-0.5 text-xs text-pulse-text-dim">{g.purpose}</p>
-              </li>
-            ))}
-          </ul>
-        </Card>
+        <div className="space-y-3">
+          <ContactActions
+            contact={contact}
+            websiteUrl={o.website_url}
+            subject={`${o.trading_name ?? o.legal_name}'s public material`}
+          />
+          {grants.length > 0 && (
+            <Card className="p-4">
+              <p className="mono-label">// Funded to build</p>
+              <ul className="mt-2 space-y-2.5">
+                {grants.map((g) => (
+                  <li key={g.id}>
+                    <p className="data-mono text-xs text-pulse-steel">
+                      {formatAud(Number(g.amount))} · {g.stream}
+                    </p>
+                    <p className="mt-0.5 text-xs text-pulse-text-dim">{g.purpose}</p>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+        </div>
       </div>
 
       {/* the send gate */}
@@ -150,28 +160,32 @@ export function ProspectDetail({ detail }: { detail: Detail }) {
       )}
 
       {/* tabs */}
-      <div className="inline-flex rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface p-1">
-        {(
-          [
-            ["note", "The note"],
-            ["contact", "Contact and consent"],
-            ["history", `History (${touches.length})`],
-          ] as const
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setTab(key)}
-            className={cn(
-              "rounded-[6px] px-3 py-1.5 text-sm transition-colors",
-              tab === key
-                ? "bg-pulse-surface-2 text-pulse-text"
-                : "text-pulse-text-dim hover:text-pulse-text",
-            )}
-          >
-            {label}
-          </button>
-        ))}
+      {/* Scrolls rather than wrapping, so the control keeps its shape on a
+          narrow screen instead of breaking into two rows. */}
+      <div className="-mx-1 overflow-x-auto px-1">
+        <div className="inline-flex rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface p-1">
+          {(
+            [
+              ["note", "The note"],
+              ["contact", "Contact and consent"],
+              ["history", `History (${touches.length})`],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              className={cn(
+                "whitespace-nowrap rounded-[6px] px-3 py-1.5 text-sm transition-colors",
+                tab === key
+                  ? "bg-pulse-surface-2 text-pulse-text"
+                  : "text-pulse-text-dim hover:text-pulse-text",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {tab === "note" && <ResearchForm organisationId={o.id} research={research} />}

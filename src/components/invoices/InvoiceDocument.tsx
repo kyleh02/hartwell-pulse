@@ -42,14 +42,17 @@ export function InvoiceDocument({
         "rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-6 sm:p-8",
         // Ironpeak's brand is near-black, but a dark invoice is hostile to
         // print and reads as a novelty rather than a financial document.
-        ironpeak && "doc-light",
+        // brand-ironpeak brings its real typography: Clash Display for the
+        // wordmark and headings, Hanken Grotesk for body, Geist Mono for every
+        // figure.
+        ironpeak && "doc-light brand-ironpeak",
       )}
     >
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-pulse-border pb-6">
         <div>
           {ironpeak ? (
             <>
-              <IronpeakWordmark size="md" />
+              <IronpeakWordmark size="lg" />
               {/* The ABN is the only permitted mention of the parent entity on
                   anything a client sees. No Hartwell Digital name or logo. */}
               {business?.abn && (
@@ -82,7 +85,9 @@ export function InvoiceDocument({
         {/* Right-aligning this block only reads correctly while it sits beside
             the logo; once it wraps underneath on a phone, left is right. */}
         <div className="text-left sm:text-right">
-          <p className="mono-label">{isTaxInvoice ? "Tax Invoice" : "Invoice"}</p>
+          <p className={cn("mono-label", ironpeak && "tracking-[0.2em]")}>
+            {isTaxInvoice ? "Tax Invoice" : "Invoice"}
+          </p>
           <p className="data-mono mt-1 text-lg text-pulse-text">
             {invoice.invoice_number}
           </p>

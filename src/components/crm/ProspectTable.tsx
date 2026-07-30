@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ChevronRight, SlidersHorizontal } from "lucide-react";
 import { ALL_STAGES, CRM_STAGES, formatAud, isStale } from "@/lib/crm-shared";
 import { setStage } from "@/app/admin/crm/actions";
 import type { ProspectRow } from "@/lib/crm";
@@ -13,9 +14,12 @@ const TIERS = ["A", "B", "C", "D"];
 
 type Show = "all" | "todo" | "live" | "stale";
 
-const IN_PLAY = ["verified", "contacted", "connected", "followed_up", "replied", "conversation", "proposal"];
+const IN_PLAY = [
+  "verified", "contacted", "connected", "followed_up",
+  "replied", "conversation", "proposal",
+];
 
-/** Stage colour, carried on the select itself so the row reads at a glance. */
+/** Stage colour, carried on the control itself so a row reads at a glance. */
 const STAGE_TONE: Record<string, string> = {
   researched: "text-pulse-text-mute",
   verified: "text-pulse-warn",
@@ -37,6 +41,7 @@ export function ProspectTable({ rows }: { rows: ProspectRow[] }) {
   const [state, setState] = useState("all");
   const [show, setShow] = useState<Show>("all");
   const [query, setQuery] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const filtered = useMemo(() => {
@@ -62,22 +67,44 @@ export function ProspectTable({ rows }: { rows: ProspectRow[] }) {
     });
   }
 
+  const narrowed = tier !== "all" || state !== "all";
+
   return (
     <div>
-      {/* filters */}
+      {/* ---------- filters ---------- */}
       <div className="mb-3 space-y-2">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <ChipGroup label="Tier" value={tier} onChange={setTier} options={TIERS} />
-          <span className="mx-1 hidden h-4 w-px bg-pulse-border sm:block" />
-          <ChipGroup label="State" value={state} onChange={setState} options={STATES} />
+        <div className="flex items-center gap-2">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search company or purpose…"
+            className="min-w-0 flex-1 rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 px-3 py-2 text-sm text-pulse-text placeholder:text-pulse-text-mute focus:border-pulse-border-strong focus:outline-none"
+          />
+          {/* Tier and state are two long chip rows. On a phone they go behind a
+              toggle rather than pushing the list off the first screen. */}
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((v) => !v)}
+            aria-expanded={filtersOpen}
+            className={cn(
+              "flex shrink-0 items-center gap-1.5 rounded-[var(--radius-input)] border px-3 py-2 text-xs transition-colors sm:hidden",
+              narrowed
+                ? "border-pulse-steel/50 bg-pulse-steel/10 text-pulse-steel-bright"
+                : "border-pulse-border text-pulse-text-dim",
+            )}
+          >
+            <SlidersHorizontal size={13} />
+            {narrowed ? `${tier !== "all" ? tier : ""}${tier !== "all" && state !== "all" ? " · " : ""}${state !== "all" ? state : ""}` : "Filter"}
+          </button>
         </div>
+
         <div className="flex flex-wrap items-center gap-1.5">
           {(
             [
               ["all", "Everything"],
-              ["todo", "Not yet contacted"],
+              ["todo", "Not contacted"],
               ["live", "In play"],
-              ["stale", "Needs re-verifying"],
+              ["stale", "Re-verify"],
             ] as [Show, string][]
           ).map(([key, label]) => (
             <Chip
@@ -87,12 +114,15 @@ export function ProspectTable({ rows }: { rows: ProspectRow[] }) {
               label={label}
             />
           ))}
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search company or purpose…"
-            className="ml-auto w-full rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 px-3 py-1.5 text-sm text-pulse-text placeholder:text-pulse-text-mute focus:border-pulse-border-strong focus:outline-none sm:w-64"
-          />
+        </div>
+
+        <div className={cn("space-y-2", !filtersOpen && "hidden sm:block")}>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <ChipGroup label="Tier" value={tier} onChange={setTier} options={TIERS} />
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <ChipGroup label="State" value={state} onChange={setState} options={STATES} />
+          </div>
         </div>
       </div>
 
@@ -100,15 +130,93 @@ export function ProspectTable({ rows }: { rows: ProspectRow[] }) {
         Showing {filtered.length} of {rows.length}
       </p>
 
-      {/* The money and stage columns cannot wrap, so the table scrolls in its
-          own box rather than dragging the page sideways on a phone. */}
-      <div className="overflow-x-auto rounded-[var(--radius-card)] border border-pulse-border">
-        <table className="w-full min-w-[52rem] text-sm">
+      {/* ---------- phones: cards ---------- */}
+      <div className="space-y-2 md:hidden">
+        {filtered.map((r) => {
+          const terminal = r.stage === "lost" || r.stage === "do_not_contact";
+          return (
+            <div
+              key={r.id}
+              className={cn(
+                "rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-3",
+                terminal && "opacity-60",
+              )}
+            >
+              <Link href={`/admin/crm/${r.id}`} className="block">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="min-w-0 font-medium text-pulse-text">
+                    {r.legal_name}
+                  </span>
+                  <ChevronRight
+                    size={15}
+                    className="mt-0.5 shrink-0 text-pulse-text-mute"
+                  />
+                </div>
+                <p className="data-mono mt-0.5 text-[11px] text-pulse-text-mute">
+                  {r.tier ? `Tier ${r.tier} · ` : ""}
+                  {r.state}
+                  {r.grant_total_aud > 0
+                    ? ` · ${formatAud(r.grant_total_aud)}`
+                    : ""}
+                  {r.grant_count > 1 ? ` · ${r.grant_count} grants` : ""}
+                </p>
+                {r.headline_purpose && (
+                  <p className="mt-1.5 line-clamp-2 text-xs text-pulse-text-dim">
+                    {r.headline_purpose}
+                  </p>
+                )}
+                <p className="mt-1.5 text-xs text-pulse-text-mute">
+                  {r.contact_name ? (
+                    <>
+                      {r.contact_name}
+                      {r.emails_sent > 0 && ` · ${r.emails_sent} of 2 emails`}
+                    </>
+                  ) : (
+                    "No contact named yet"
+                  )}
+                </p>
+                {r.opted_out && (
+                  <p className="data-mono mt-0.5 text-[10px] text-pulse-danger">
+                    opted out
+                  </p>
+                )}
+                {isStale(r.last_verified_at) && !terminal && (
+                  <p className="data-mono mt-0.5 text-[10px] text-pulse-warn">
+                    evidence over 14 days old
+                  </p>
+                )}
+              </Link>
+              <select
+                value={r.stage}
+                disabled={pending}
+                onChange={(e) => changeStage(r.id, e.target.value)}
+                aria-label={`Stage for ${r.legal_name}`}
+                className={cn(
+                  "data-mono mt-2.5 w-full rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 px-2 py-2 text-xs focus:border-pulse-border-strong focus:outline-none disabled:opacity-50",
+                  STAGE_TONE[r.stage] ?? "text-pulse-text",
+                )}
+              >
+                {ALL_STAGES.map((s) => (
+                  <option key={s.key} value={s.key}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ---------- tablet and up: the table ---------- */}
+      <div className="hidden overflow-x-auto rounded-[var(--radius-card)] border border-pulse-border md:block">
+        <table className="w-full min-w-[46rem] text-sm">
           <thead>
             <tr className="mono-label border-b border-pulse-border bg-pulse-surface text-left">
               <th className="px-3 py-2.5 font-medium">Tier</th>
               <th className="px-3 py-2.5 font-medium">Company</th>
-              <th className="whitespace-nowrap px-3 py-2.5 text-right font-medium">Funding</th>
+              <th className="whitespace-nowrap px-3 py-2.5 text-right font-medium">
+                Funding
+              </th>
               <th className="px-3 py-2.5 font-medium">Contact</th>
               <th className="px-3 py-2.5 font-medium">Stage</th>
             </tr>
@@ -140,14 +248,14 @@ export function ProspectTable({ rows }: { rows: ProspectRow[] }) {
                       {r.state}
                     </span>
                     {r.headline_purpose && (
-                      <span className="mt-0.5 block max-w-[38rem] text-xs text-pulse-text-mute">
+                      <span className="mt-0.5 block max-w-[34rem] text-xs text-pulse-text-mute">
                         {r.headline_purpose}
                       </span>
                     )}
                   </td>
                   <td className="whitespace-nowrap px-3 py-3 text-right">
                     <span className="data-mono text-pulse-text">
-                      {formatAud(r.grant_total_aud)}
+                      {r.grant_total_aud > 0 ? formatAud(r.grant_total_aud) : "-"}
                     </span>
                     {r.grant_count > 1 && (
                       <span className="data-mono block text-[10px] text-pulse-text-mute">
@@ -171,7 +279,9 @@ export function ProspectTable({ rows }: { rows: ProspectRow[] }) {
                         )}
                       </>
                     ) : (
-                      <span className="text-xs text-pulse-text-mute">Not yet named</span>
+                      <span className="text-xs text-pulse-text-mute">
+                        Not yet named
+                      </span>
                     )}
                     {isStale(r.last_verified_at) && !terminal && (
                       <span className="data-mono block text-[10px] text-pulse-warn">
@@ -250,7 +360,8 @@ function Chip({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "data-mono rounded-full px-2.5 py-1 text-[11px] transition-colors",
+        // 32px min height so it is a comfortable tap target on a phone.
+        "data-mono min-h-[32px] rounded-full px-3 py-1 text-[11px] transition-colors",
         active
           ? "bg-pulse-steel/15 text-pulse-steel-bright"
           : "text-pulse-text-mute hover:text-pulse-text",
@@ -266,19 +377,25 @@ export function StageStrip({ counts }: { counts: Record<string, number> }) {
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   if (total === 0) return null;
   return (
-    <div className="mb-4 flex flex-wrap gap-x-4 gap-y-1.5">
+    <div className="mb-4 -mx-1 flex gap-x-4 gap-y-1.5 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible">
       {CRM_STAGES.map((s) => (
-        <span key={s.key} className="flex items-baseline gap-1.5" title={s.hint}>
-          <span className="data-mono text-sm text-pulse-text">{counts[s.key] ?? 0}</span>
-          <span className="mono-label">{s.label}</span>
+        <span
+          key={s.key}
+          className="flex shrink-0 items-baseline gap-1.5"
+          title={s.hint}
+        >
+          <span className="data-mono text-sm text-pulse-text">
+            {counts[s.key] ?? 0}
+          </span>
+          <span className="mono-label whitespace-nowrap">{s.label}</span>
         </span>
       ))}
       {counts.do_not_contact ? (
-        <span className="flex items-baseline gap-1.5">
+        <span className="flex shrink-0 items-baseline gap-1.5">
           <span className="data-mono text-sm text-pulse-danger">
             {counts.do_not_contact}
           </span>
-          <span className="mono-label">Do not contact</span>
+          <span className="mono-label whitespace-nowrap">Do not contact</span>
         </span>
       ) : null}
     </div>

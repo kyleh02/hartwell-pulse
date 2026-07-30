@@ -1,5 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Outfit, JetBrains_Mono } from "next/font/google";
+import {
+  Outfit,
+  JetBrains_Mono,
+  Hanken_Grotesk,
+  Geist_Mono,
+} from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 
@@ -12,6 +17,22 @@ const outfit = Outfit({
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
   variable: "--font-jetbrains",
+  display: "swap",
+});
+
+// Ironpeak's body and figure faces. Loaded alongside Pulse's own so an
+// Ironpeak invoice renders in its real typography rather than an approximation.
+const hankenGrotesk = Hanken_Grotesk({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-hanken",
+  display: "swap",
+});
+
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-geist-mono",
   display: "swap",
 });
 
@@ -87,7 +108,7 @@ export default function RootLayout({
     >
       <html
         lang="en-AU"
-        className={`${outfit.variable} ${jetbrainsMono.variable}`}
+        className={`${outfit.variable} ${jetbrainsMono.variable} ${hankenGrotesk.variable} ${geistMono.variable}`}
         suppressHydrationWarning
       >
         <body className="min-h-screen bg-pulse-bg text-pulse-text antialiased">
