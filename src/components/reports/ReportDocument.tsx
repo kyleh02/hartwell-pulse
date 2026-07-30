@@ -1,6 +1,7 @@
 import type { ReportBundle, ReportBlock } from "@/lib/reports-shared";
 import { sectionBlocks, metricKeyOf } from "@/lib/reports-shared";
 import { ReportMetricBlock } from "@/components/reports/ReportMetricBlock";
+import { ZoomableImage } from "@/components/ui/ZoomableImage";
 import { ReportText } from "@/components/reports/ReportText";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 
@@ -60,8 +61,7 @@ export function ReportDocument({
             {imageBlocks.map((b) => (
               <figure key={b.id} className="report-figure mt-4">
                 {imageUrls[b.path] && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <ZoomableImage
                     src={imageUrls[b.path]}
                     alt={b.caption || "Report image"}
                     className="w-full rounded-[var(--radius-card)] border border-pulse-border"

@@ -5,6 +5,7 @@ import { resolveShare } from "@/lib/shares";
 import { getPulseSession } from "@/lib/auth/session";
 import type { Asset } from "@/lib/types/database";
 import { formatBytes, isImageMime } from "@/lib/assets-shared";
+import { ZoomableImage } from "@/components/ui/ZoomableImage";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Shared with you" };
@@ -65,8 +66,11 @@ export default async function SharePage({
       <Shell title={asset.name}>
         <div className="overflow-hidden rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface">
           {isImageMime(asset.mime_type) ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={rawBase} alt={asset.name} className="mx-auto max-h-[75vh]" />
+            <ZoomableImage
+              src={rawBase}
+              alt={asset.name}
+              className="mx-auto max-h-[75vh]"
+            />
           ) : isPdf(asset.mime_type) ? (
             <iframe
               src={rawBase}

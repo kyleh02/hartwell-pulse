@@ -19,6 +19,7 @@ import {
 import { useSupabaseClient } from "@/lib/supabase/client";
 import { notifyNewMessage } from "@/lib/actions/push";
 import { EmojiPicker } from "@/components/messages/EmojiPicker";
+import { ZoomableImage } from "@/components/ui/ZoomableImage";
 import type {
   ConversationKind,
   ConversationMember,
@@ -831,11 +832,11 @@ export function ChatThread({
                     {attachmentsOf(m).map((a) =>
                       isImageMime(a.mime) && urls[a.path] ? (
                         <div key={a.path} className="relative mt-1 w-fit">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
+                          <ZoomableImage
                             src={urls[a.path]}
                             alt={a.name}
                             className="max-h-60 rounded-lg border border-pulse-border"
+                            onDownload={() => void download(a)}
                           />
                           <button
                             type="button"
