@@ -24,7 +24,9 @@ Live at https://portal.hartwelldigital.com
 - Write them idempotent: `add column if not exists`, `drop policy if exists`
   before `create policy` (Postgres has no CREATE POLICY IF NOT EXISTS),
   `drop trigger if exists`, guarded `do $$` blocks.
-- 0001–0021 are applied in production as of 2026-07-27.
+- 0001–0023 are applied in production as of 2026-07-30. The CRM prospect data
+  is NOT a migration: it imports in-app from Pipeline, because 30 KB of string
+  literals proved unreliable to paste into the Supabase SQL editor.
 
 ## Security model (do not weaken)
 - Helpers `is_admin()`, `current_client_id()`, `clerk_user_id()` read the Clerk
