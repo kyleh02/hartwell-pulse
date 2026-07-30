@@ -4,7 +4,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { importGrantRecipients } from "@/app/admin/crm/actions";
+import {
+  importGrantRecipients,
+  importContactedTargets,
+} from "@/app/admin/crm/actions";
 
 /**
  * One-press import of the grant recipient list. Safe to press more than once:
@@ -22,10 +25,13 @@ export function ImportProspects() {
     startTransition(async () => {
       try {
         const r = await importGrantRecipients();
+        // Then bring Copamate and NH Micro up to already-contacted. Runs second
+        // because it needs those two companies to exist first.
+        const c = await importContactedTargets();
         setResult(
           r.organisations === 0 && r.grants === 0
             ? "Already up to date, nothing to add."
-            : `Imported ${r.organisations} companies and ${r.grants} grants.`,
+            : `Imported ${r.organisations} companies and ${r.grants} grants, and restored ${c.updated} contacted records.`,
         );
         router.refresh();
       } catch (e) {

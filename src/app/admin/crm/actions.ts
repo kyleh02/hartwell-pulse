@@ -408,6 +408,227 @@ export async function importGrantRecipients(): Promise<{
   return { organisations: newOrgs.length, grants: newGrants.length };
 }
 
+/**
+ * Bring Copamate and NH Micro up to where they actually are: researched, with a
+ * named contact, a consent trail, and email 1 already sent on 30 July 2026. The
+ * old tracker had nowhere to record any of that.
+ *
+ * Order matters. The touch guard checks the contact's consent fields and the
+ * research findings before it will accept an outbound email, so the contact and
+ * the note have to land first. That is the guard doing its job, not an
+ * inconvenience.
+ */
+export async function importContactedTargets(): Promise<{ updated: number }> {
+  const { supabase } = await adminSupabase();
+
+  const targets = [
+    {
+      legalName: "Cop-A-Mate Products Pty Ltd",
+      org: {
+        trading_name: "Copamate",
+        website_url: "https://copamate.com",
+        domain: "copamate.com",
+        platform: "wordpress",
+        established_year: 1993,
+        research_file_path:
+          "H:\\My Drive\\Ironpeak Consulting Build\\target-01-copamate.md",
+        last_verified_at: "2026-07-29T00:00:00+10:00",
+        stage: "contacted",
+      },
+      research: {
+        verified_on: "2026-07-29",
+        lead_finding:
+          "The About Us page returns HTTP 200 with Content-Length 0, so it renders as a blank white screen.",
+        lead_finding_method:
+          "Confirmed four ways: plain request, compressed request, and with a browser Accept header, against a control page (/rail/) that returns 102,576 bytes. Server is nginx with PHP 8.3.32.",
+        technical_domain_finding:
+          "Defence is named second in the homepage headline and in the intro, but it is absent from the Industries menu (Rail, Pipeline, Valves, Steel Framing, Infrastructure, Automotive) and copamate.com/defence/ returns 404, as do /defense/ and /military/. The only defence-adjacent content is Military Coatings, three levels down under Our Services.",
+        positive_finding:
+          "The certification list is genuinely deep for a business this size: AS9100, ISO 22163 (IRIS), ISO 9001, ISO 14001 and a long list of welding and pressure standards. That is real evidence of process maturity, and it is why the funded armour and exhaust work is credible.",
+        signals: {
+          platform: "WordPress",
+          homepage_weight: "1,011 KB",
+          copyright_year: "2026",
+          capability_statement: "none published",
+          note_on_cert_list:
+            "AUKUS and DISP (waiting for approval) appear in the same list as standards, but neither is a standard",
+        },
+      },
+      contact: {
+        first_name: "David",
+        surname: "Likar",
+        role_title: "Role unconfirmed",
+        role_source: "linkedin",
+        role_confirmed: false,
+        email_as_published: "sales@copamate.com",
+        email_source_url: "https://copamate.com/contact",
+        email_verified_at: "2026-07-27T00:00:00+10:00",
+        no_opt_out_notice: true,
+        consent_basis: "inferred_published",
+        relevance_note:
+          "Only a generic published address is available, so the note is addressed to a named person at sales@. No individual is named anywhere on the site.",
+      },
+      subject: "Copamate's public material and the land vehicle grant",
+      sentAt: "2026-07-30T10:00:00+10:00",
+    },
+    {
+      legalName: "NH Micro Pty Ltd",
+      org: {
+        website_url: "https://www.nhmicro.com",
+        domain: "www.nhmicro.com",
+        platform: "wix",
+        abn: "38 647 568 250",
+        established_year: 2020,
+        research_file_path:
+          "H:\\My Drive\\Ironpeak Consulting Build\\target-02-nhmicro.md",
+        last_verified_at: "2026-07-30T00:00:00+10:00",
+        stage: "contacted",
+      },
+      research: {
+        verified_on: "2026-07-30",
+        lead_finding:
+          'There are zero occurrences of "defence" or "defense" in visible text on any page. The published sector list runs Scientific Instruments, Micro-mechanics, Photonics and Optics, Semi-conductor, Medical components, High frequency communication, Microfluidics and Space Industry.',
+        lead_finding_method:
+          "A naive source search falsely returned DISP, ITAR, AS9100 and ISO 9001 matches, all of which were Wix bundle artefacts (disp matching inside display). Stripping scripts and tags first gives zero visible occurrences. Never keyword-match Wix source.",
+        technical_domain_finding:
+          "The live capabilities page is /capabilties, missing the second i, and their own menu points at the misspelling. The correctly spelled /capabilities returns 404. It is a five minute Wix redirect fix.",
+        positive_finding:
+          "They publish specific tolerance figures rather than adjectives, sub-micron and plus or minus 2 micron form accuracy, and name machines by model: Kern Micro HD, Pyramid Nano, Makino U32j, Citizen R04. The /examples page shows real parts. That is exactly the evidence a technical buyer wants.",
+        keep_out_of_first_email:
+          "Do not raise, cold, that published photographs of guided weapons or in-space propulsion parts might be an export control concern. It reads as a scare tactic and their obligations cannot be known from outside. No legal, export control or classification advice, ever.",
+        signals: {
+          platform: "Wix",
+          site_page_count: "4 (home, /capabilties, /examples, /contact)",
+          about_page: "404, no about page",
+          copyright_year: "2025, a year stale",
+          quality_certifications:
+            "none published, /quality and /certifications both 404",
+        },
+      },
+      contact: {
+        first_name: "Josh",
+        surname: "Hacko",
+        role_title: "Technical Director",
+        role_source: "trade_press",
+        role_confirmed: false,
+        email_as_published: "mail@nhmicro.com",
+        email_source_url: "https://www.nhmicro.com/contact",
+        email_verified_at: "2026-07-30T00:00:00+10:00",
+        no_opt_out_notice: true,
+        consent_basis: "inferred_published",
+        relevance_note:
+          "He is the co-owner and operator, and the person trade press quotes on the move into defence, so the funded ballscrew and control actuation work sits directly with him.",
+      },
+      subject: "NH Micro's public material and the guided weapons grant",
+      sentAt: "2026-07-30T11:00:00+10:00",
+    },
+  ];
+
+  const ticked = {
+    c1: true, c2: true, c3: true, c4: true, c5: true,
+    c6: true, c7: true, c8: true, c9: true,
+  };
+
+  let updated = 0;
+  for (const t of targets) {
+    const { data: orgRow } = await supabase
+      .from("crm_organisations")
+      .select("id")
+      .eq("brand", "ironpeak")
+      .ilike("legal_name", t.legalName)
+      .maybeSingle();
+    const orgId = (orgRow as { id: string } | null)?.id;
+    if (!orgId) continue; // import the grant list first
+
+    await supabase.from("crm_organisations").update(t.org).eq("id", orgId);
+
+    const { data: haveResearch } = await supabase
+      .from("crm_research")
+      .select("id")
+      .eq("organisation_id", orgId)
+      .maybeSingle();
+    if (!haveResearch) {
+      const { error } = await supabase
+        .from("crm_research")
+        .insert({ organisation_id: orgId, ...t.research });
+      if (error) throw new Error(`${t.legalName} note: ${error.message}`);
+    }
+
+    const { data: haveContact } = await supabase
+      .from("crm_contacts")
+      .select("id")
+      .eq("organisation_id", orgId)
+      .maybeSingle();
+    let contactId = (haveContact as { id: string } | null)?.id;
+    if (!contactId) {
+      const { data, error } = await supabase
+        .from("crm_contacts")
+        .insert({ organisation_id: orgId, ...t.contact })
+        .select("id")
+        .single();
+      if (error || !data) {
+        throw new Error(`${t.legalName} contact: ${error?.message ?? "failed"}`);
+      }
+      contactId = (data as { id: string }).id;
+    }
+
+    const { count } = await supabase
+      .from("crm_touches")
+      .select("id", { count: "exact", head: true })
+      .eq("organisation_id", orgId)
+      .eq("sequence_step", "email_1");
+    if ((count ?? 0) === 0) {
+      const { error } = await supabase.from("crm_touches").insert({
+        contact_id: contactId,
+        organisation_id: orgId,
+        channel: "email",
+        sequence_step: "email_1",
+        direction: "out",
+        sent_at: t.sentAt,
+        subject: t.subject,
+        presend_checks: ticked,
+      });
+      if (error) throw new Error(`${t.legalName} email 1: ${error.message}`);
+
+      await supabase.from("crm_tasks").insert({
+        organisation_id: orgId,
+        contact_id: contactId,
+        kind: "follow_up",
+        title: `Email 2 for ${t.legalName}, then stop`,
+        due_on: "2026-08-08",
+      });
+    }
+    updated++;
+  }
+
+  // NH Micro's LinkedIn request was still outstanding when the emails went out.
+  const { data: nh } = await supabase
+    .from("crm_organisations")
+    .select("id")
+    .eq("brand", "ironpeak")
+    .ilike("legal_name", "NH Micro Pty Ltd")
+    .maybeSingle();
+  const nhId = (nh as { id: string } | null)?.id;
+  if (nhId) {
+    const { count } = await supabase
+      .from("crm_tasks")
+      .select("id", { count: "exact", head: true })
+      .eq("organisation_id", nhId)
+      .eq("kind", "linkedin_connect");
+    if ((count ?? 0) === 0) {
+      await supabase.from("crm_tasks").insert({
+        organisation_id: nhId,
+        kind: "linkedin_connect",
+        title: "LinkedIn connection request for Josh Hacko, NH Micro",
+        due_on: "2026-07-31",
+      });
+    }
+  }
+
+  revalidatePath("/admin/crm");
+  return { updated };
+}
+
 export async function saveCrmGoals(daily: number, weekly: number) {
   const { supabase } = await adminSupabase();
   const { error } = await supabase
