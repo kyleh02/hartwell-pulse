@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CrmHealth } from "@/components/crm/CrmHealth";
 import { ProspectTable, StageStrip } from "@/components/crm/ProspectTable";
+import { ImportProspects } from "@/components/crm/ImportProspects";
 
 export const metadata = { title: "Pipeline" };
 
@@ -39,7 +40,8 @@ export default async function AdminCrmPage() {
         <EmptyState
           icon={<Target size={20} strokeWidth={1.75} />}
           title="No prospects yet"
-          description="Run migrations 0022 to 0024 in the Supabase SQL editor and the grant recipients will appear here."
+          description="Import the 59 Defence Industry Development Grant recipients and their 67 grants. Safe to press twice: anything already here is skipped."
+          action={<ImportProspects />}
         />
       ) : (
         <>

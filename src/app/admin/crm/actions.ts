@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getPulseSession } from "@/lib/auth/session";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { FOLLOW_UP_DAYS } from "@/lib/crm-shared";
+import { SEED_ORGS, SEED_GRANTS } from "@/lib/crm-seed-data";
 
 /**
  * CRM actions. The crm_* tables carry an admin-only RLS policy, so these use
@@ -320,6 +321,91 @@ export async function addNote(organisationId: string, body: string) {
   });
   if (error) throw new Error(error.message);
   revalidatePath(`/admin/crm/${organisationId}`);
+}
+
+/**
+ * Import the grant recipients. Doing this through the app rather than a SQL
+ * migration is deliberate: the purpose strings are long prose carrying commas,
+ * semicolons and full stops, and pasting them as SQL literals into the Supabase
+ * editor proved unreliable. Here the values are parameterised, so no escaping
+ * is involved at all.
+ *
+ * Idempotent by company name and by (company, purpose), so running it twice
+ * adds nothing and it is safe to press again after a partial failure.
+ */
+export async function importGrantRecipients(): Promise<{
+  organisations: number;
+  grants: number;
+}> {
+  const { supabase } = await adminSupabase();
+
+  const { data: existingData, error: exErr } = await supabase
+    .from("crm_organisations")
+    .select("id, legal_name")
+    .eq("brand", "ironpeak");
+  if (exErr) throw new Error(exErr.message);
+  const existing =
+    (existingData as { id: string; legal_name: string }[] | null) ?? [];
+  const have = new Set(existing.map((o) => o.legal_name.toLowerCase()));
+
+  const newOrgs = SEED_ORGS.filter((o) => !have.has(o.legal_name.toLowerCase()));
+  if (newOrgs.length > 0) {
+    const { error } = await supabase.from("crm_organisations").insert(
+      newOrgs.map((o) => ({
+        brand: "ironpeak",
+        legal_name: o.legal_name,
+        state: o.state,
+        tier: o.tier,
+        grant_total_aud: o.grant_total_aud,
+        grant_count: o.grant_count,
+        grant_streams: o.grant_streams,
+        new_capability: o.new_capability,
+        headline_purpose: o.headline_purpose,
+      })),
+    );
+    if (error) throw new Error(`Companies: ${error.message}`);
+  }
+
+  // Re-read so the id map covers rows that already existed as well as the new ones.
+  const { data: allData } = await supabase
+    .from("crm_organisations")
+    .select("id, legal_name")
+    .eq("brand", "ironpeak");
+  const idByName = new Map(
+    ((allData as { id: string; legal_name: string }[] | null) ?? []).map((o) => [
+      o.legal_name.toLowerCase(),
+      o.id,
+    ]),
+  );
+
+  const { data: haveGrantsData } = await supabase
+    .from("crm_grants")
+    .select("organisation_id, purpose");
+  const haveGrants = new Set(
+    ((haveGrantsData as { organisation_id: string; purpose: string | null }[] | null) ??
+      []).map((g) => `${g.organisation_id}|${g.purpose ?? ""}`),
+  );
+
+  const newGrants = SEED_GRANTS.flatMap((g) => {
+    const orgId = idByName.get(g.company.toLowerCase());
+    if (!orgId) return [];
+    if (haveGrants.has(`${orgId}|${g.purpose}`)) return [];
+    return [
+      {
+        organisation_id: orgId,
+        amount: g.amount,
+        stream: g.stream,
+        purpose: g.purpose,
+      },
+    ];
+  });
+  if (newGrants.length > 0) {
+    const { error } = await supabase.from("crm_grants").insert(newGrants);
+    if (error) throw new Error(`Grants: ${error.message}`);
+  }
+
+  revalidatePath("/admin/crm");
+  return { organisations: newOrgs.length, grants: newGrants.length };
 }
 
 export async function saveCrmGoals(daily: number, weekly: number) {
