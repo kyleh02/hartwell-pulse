@@ -57,7 +57,8 @@ Live at https://portal.hartwelldigital.com
   Hartwell Digital", no dual logos. The bare ABN line is the only permitted
   expression of the parent.
 - `crm_*` tables are admin-only (`is_admin()`), so clients never see a prospect.
-  Prospect list is 59 DIDG grant recipients seeded in 0023.
+  The 59 DIDG grant recipients and their 67 grants live in
+  `src/lib/crm-seed-data.ts` and load via the Import button on Pipeline.
 - The compliance trail is the point, not a nicety. Cold outreach relies on
   **inferred consent under the Spam Act 2003**, which only attaches to an
   address the business itself conspicuously published. `email_as_published` is
@@ -71,8 +72,12 @@ Live at https://portal.hartwelldigital.com
 - Kyle sends from Outlook. The portal **logs** sends, it does not send them.
   Logging is what advances the stage, counts towards the daily goal, and books
   the LinkedIn request and day 8 to 10 follow-up.
-- Benchmarks: 3 sends a week, 2 to 3 substantive replies per 15, and **zero
-  opt-outs** — that last one is the health metric, shown first.
+- Goals are 3 a day and 15 a week, set by Kyle on 30 July 2026. The outreach
+  playbook benchmarks 3 a WEEK, so this runs five times that rate: the abort
+  warning (15 sends, no substantive reply) now lands after about a week rather
+  than five. Kyle was shown the trade-off and chose the faster pace.
+- Benchmarks that do not change: 2 to 3 substantive replies per 15 sent, and
+  **zero opt-outs** — that last one is the health metric, shown first.
 
 ## Platform constraints
 - Vercel Hobby: crons max once daily (sub-daily jobs run via cron-job.org
