@@ -6,6 +6,7 @@ import { ArrowLeft, Plus, Trash2, Send } from "lucide-react";
 import type {
   BusinessSettings,
   GstMode,
+  InvoiceBrand,
   InvoiceLineItem,
   InvoiceStatus,
   PricingItem,
@@ -61,6 +62,9 @@ export function InvoiceBuilder({
   const [issueDate, setIssueDate] = useState(invoice.issue_date.slice(0, 10));
   const [dueDate, setDueDate] = useState(invoice.due_date.slice(0, 10));
   const [gstMode, setGstMode] = useState<GstMode>(invoice.gst_mode);
+  const [brand, setBrand] = useState(invoice.brand ?? "hartwell");
+  const [deposit, setDeposit] = useState(String(invoice.deposit_amount ?? 0));
+  const [depositLabel, setDepositLabel] = useState(invoice.deposit_label ?? "");
   const [notes, setNotes] = useState(invoice.notes ?? "");
   const [emailMessage, setEmailMessage] = useState(
     () =>
@@ -125,6 +129,9 @@ export function InvoiceBuilder({
     return {
       issue_date: issueDate,
       due_date: dueDate,
+      brand,
+      deposit_amount: Number(deposit) || 0,
+      deposit_label: depositLabel,
       gst_mode: gstMode,
       notes,
       email_message: emailMessage,
@@ -177,6 +184,9 @@ export function InvoiceBuilder({
       ...invoice,
       issue_date: issueDate,
       due_date: dueDate,
+      brand,
+      deposit_amount: Number(deposit) || 0,
+      deposit_label: depositLabel,
       gst_mode: gstMode,
       notes: notes || null,
       discount: totals.discount,
@@ -291,6 +301,64 @@ export function InvoiceBuilder({
               />
             </label>
           </div>
+
+          <label className="flex flex-col gap-1">
+            <span className="mono-label">Issued under</span>
+            <select
+              value={brand}
+              disabled={!editable}
+              onChange={(e) => {
+                setBrand(e.target.value as InvoiceBrand);
+                touch();
+              }}
+              className={fieldCls}
+            >
+              <option value="hartwell">Hartwell Digital</option>
+              <option value="ironpeak">Ironpeak Consulting</option>
+            </select>
+            <span className="text-[11px] text-pulse-text-mute">
+              {brand === "ironpeak"
+                ? "Ironpeak branding on a light document, ABN line only, no Hartwell Digital name. Same invoice number sequence."
+                : "The standard Hartwell Digital invoice."}
+            </span>
+          </label>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1">
+              <span className="mono-label">Deposit received</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={deposit}
+                disabled={!editable}
+                onChange={(e) => {
+                  setDeposit(e.target.value);
+                  touch();
+                }}
+                className={fieldCls}
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="mono-label">Deposit label</span>
+              <input
+                value={depositLabel}
+                disabled={!editable}
+                placeholder="Deposit received"
+                onChange={(e) => {
+                  setDepositLabel(e.target.value);
+                  touch();
+                }}
+                className={fieldCls}
+              />
+            </label>
+          </div>
+          {Number(deposit) > 0 && (
+            <p className="text-[11px] text-pulse-text-mute">
+              Credited against the total, so the document shows the full contract
+              value and then what is left to pay.
+            </p>
+          )}
 
           <label className="flex flex-col gap-1">
             <span className="mono-label">GST</span>

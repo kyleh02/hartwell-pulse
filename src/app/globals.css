@@ -136,6 +136,26 @@
 
 /* ---------- utilities ---------- */
 @layer utilities {
+  /* A light document variant, for anything a client receives on paper or as a
+     PDF. Ironpeak's brand is near-black, but a dark invoice is hostile to
+     print, burns toner and reads as a novelty rather than a financial
+     document. Same tokens, flipped, so the document components need no
+     branching. Steel replaces gold as the accent. */
+  .doc-light {
+    --pulse-bg: #ffffff;
+    --pulse-surface: #ffffff;
+    --pulse-surface-2: #f5f6f8;
+    --pulse-border: rgba(14, 15, 18, 0.12);
+    --pulse-border-strong: rgba(14, 15, 18, 0.22);
+    --pulse-text: #0e0f12;
+    --pulse-text-dim: rgba(14, 15, 18, 0.72);
+    --pulse-text-mute: rgba(14, 15, 18, 0.5);
+    --pulse-gold: #4a6c96;
+    --pulse-gold-light: #7fa0c8;
+    background-color: #ffffff;
+    color: #0e0f12;
+  }
+
   /* Monospace small-caps section header, e.g. PERFORMANCE / GOOGLE ADS */
   .mono-label {
     font-family: var(--font-mono);

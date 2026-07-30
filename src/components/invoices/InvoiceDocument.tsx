@@ -2,6 +2,15 @@ import type { BusinessSettings } from "@/lib/types/database";
 import type { InvoiceBundle } from "@/lib/invoices-shared";
 import { formatMoney, gstLabel } from "@/lib/invoices-shared";
 import { Wordmark } from "@/components/brand/Wordmark";
+import { IronpeakWordmark } from "@/components/brand/IronpeakMark";
+import { cn } from "@/lib/utils/cn";
+
+/** Ironpeak's own details. Same legal entity and ABN as Hartwell Digital. */
+const IRONPEAK = {
+  name: "Ironpeak Consulting",
+  email: "kyle@ironpeakconsulting.com.au",
+  location: "Melbourne, working with defence suppliers across Australia",
+};
 
 function pretty(iso: string): string {
   return new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString("en-AU", {
@@ -20,25 +29,54 @@ export function InvoiceDocument({
 }) {
   const { invoice, client, lines } = bundle;
   const isTaxInvoice = invoice.gst_mode !== "none";
+  const ironpeak = invoice.brand === "ironpeak";
+  // What is left to pay once a deposit already received is credited.
+  const amountDue = invoice.total - Number(invoice.deposit_amount ?? 0);
   // Flat-fee work is almost always qty 1, where Unit == Amount — so show the
   // Qty/Unit columns only when a line actually has a quantity other than 1.
   const showRate = lines.some((l) => Number(l.quantity) !== 1);
 
   return (
-    <div className="rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-6 sm:p-8">
+    <div
+      className={cn(
+        "rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-6 sm:p-8",
+        // Ironpeak's brand is near-black, but a dark invoice is hostile to
+        // print and reads as a novelty rather than a financial document.
+        ironpeak && "doc-light",
+      )}
+    >
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-pulse-border pb-6">
         <div>
-          <Wordmark size="md" />
-          <p className="mt-3 text-sm font-medium text-pulse-text">
-            {business?.business_name ?? "Hartwell Digital"}
-          </p>
-          {business?.abn && (
-            <p className="data-mono text-xs text-pulse-text-mute">ABN {business.abn}</p>
-          )}
-          {business?.address && (
-            <p className="mt-1 whitespace-pre-line text-xs text-pulse-text-dim">
-              {business.address}
-            </p>
+          {ironpeak ? (
+            <>
+              <IronpeakWordmark size="md" />
+              {/* The ABN is the only permitted mention of the parent entity on
+                  anything a client sees. No Hartwell Digital name or logo. */}
+              {business?.abn && (
+                <p className="data-mono mt-3 text-xs text-pulse-text-mute">
+                  ABN {business.abn}
+                </p>
+              )}
+              <p className="mt-1 text-xs text-pulse-text-dim">{IRONPEAK.location}</p>
+              <p className="data-mono text-xs text-pulse-text-dim">{IRONPEAK.email}</p>
+            </>
+          ) : (
+            <>
+              <Wordmark size="md" />
+              <p className="mt-3 text-sm font-medium text-pulse-text">
+                {business?.business_name ?? "Hartwell Digital"}
+              </p>
+              {business?.abn && (
+                <p className="data-mono text-xs text-pulse-text-mute">
+                  ABN {business.abn}
+                </p>
+              )}
+              {business?.address && (
+                <p className="mt-1 whitespace-pre-line text-xs text-pulse-text-dim">
+                  {business.address}
+                </p>
+              )}
+            </>
           )}
         </div>
         {/* Right-aligning this block only reads correctly while it sits beside
@@ -154,6 +192,20 @@ export function InvoiceDocument({
             <span>Total</span>
             <span className="data-mono">{formatMoney(invoice.total)}</span>
           </div>
+          {Number(invoice.deposit_amount ?? 0) > 0 && (
+            <>
+              <div className="flex justify-between text-pulse-text-dim">
+                <span>{invoice.deposit_label || "Deposit received"}</span>
+                <span className="data-mono">
+                  −{formatMoney(Number(invoice.deposit_amount))}
+                </span>
+              </div>
+              <div className="flex justify-between border-t border-pulse-border pt-1.5 text-base font-medium text-pulse-text">
+                <span>Amount due</span>
+                <span className="data-mono">{formatMoney(amountDue)}</span>
+              </div>
+            </>
+          )}
         </div>
       </div>
 

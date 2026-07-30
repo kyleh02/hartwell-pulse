@@ -438,10 +438,16 @@ export interface PricingItem {
   created_at: string;
 }
 
+/** Which trading brand an invoice is issued under. Same entity and ABN. */
+export type InvoiceBrand = "hartwell" | "ironpeak";
+
 export interface Invoice {
   id: string;
   client_id: string;
   invoice_number: string;
+  brand: InvoiceBrand;
+  deposit_amount: number; // already received, credited against the total
+  deposit_label: string | null;
   status: InvoiceStatus;
   issue_date: string;
   due_date: string;

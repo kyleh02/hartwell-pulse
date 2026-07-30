@@ -59,6 +59,9 @@ export async function createInvoice(clientId: string) {
 export interface SaveInvoiceInput {
   issue_date: string;
   due_date: string;
+  brand: string;
+  deposit_amount: number;
+  deposit_label: string;
   gst_mode: GstMode;
   notes: string;
   email_message: string;
@@ -88,6 +91,9 @@ export async function saveInvoice(invoiceId: string, input: SaveInvoiceInput) {
     .update({
       issue_date: input.issue_date,
       due_date: input.due_date,
+      brand: input.brand,
+      deposit_amount: input.deposit_amount,
+      deposit_label: input.deposit_label || null,
       gst_mode: input.gst_mode,
       notes: input.notes || null,
       email_message: input.email_message || null,
