@@ -20,6 +20,12 @@
   --pulse-success: #6ba368; /* up trends, muted green */
   --pulse-warn: #c9a04c; /* attention states */
   --pulse-danger: #b5563f; /* down trends, muted terracotta, never harsh red */
+
+  /* Ironpeak Consulting accent, verified from its own tokens.css. Used only on
+     Ironpeak-scoped surfaces (the CRM) so the two brands read as related
+     without Ironpeak inheriting Hartwell's gold. */
+  --pulse-steel: #7fa0c8;
+  --pulse-steel-bright: #9db9d9;
 }
 
 /* Map brand tokens onto Tailwind's theme so utilities like `bg-pulse-surface`,
@@ -38,6 +44,8 @@
   --color-pulse-success: var(--pulse-success);
   --color-pulse-warn: var(--pulse-warn);
   --color-pulse-danger: var(--pulse-danger);
+  --color-pulse-steel: var(--pulse-steel);
+  --color-pulse-steel-bright: var(--pulse-steel-bright);
 
   --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, "JetBrains Mono", "SFMono-Regular", monospace;

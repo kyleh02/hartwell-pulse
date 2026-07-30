@@ -48,6 +48,30 @@ Live at https://portal.hartwelldigital.com
   materialises + auto-sends one invoice per template per month (unique index
   dedup), evaluated in Australia/Brisbane time.
 
+## Ironpeak CRM (admin only)
+- Ironpeak Consulting is a **registered business name against Hartwell Digital's
+  ABN 44 286 503 049**, trading in defence only. Internal surfaces may say
+  Hartwell is the parent; **client-facing output must not** — no "a business of
+  Hartwell Digital", no dual logos. The bare ABN line is the only permitted
+  expression of the parent.
+- `crm_*` tables are admin-only (`is_admin()`), so clients never see a prospect.
+  Prospect list is 59 DIDG grant recipients seeded in 0023.
+- The compliance trail is the point, not a nicety. Cold outreach relies on
+  **inferred consent under the Spam Act 2003**, which only attaches to an
+  address the business itself conspicuously published. `email_as_published` is
+  stored **verbatim** (never trimmed or lowercased) with its source URL and
+  verified date, because those three are the legal defence.
+- Rules enforced by database triggers, not just UI: one contact per
+  organisation; hard block on touching an opted-out contact; two emails then the
+  sequence closes (lifts once they reply); a first email needs a
+  **technical-domain finding and a positive finding** on the research note; all
+  nine pre-send checks ticked, stored per touch.
+- Kyle sends from Outlook. The portal **logs** sends, it does not send them.
+  Logging is what advances the stage, counts towards the daily goal, and books
+  the LinkedIn request and day 8 to 10 follow-up.
+- Benchmarks: 3 sends a week, 2 to 3 substantive replies per 15, and **zero
+  opt-outs** — that last one is the health metric, shown first.
+
 ## Platform constraints
 - Vercel Hobby: crons max once daily (sub-daily jobs run via cron-job.org
   hitting `/api/cron/*` with CRON_SECRET). No WebSocket hosting.

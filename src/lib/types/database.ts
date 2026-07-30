@@ -264,6 +264,139 @@ export interface MessageReaction {
   created_at: string;
 }
 
+// ---------- CRM (Ironpeak outreach). Admin only; clients never see these. ----
+export type CrmPlatform = "wordpress" | "wix" | "squarespace" | "custom" | "unknown";
+export type CrmRoleSource = "own_site" | "trade_press" | "linkedin" | "referral";
+export type CrmConsentBasis = "inferred_published" | "express" | "referral" | "none";
+export type CrmChannel = "email" | "linkedin_note" | "linkedin_message" | "reply" | "meeting";
+export type CrmSequenceStep = "email_1" | "linkedin_connect" | "email_2" | "ad_hoc" | "inbound";
+export type CrmTaskKind = "follow_up" | "linkedin_connect" | "reverify" | "annual_review" | "manual";
+
+export interface CrmOrganisation {
+  id: string;
+  brand: string; // 'ironpeak' today; the column exists so Hartwell can share
+  legal_name: string;
+  trading_name: string | null;
+  abn: string | null;
+  state: string | null;
+  website_url: string | null;
+  domain: string | null;
+  platform: CrmPlatform;
+  sector_tags: string[];
+  employee_estimate: number | null;
+  established_year: number | null;
+  tier: string | null; // A to D
+  research_file_path: string | null;
+  last_verified_at: string | null;
+  grant_total_aud: number;
+  grant_count: number;
+  grant_streams: string[];
+  new_capability: boolean;
+  headline_purpose: string | null;
+  stage: string;
+  lost_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CrmGrant {
+  id: string;
+  organisation_id: string;
+  amount: number;
+  stream: string | null;
+  purpose: string | null; // the public sentence: what they were funded to build
+  created_at: string;
+}
+
+export interface CrmContact {
+  id: string;
+  organisation_id: string;
+  first_name: string | null;
+  surname: string | null;
+  role_title: string | null;
+  role_source: CrmRoleSource | null;
+  role_verified_at: string | null;
+  role_confirmed: boolean;
+  email_as_published: string | null; // verbatim, never normalised
+  email_source_url: string | null;
+  email_verified_at: string | null;
+  screenshot_path: string | null;
+  linkedin_url: string | null;
+  no_opt_out_notice: boolean;
+  consent_basis: CrmConsentBasis;
+  relevance_note: string | null;
+  is_sole_contact_for_org: boolean;
+  opt_out_at: string | null;
+  opt_out_actioned_at: string | null;
+  opt_out_channel: string | null;
+  opt_out_verbatim: string | null;
+  created_at: string;
+}
+
+export interface CrmTouch {
+  id: string;
+  contact_id: string;
+  organisation_id: string;
+  channel: CrmChannel;
+  sequence_step: CrmSequenceStep;
+  direction: "out" | "in";
+  sent_at: string;
+  subject: string | null;
+  body_snapshot: string | null; // what was actually sent, not the template
+  outcome: string;
+  substantive: boolean;
+  presend_checks: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface CrmResearch {
+  id: string;
+  organisation_id: string;
+  verified_on: string | null;
+  lead_finding: string | null;
+  lead_finding_method: string | null;
+  technical_domain_finding: string | null; // the send gate
+  positive_finding: string | null; // also required before a first email
+  keep_out_of_first_email: string | null;
+  blocker: string | null;
+  seven_questions: Record<string, unknown>[];
+  signals: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CrmTask {
+  id: string;
+  organisation_id: string | null;
+  contact_id: string | null;
+  kind: CrmTaskKind;
+  title: string;
+  due_on: string; // ISO date
+  done_at: string | null;
+  notified_at: string | null;
+  created_at: string;
+}
+
+export interface CrmSettings {
+  id: boolean;
+  daily_contact_goal: number;
+  weekly_contact_goal: number;
+  capacity_engagement_limit: number;
+  abort_warning_sends: number;
+  reverify_after_days: number;
+  updated_at: string;
+}
+
+export interface CrmMetrics {
+  sent: number;
+  replies: number;
+  substantive: number;
+  opt_outs: number;
+  sent_today: number;
+  live_engagements: number;
+  sends_since_substantive: number;
+}
+
 export interface Notification {
   id: string;
   recipient_user_id: string;

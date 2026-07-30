@@ -4,6 +4,7 @@
     { "path": "/api/cron/digest", "schedule": "0 8 * * 1" },
     { "path": "/api/cron/overdue", "schedule": "0 8 * * *" },
     { "path": "/api/cron/recurring", "schedule": "0 6 * * *" },
-    { "path": "/api/cron/purge-clients", "schedule": "0 4 * * *" }
+    { "path": "/api/cron/purge-clients", "schedule": "0 4 * * *" },
+    { "path": "/api/cron/crm-reminders", "schedule": "0 22 * * *" }
   ]
 }

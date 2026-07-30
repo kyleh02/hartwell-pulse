@@ -8,6 +8,7 @@ import {
   CalendarRange,
   Receipt,
   PenLine,
+  Target,
   type LucideIcon,
 } from "lucide-react";
 
@@ -36,6 +37,8 @@ export const adminNav: NavItem[] = [
   { label: "Copy", href: "/admin/copy", icon: PenLine },
   { label: "Messages", href: "/admin/messages", icon: MessageSquare, badge: "messages" },
   { label: "Invoices", href: "/admin/invoices", icon: Receipt },
+  // Ironpeak Consulting outreach. Admin only, like the rest of this nav.
+  { label: "Pipeline", href: "/admin/crm", icon: Target },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
 
