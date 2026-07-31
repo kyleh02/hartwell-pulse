@@ -24,7 +24,7 @@ Live at https://portal.hartwelldigital.com
 - Write them idempotent: `add column if not exists`, `drop policy if exists`
   before `create policy` (Postgres has no CREATE POLICY IF NOT EXISTS),
   `drop trigger if exists`, guarded `do $$` blocks.
-- 0001–0025 are applied in production as of 2026-07-30. The CRM prospect data
+- 0001–0026 are applied in production as of 2026-07-30. The CRM prospect data
   is NOT a migration: it imports in-app from Pipeline, because 30 KB of string
   literals proved unreliable to paste into the Supabase SQL editor.
 
@@ -98,6 +98,16 @@ Live at https://portal.hartwelldigital.com
   than five. Kyle was shown the trade-off and chose the faster pace.
 - Benchmarks that do not change: 2 to 3 substantive replies per 15 sent, and
   **zero opt-outs** — that last one is the health metric, shown first.
+
+## Celebrations and gamification
+- Admin surfaces only. Clients are businesses and defence buyers are
+  conservative, so confetti in a client portal would read as unserious.
+- `celebrate()` in `src/lib/celebrate.ts` fires on OUTCOMES, never activity:
+  finishing the day's goal (once), a substantive reply, an invoice marked paid.
+  **Never celebrate a send.** The playbook says volume is the risk, so
+  rewarding each send would train the behaviour that gets a campaign
+  complained about. Sending an invoice gets nothing either; being paid does.
+- Honours `prefers-reduced-motion`: the toast shows, the confetti does not.
 
 ## Platform constraints
 - Vercel Hobby: crons max once daily (sub-daily jobs run via cron-job.org
