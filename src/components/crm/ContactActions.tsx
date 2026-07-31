@@ -1,7 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Copy, Linkedin, Mail, Phone, Globe } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Linkedin,
+  Mail,
+  Pencil,
+  Phone,
+  Globe,
+  UserPlus,
+} from "lucide-react";
 import type { CrmContact } from "@/lib/types/database";
 
 /**
@@ -18,14 +27,37 @@ export function ContactActions({
   contact,
   websiteUrl,
   subject,
+  onEdit,
 }: {
   contact: CrmContact | null;
   websiteUrl: string | null;
   subject?: string;
+  onEdit?: () => void;
 }) {
   const [copied, setCopied] = useState<string | null>(null);
 
-  if (!contact) return null;
+  // No contact yet is a state worth showing, not hiding: naming the person is
+  // the next thing to do, so offer the way in rather than an empty space.
+  if (!contact) {
+    return (
+      <div className="rounded-[var(--radius-card)] border border-dashed border-pulse-border bg-pulse-surface/40 p-3">
+        <p className="mono-label">// Reach them</p>
+        <p className="mt-1.5 text-xs text-pulse-text-dim">
+          No one named yet. Add the person and their details before anything can
+          be sent.
+        </p>
+        {onEdit && (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="mt-2 flex min-h-[36px] items-center gap-1.5 rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 px-3 text-sm text-pulse-text-dim transition-colors hover:border-pulse-border-strong hover:text-pulse-text"
+          >
+            <UserPlus size={14} /> Add contact
+          </button>
+        )}
+      </div>
+    );
+  }
 
   const published = contact.email_as_published?.trim() || null;
   const direct = contact.direct_email?.trim() || null;
@@ -51,7 +83,32 @@ export function ContactActions({
 
   return (
     <div className="rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-3">
-      <p className="mono-label">// Reach them</p>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="mono-label">// Reach them</p>
+          <p className="mt-1 truncate text-sm text-pulse-text">
+            {[contact.first_name, contact.surname].filter(Boolean).join(" ") ||
+              "Unnamed contact"}
+          </p>
+          {contact.role_title && (
+            <p className="truncate text-xs text-pulse-text-mute">
+              {contact.role_title}
+              {!contact.role_confirmed && " · unconfirmed"}
+            </p>
+          )}
+        </div>
+        {onEdit && (
+          <button
+            type="button"
+            onClick={onEdit}
+            aria-label="Edit contact details"
+            title="Edit name, phone and email"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-input)] text-pulse-text-mute transition-colors hover:bg-pulse-surface-2 hover:text-pulse-text"
+          >
+            <Pencil size={14} />
+          </button>
+        )}
+      </div>
 
       {optedOut && (
         <p className="mt-1.5 text-xs text-pulse-danger">

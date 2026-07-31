@@ -109,6 +109,7 @@ export function ProspectDetail({ detail }: { detail: Detail }) {
             contact={contact}
             websiteUrl={o.website_url}
             subject={`${o.trading_name ?? o.legal_name}'s public material`}
+            onEdit={() => setTab("contact")}
           />
           {grants.length > 0 && (
             <Card className="p-4">
@@ -167,7 +168,7 @@ export function ProspectDetail({ detail }: { detail: Detail }) {
           {(
             [
               ["note", "The note"],
-              ["contact", "Contact and consent"],
+              ["contact", "Contact"],
               ["history", `History (${touches.length})`],
             ] as const
           ).map(([key, label]) => (
@@ -622,11 +623,11 @@ function ContactForm({
 
   return (
     <Card className="space-y-3 p-4">
-      <p className="text-xs text-pulse-text-mute">
-        One contact per company, ever. Inferred consent only attaches to an
-        address the business itself published, so the exact string, the page it
-        appeared on and the date you checked are the legal defence. The address is
-        stored exactly as typed: no trimming, no lowercasing.
+      <p className="mono-label">// Who they are</p>
+      <p className="-mt-1 text-xs text-pulse-text-mute">
+        One contact per company, ever. Change any of this whenever you learn
+        better: a corrected name, a direct line, a role you have since had
+        confirmed.
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -646,6 +647,38 @@ function ContactForm({
             <option value="referral">Referral</option>
           </select>
         </label>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Text
+          label="Phone"
+          value={form.phone}
+          onChange={(v) => set("phone", v)}
+          mono
+        />
+        <Text
+          label="Direct email"
+          value={form.directEmail}
+          onChange={(v) => set("directEmail", v)}
+          mono
+        />
+      </div>
+      <Text label="LinkedIn URL" value={form.linkedinUrl} onChange={(v) => set("linkedinUrl", v)} />
+      <Tick
+        checked={form.roleConfirmed}
+        onChange={(v) => set("roleConfirmed", v)}
+        label="Role confirmed, not assumed"
+      />
+
+      <div className="border-t border-pulse-border pt-3">
+        <p className="mono-label">// Consent trail</p>
+        <p className="mt-1 text-xs text-pulse-text-mute">
+          This is the legal part. Inferred consent only attaches to an address
+          the business itself published, so the exact string, the page it
+          appeared on and the date you checked are the defence if a complaint
+          ever arrives. The address is stored exactly as typed: no trimming, no
+          lowercasing. These fields gate whether a send can be logged.
+        </p>
       </div>
 
       <Text
@@ -690,29 +723,7 @@ function ContactForm({
         onChange={(v) => set("screenshotPath", v)}
       />
 
-      <div className="rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2/40 p-3">
-        <p className="mono-label">// Once you are talking</p>
-        <p className="mt-0.5 text-[11px] text-pulse-text-mute">
-          A direct address or phone number they give you later. Kept separate
-          from the published address above, which stays as the consent evidence.
-        </p>
-        <div className="mt-2 grid gap-3 sm:grid-cols-2">
-          <Text
-            label="Direct email"
-            value={form.directEmail}
-            onChange={(v) => set("directEmail", v)}
-            mono
-          />
-          <Text
-            label="Phone"
-            value={form.phone}
-            onChange={(v) => set("phone", v)}
-            mono
-          />
-        </div>
-      </div>
 
-      <Text label="LinkedIn URL" value={form.linkedinUrl} onChange={(v) => set("linkedinUrl", v)} />
 
       <label className="block">
         <span className="mono-label">Why this is relevant to their role</span>
@@ -724,18 +735,11 @@ function ContactForm({
         />
       </label>
 
-      <div className="space-y-1.5">
-        <Tick
-          checked={form.roleConfirmed}
-          onChange={(v) => set("roleConfirmed", v)}
-          label="Role confirmed, not assumed"
-        />
-        <Tick
-          checked={form.noOptOutNotice}
-          onChange={(v) => set("noOptOutNotice", v)}
-          label="Their contact page carries no notice refusing unsolicited approaches"
-        />
-      </div>
+      <Tick
+        checked={form.noOptOutNotice}
+        onChange={(v) => set("noOptOutNotice", v)}
+        label="Their contact page carries no notice refusing unsolicited approaches"
+      />
 
       {contact?.opt_out_at && (
         <OptOutRow
