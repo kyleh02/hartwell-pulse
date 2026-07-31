@@ -27,6 +27,7 @@ import {
 import { InvoiceDocument } from "@/components/invoices/InvoiceDocument";
 import { PrintButton } from "@/components/invoices/PrintButton";
 import { Button } from "@/components/ui/Button";
+import { celebrate } from "@/lib/celebrate";
 import { Badge } from "@/components/ui/Badge";
 
 function newId() {
@@ -164,6 +165,16 @@ export function InvoiceBuilder({
     startTransition(async () => {
       await setInvoiceStatus(invoice.id, s);
       setStatus(s);
+      // Getting paid is the only invoice state worth cheering. Sending one is
+      // just work.
+      if (s === "paid") {
+        celebrate({
+          title: `${formatMoney(totals.total)} paid`,
+          message: `${bundle.client.business_name} settled ${invoice.invoice_number}.`,
+          tone: "success",
+          intensity: 3,
+        });
+      }
     });
   }
   function del() {

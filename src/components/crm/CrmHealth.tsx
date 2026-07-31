@@ -5,7 +5,9 @@ import { AlertTriangle, Check, Pencil } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { completeTask, saveCrmGoals } from "@/app/admin/crm/actions";
 import type { CrmMetrics, CrmSettings } from "@/lib/types/database";
-import type { DueTask } from "@/lib/crm";
+import type { ActivityDay, DueTask } from "@/lib/crm";
+import { currentStreak } from "@/lib/crm";
+import { GoalRing } from "@/components/crm/GoalRing";
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -17,10 +19,12 @@ export function CrmHealth({
   metrics,
   settings,
   dueTasks,
+  activity,
 }: {
   metrics: CrmMetrics;
   settings: CrmSettings | null;
   dueTasks: DueTask[];
+  activity: ActivityDay[];
 }) {
   const dailyGoal = settings?.daily_contact_goal ?? 3;
   const weeklyGoal = settings?.weekly_contact_goal ?? 3;
@@ -32,6 +36,7 @@ export function CrmHealth({
   const [weekly, setWeekly] = useState(String(weeklyGoal));
   const [pending, startTransition] = useTransition();
 
+  const streak = currentStreak(activity, dailyGoal);
   const atCapacity = metrics.live_engagements >= capacity;
   const shouldAbort = metrics.sends_since_substantive >= abortAt;
 
@@ -93,7 +98,7 @@ export function CrmHealth({
         {/* Today's goal */}
         <Card className="p-4">
           <div className="flex items-start justify-between gap-2">
-            <p className="mono-label">// Today</p>
+            <p className="mono-label">{editing ? "// Goals" : ""}</p>
             <button
               type="button"
               onClick={() => setEditing((v) => !v)}
@@ -122,25 +127,14 @@ export function CrmHealth({
               </p>
             </div>
           ) : (
-            <>
-              <p className="data-mono mt-1 text-2xl text-pulse-text">
-                {metrics.sent_today}
-                <span className="text-base text-pulse-text-mute"> / {dailyGoal}</span>
-              </p>
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-pulse-surface-2">
-                <div
-                  className="h-full rounded-full bg-pulse-steel transition-all"
-                  style={{
-                    width: `${dailyGoal > 0 ? Math.min(100, (metrics.sent_today / dailyGoal) * 100) : 0}%`,
-                  }}
-                />
-              </div>
-              <p className="mt-2 text-xs text-pulse-text-dim">
-                {metrics.sent_today >= dailyGoal
-                  ? "Today's goal is met. Stop here."
-                  : `${dailyGoal - metrics.sent_today} to go. Only counts when a send is logged.`}
-              </p>
-            </>
+            <div className="mt-2">
+              <GoalRing
+                done={metrics.sent_today}
+                goal={dailyGoal}
+                streak={streak}
+                days={activity}
+              />
+            </div>
           )}
         </Card>
 

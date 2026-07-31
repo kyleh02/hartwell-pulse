@@ -202,6 +202,23 @@
     font-family: var(--font-ip-mono);
   }
 
+  /* A card that responds to being pointed at. Border and a 1px rise only:
+     anything more and a page of them starts to feel like a trampoline. */
+  .lift {
+    transition:
+      border-color 0.18s ease,
+      transform 0.18s ease;
+  }
+  .lift:hover {
+    border-color: var(--pulse-border-strong);
+    transform: translateY(-1px);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lift:hover {
+      transform: none;
+    }
+  }
+
   /* Monospace small-caps section header, e.g. PERFORMANCE / GOOGLE ADS */
   .mono-label {
     font-family: var(--font-mono);

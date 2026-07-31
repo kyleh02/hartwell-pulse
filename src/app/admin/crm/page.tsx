@@ -4,6 +4,7 @@ import {
   getCrmMetrics,
   getCrmSettings,
   listCrmLists,
+  listActivityDays,
   listDueTasks,
   listProspects,
 } from "@/lib/crm";
@@ -44,12 +45,13 @@ export default async function AdminCrmPage({
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
-  const [rows, metrics, settings, dueTasks, lists] = await Promise.all([
+  const [rows, metrics, settings, dueTasks, lists, activity] = await Promise.all([
     listProspects(supabase, brand),
     getCrmMetrics(supabase, 7, brand),
     getCrmSettings(supabase),
     listDueTasks(supabase, today),
     listCrmLists(supabase, brand),
+    listActivityDays(supabase, 14, brand),
   ]);
 
   return (
@@ -80,7 +82,12 @@ export default async function AdminCrmPage({
       </div>
       <p className="-mt-3 max-w-2xl text-xs text-pulse-text-mute">{current.blurb}</p>
 
-      <CrmHealth metrics={metrics} settings={settings} dueTasks={dueTasks} />
+      <CrmHealth
+        metrics={metrics}
+        settings={settings}
+        dueTasks={dueTasks}
+        activity={activity}
+      />
       <PipelineView brand={brand} lists={lists} rows={rows} />
 
       {/* The grant recipients are an Ironpeak list, so the one-press import

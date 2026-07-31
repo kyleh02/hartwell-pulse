@@ -22,6 +22,7 @@ import {
   stageLabel,
 } from "@/lib/crm-shared";
 import { ContactActions } from "@/components/crm/ContactActions";
+import { celebrate } from "@/lib/celebrate";
 import type { ProspectDetail as Detail } from "@/lib/crm";
 import { cn } from "@/lib/utils/cn";
 
@@ -41,7 +42,15 @@ const PRESEND = [
   ["c9", "One sentence here could not have been sent to any other company"],
 ] as const;
 
-export function ProspectDetail({ detail }: { detail: Detail }) {
+export function ProspectDetail({
+  detail,
+  goalDone = 0,
+  goalTarget = 0,
+}: {
+  detail: Detail;
+  goalDone?: number;
+  goalTarget?: number;
+}) {
   const { organisation: o, grants, contact, research, touches, tasks } = detail;
   const router = useRouter();
   const [tab, setTab] = useState<"note" | "contact" | "history">("note");
@@ -140,6 +149,8 @@ export function ProspectDetail({ detail }: { detail: Detail }) {
         nextStep={nextStep}
         organisationId={o.id}
         contactId={contact?.id ?? null}
+        goalDone={goalDone}
+        goalTarget={goalTarget}
         onDone={() => router.refresh()}
       />
 
@@ -233,6 +244,8 @@ function SendPanel({
   nextStep,
   organisationId,
   contactId,
+  goalDone,
+  goalTarget,
   onDone,
 }: {
   blocked: boolean;
@@ -244,6 +257,8 @@ function SendPanel({
   nextStep: string;
   organisationId: string;
   contactId: string | null;
+  goalDone: number;
+  goalTarget: number;
   onDone: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -274,6 +289,17 @@ function SendPanel({
         setChecks({});
         setSubject("");
         setBody("");
+        // Deliberately not a cheer for every send. The playbook is explicit
+        // that volume is the risk, so the reward lands on finishing the day's
+        // goal, not on adding one more email to the pile.
+        if (goalDone + 1 === goalTarget && goalTarget > 0) {
+          celebrate({
+            title: "Today's goal is done",
+            message: "That is the number you set. Stop here rather than pushing on.",
+            tone: "steel",
+            intensity: 2,
+          });
+        }
         onDone();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Could not log that.");
@@ -889,6 +915,21 @@ function History({
                   await logReply(organisationId, contactId, outcome, substantive, body);
                   setOpen(false);
                   setBody("");
+                  if (substantive) {
+                    celebrate({
+                      title: "A substantive reply",
+                      message:
+                        "The metric that actually governs the campaign. Two to three per fifteen is the benchmark.",
+                      tone: "success",
+                      intensity: 3,
+                    });
+                  } else if (outcome === "reply_positive") {
+                    celebrate({
+                      title: "They replied",
+                      tone: "steel",
+                      intensity: 1,
+                    });
+                  }
                   router.refresh();
                 })
               }

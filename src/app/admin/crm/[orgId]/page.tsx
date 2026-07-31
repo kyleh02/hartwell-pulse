@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { getProspect } from "@/lib/crm";
+import { getCrmMetrics, getCrmSettings, getProspect } from "@/lib/crm";
 import { ProspectDetail } from "@/components/crm/ProspectDetail";
 
 export const metadata = { title: "Prospect" };
@@ -17,6 +17,12 @@ export default async function CrmProspectPage({
   const detail = await getProspect(supabase, orgId);
   if (!detail) notFound();
 
+  // Passed through so a logged send knows whether it just completed the day.
+  const [metrics, settings] = await Promise.all([
+    getCrmMetrics(supabase, 7, detail.organisation.brand),
+    getCrmSettings(supabase),
+  ]);
+
   return (
     <div>
       <Link
@@ -25,7 +31,11 @@ export default async function CrmProspectPage({
       >
         <ChevronLeft size={15} /> Pipeline
       </Link>
-      <ProspectDetail detail={detail} />
+      <ProspectDetail
+        detail={detail}
+        goalDone={metrics.sent_today}
+        goalTarget={settings?.daily_contact_goal ?? 0}
+      />
     </div>
   );
 }

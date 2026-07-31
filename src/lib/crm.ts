@@ -215,6 +215,44 @@ export async function listDueTasks(
   }));
 }
 
+export interface ActivityDay {
+  day: string; // ISO date
+  sent: number;
+}
+
+/** Sends per day for the last fortnight, oldest first. Drives the streak. */
+export async function listActivityDays(
+  supabase: SupabaseClient,
+  days = 14,
+  brand = "ironpeak",
+): Promise<ActivityDay[]> {
+  const { data } = await supabase.rpc("crm_activity_days", {
+    p_days: days,
+    p_brand: brand,
+  });
+  return ((data as { day: string; sent: number }[] | null) ?? []).map((d) => ({
+    day: d.day,
+    sent: Number(d.sent),
+  }));
+}
+
+/**
+ * Consecutive days up to today that met the goal. Today only breaks the streak
+ * once it is over: a run of four should not read as zero at 9am just because
+ * the day has not been worked yet.
+ */
+export function currentStreak(days: ActivityDay[], goal: number): number {
+  if (goal <= 0) return 0;
+  let streak = 0;
+  for (let i = days.length - 1; i >= 0; i--) {
+    const met = days[i].sent >= goal;
+    if (met) streak++;
+    else if (i === days.length - 1) continue; // today, still in play
+    else break;
+  }
+  return streak;
+}
+
 /** Source lists, newest first, with how many prospects each holds. */
 export async function listCrmLists(
   supabase: SupabaseClient,
