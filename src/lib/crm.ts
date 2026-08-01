@@ -20,6 +20,8 @@ export interface ProspectRow {
   id: string;
   list_id: string | null;
   legal_name: string;
+  source_status: string | null;
+  next_action: string | null;
   state: string | null;
   tier: string | null;
   grant_total_aud: number;
@@ -86,6 +88,8 @@ export async function listProspects(
       id: o.id,
       list_id: o.list_id,
       legal_name: o.legal_name,
+      source_status: o.source_status,
+      next_action: o.next_action,
       state: o.state,
       tier: o.tier,
       grant_total_aud: Number(o.grant_total_aud),

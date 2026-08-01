@@ -5,6 +5,7 @@ import { getPulseSession } from "@/lib/auth/session";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { FOLLOW_UP_DAYS } from "@/lib/crm-shared";
 import { SEED_ORGS, SEED_GRANTS } from "@/lib/crm-seed-data";
+import { PIPELINE_MASTER } from "@/lib/crm-pipeline-master";
 
 /**
  * CRM actions. The crm_* tables carry an admin-only RLS policy, so these use
@@ -723,6 +724,137 @@ export async function importContactedTargets(): Promise<{ updated: number }> {
 
   revalidatePath("/admin/crm");
   return { updated };
+}
+
+/**
+ * Apply the researched pipeline master over the existing prospects.
+ *
+ * Deliberately an update, not a wipe and reload. The company list is identical,
+ * so clearing first would delete and immediately recreate the same 59 rows,
+ * taking with them the things the CSV does not carry: the research notes, and
+ * the logged sends with their dates. That touch log is the Spam Act defence, so
+ * it is the one thing that must survive a refresh of the list.
+ *
+ * Qualification maps onto stage like this:
+ *   skip      -> lost, carrying the reason it was ruled out
+ *   contacted -> contacted, but only if nothing further has happened already
+ *   others    -> verified when a named contact and published address exist,
+ *                researched when they do not
+ *
+ * A company already further along than the CSV says is left where it is: the
+ * portal knows about replies the spreadsheet does not.
+ */
+export async function syncPipelineMaster(): Promise<{
+  updated: number;
+  contacts: number;
+  needSourceUrl: number;
+  skipped: number;
+}> {
+  const { supabase } = await adminSupabase();
+
+  const { data: orgData, error: oErr } = await supabase
+    .from("crm_organisations")
+    .select("id, legal_name, stage")
+    .eq("brand", "ironpeak");
+  if (oErr) throw new Error(oErr.message);
+  const orgs = (orgData as { id: string; legal_name: string; stage: string }[] | null) ?? [];
+  const byName = new Map(orgs.map((o) => [o.legal_name.toLowerCase(), o]));
+
+  // Stages that mean real contact has happened. Never walk one of these back
+  // to match a spreadsheet.
+  const AHEAD = [
+    "connected", "followed_up", "replied", "conversation",
+    "proposal", "won", "delivered", "do_not_contact",
+  ];
+
+  let updated = 0;
+  let contacts = 0;
+  let needSourceUrl = 0;
+  let skipped = 0;
+
+  for (const row of PIPELINE_MASTER) {
+    const org = byName.get(row.company.toLowerCase());
+    if (!org) continue;
+
+    const hasContact = !!row.published_email && !!row.contact_name;
+    let stage: string;
+    if (row.status === "skip") stage = "lost";
+    else if (row.status === "contacted") stage = "contacted";
+    else stage = hasContact ? "verified" : "researched";
+
+    // The portal may know more than the sheet does.
+    if (AHEAD.includes(org.stage)) stage = org.stage;
+    if (row.status === "skip") skipped++;
+
+    const { error } = await supabase
+      .from("crm_organisations")
+      .update({
+        state: row.state || null,
+        tier: row.tier || null,
+        grant_total_aud: row.grant_total_aud,
+        grant_streams: row.streams,
+        new_capability: row.new_capability,
+        headline_purpose: row.headline_purpose || null,
+        domain: row.domain || null,
+        website_url: row.domain ? `https://${row.domain}` : null,
+        research_file_path: row.research_file || null,
+        source_status: row.status || null,
+        next_action: row.next_action || null,
+        stage,
+        lost_reason: row.status === "skip" ? row.next_action || "Outside the filter" : null,
+      })
+      .eq("id", org.id);
+    if (error) throw new Error(`${row.company}: ${error.message}`);
+    updated++;
+
+    if (!hasContact) continue;
+
+    const parts = row.contact_name.trim().split(/\s+/);
+    const first = parts[0] ?? null;
+    const surname = parts.length > 1 ? parts.slice(1).join(" ") : null;
+
+    const { data: existing } = await supabase
+      .from("crm_contacts")
+      .select("id, email_source_url")
+      .eq("organisation_id", org.id)
+      .maybeSingle();
+
+    // The CSV carries no source URL, and that field is the evidence inferred
+    // consent rests on. Guessing it from the domain would be fabricating the
+    // one thing that has to be checkable, so it is left for Kyle to fill and
+    // an existing one is never overwritten.
+    const base = {
+      first_name: first,
+      surname,
+      role_title: row.contact_title || null,
+      email_as_published: row.published_email,
+      email_verified_at: row.status_date ? `${row.status_date}T00:00:00+10:00` : null,
+      consent_basis: "inferred_published",
+      relevance_note:
+        row.next_action ||
+        `Funded to ${row.headline_purpose || "build new capability"}.`,
+    };
+
+    if (existing) {
+      const e = existing as { id: string; email_source_url: string | null };
+      const { error: cErr } = await supabase
+        .from("crm_contacts")
+        .update(base)
+        .eq("id", e.id);
+      if (cErr) throw new Error(`${row.company} contact: ${cErr.message}`);
+      if (!e.email_source_url) needSourceUrl++;
+    } else {
+      const { error: cErr } = await supabase
+        .from("crm_contacts")
+        .insert({ organisation_id: org.id, ...base });
+      if (cErr) throw new Error(`${row.company} contact: ${cErr.message}`);
+      needSourceUrl++;
+    }
+    contacts++;
+  }
+
+  revalidatePath("/admin/crm");
+  return { updated, contacts, needSourceUrl, skipped };
 }
 
 export async function saveCrmGoals(daily: number, weekly: number) {

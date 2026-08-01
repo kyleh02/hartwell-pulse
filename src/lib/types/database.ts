@@ -306,6 +306,9 @@ export interface CrmOrganisation {
   grant_streams: string[];
   new_capability: boolean;
   headline_purpose: string | null;
+  /** Kyle's qualification vocabulary: skip | watch | queued | advance-queued. */
+  source_status: string | null;
+  next_action: string | null;
   stage: string;
   lost_reason: string | null;
   created_at: string;

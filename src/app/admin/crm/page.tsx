@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { CrmHealth } from "@/components/crm/CrmHealth";
 import { PipelineView } from "@/components/crm/PipelineView";
 import { ImportProspects } from "@/components/crm/ImportProspects";
+import { SyncMaster } from "@/components/crm/SyncMaster";
 import { cn } from "@/lib/utils/cn";
 
 export const metadata = { title: "Pipeline" };
@@ -60,6 +61,7 @@ export default async function AdminCrmPage({
         label={[current.label, "Outreach"]}
         title="Pipeline"
         description="Who you are reaching out to, grouped by where the names came from, and where each one sits. The rules are enforced rather than displayed: a send is blocked until its consent trail is complete."
+        actions={brand === "ironpeak" && rows.length > 0 ? <SyncMaster /> : undefined}
       />
 
       {/* Two businesses, two client bases, two sets of numbers. Kept apart so a
