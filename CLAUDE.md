@@ -24,7 +24,7 @@ Live at https://portal.hartwelldigital.com
 - Write them idempotent: `add column if not exists`, `drop policy if exists`
   before `create policy` (Postgres has no CREATE POLICY IF NOT EXISTS),
   `drop trigger if exists`, guarded `do $$` blocks.
-- 0001–0026 are applied in production as of 2026-07-30. The CRM prospect data
+- 0001–0027 are applied in production as of 2026-08-01. The CRM prospect data
   is NOT a migration: it imports in-app from Pipeline, because 30 KB of string
   literals proved unreliable to paste into the Supabase SQL editor.
 
@@ -71,8 +71,17 @@ Live at https://portal.hartwelldigital.com
   Hartwell Digital", no dual logos. The bare ABN line is the only permitted
   expression of the parent.
 - `crm_*` tables are admin-only (`is_admin()`), so clients never see a prospect.
-  The 59 DIDG grant recipients and their 67 grants live in
-  `src/lib/crm-seed-data.ts` and load via the Import button on Pipeline.
+  The researched list lives in `src/lib/crm-pipeline-master.ts` and applies via
+  **Sync master list** on Pipeline. Of the 59 companies, 34 are ruled out
+  (stage `lost`, reason kept), 25 are live, 3 contacted.
+- **Sync updates, it never wipes.** The names match one for one, so clearing
+  first would destroy the research notes and the logged sends, and that touch
+  log is the Spam Act defence. A company already further along than the sheet
+  is left where it is.
+- The master CSV carries **no `email_source_url`**, so sync leaves it blank
+  rather than guessing `{domain}/contact`. Sends stay blocked until Kyle fills
+  each one: a fabricated source URL would fake the one thing that must be
+  checkable.
 - Prospects belong to a **source list** (`crm_lists`). Provenance is what makes
   a first email specific, and it stops reply rates from different sources being
   averaged into one meaningless number. New batches get their own list.
