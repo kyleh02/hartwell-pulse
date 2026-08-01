@@ -61,7 +61,13 @@ export default async function AdminCrmPage({
         label={[current.label, "Outreach"]}
         title="Pipeline"
         description="Who you are reaching out to, grouped by where the names came from, and where each one sits. The rules are enforced rather than displayed: a send is blocked until its consent trail is complete."
-        actions={brand === "ironpeak" && rows.length > 0 ? <SyncMaster /> : undefined}
+        actions={
+          brand === "ironpeak" && rows.length > 0 ? (
+            <SyncMaster
+              ruledOutCount={rows.filter((r) => r.stage === "lost").length}
+            />
+          ) : undefined
+        }
       />
 
       {/* Two businesses, two client bases, two sets of numbers. Kept apart so a

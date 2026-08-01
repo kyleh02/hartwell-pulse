@@ -857,6 +857,57 @@ export async function syncPipelineMaster(): Promise<{
   return { updated, contacts, needSourceUrl, skipped };
 }
 
+/**
+ * Delete the companies that were ruled out, leaving only those verified or
+ * already contacted.
+ *
+ * Two guards, because this is not reversible from inside the portal. Only
+ * organisations at stage 'lost' are eligible, and any with a logged touch is
+ * kept regardless: something that was written to has a compliance record, and
+ * that record outranks a tidy list. Everything else cascades away with the
+ * company, which is what makes it a real removal rather than a hidden row.
+ *
+ * The list itself is not lost. src/lib/crm-pipeline-master.ts still holds all
+ * 59 with their skip reasons, so a company can be brought back deliberately.
+ */
+export async function removeRuledOut(
+  brand = "ironpeak",
+): Promise<{ removed: number; keptWithHistory: number }> {
+  const { supabase } = await adminSupabase();
+
+  const { data: lostData, error: lErr } = await supabase
+    .from("crm_organisations")
+    .select("id")
+    .eq("brand", brand)
+    .eq("stage", "lost");
+  if (lErr) throw new Error(lErr.message);
+  const lost = ((lostData as { id: string }[] | null) ?? []).map((o) => o.id);
+  if (lost.length === 0) return { removed: 0, keptWithHistory: 0 };
+
+  // Anything ever written to keeps its record, whatever the list says.
+  const { data: touched } = await supabase
+    .from("crm_touches")
+    .select("organisation_id")
+    .in("organisation_id", lost);
+  const hasHistory = new Set(
+    ((touched as { organisation_id: string }[] | null) ?? []).map(
+      (t) => t.organisation_id,
+    ),
+  );
+
+  const deletable = lost.filter((id) => !hasHistory.has(id));
+  if (deletable.length > 0) {
+    const { error } = await supabase
+      .from("crm_organisations")
+      .delete()
+      .in("id", deletable);
+    if (error) throw new Error(error.message);
+  }
+
+  revalidatePath("/admin/crm");
+  return { removed: deletable.length, keptWithHistory: hasHistory.size };
+}
+
 export async function saveCrmGoals(daily: number, weekly: number) {
   const { supabase } = await adminSupabase();
   const { error } = await supabase

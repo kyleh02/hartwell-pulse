@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw } from "lucide-react";
-import { syncPipelineMaster } from "@/app/admin/crm/actions";
+import { RefreshCw, Trash2 } from "lucide-react";
+import { syncPipelineMaster, removeRuledOut } from "@/app/admin/crm/actions";
 import { buttonClasses } from "@/components/ui/Button";
 
 /**
@@ -13,7 +13,7 @@ import { buttonClasses } from "@/components/ui/Button";
  * the research notes and the logged sends with their dates, survives. Safe to
  * press again whenever the master changes.
  */
-export function SyncMaster() {
+export function SyncMaster({ ruledOutCount = 0 }: { ruledOutCount?: number }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<string | null>(null);
@@ -42,17 +42,57 @@ export function SyncMaster() {
     });
   }
 
+  function purge() {
+    if (
+      !window.confirm(
+        `Remove ${ruledOutCount} ruled-out compan${ruledOutCount === 1 ? "y" : "ies"}?
+
+They are deleted from the portal along with anything attached. Any that were actually written to are kept regardless, so no outreach record is lost. The full list with skip reasons stays in the master file if you ever want one back.`,
+      )
+    )
+      return;
+    setError(null);
+    setResult(null);
+    setNote(null);
+    startTransition(async () => {
+      try {
+        const r = await removeRuledOut();
+        setResult(`${r.removed} removed.`);
+        if (r.keptWithHistory > 0) {
+          setNote(
+            `${r.keptWithHistory} kept because they have a logged send. A compliance record outranks a tidy list.`,
+          );
+        }
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not remove them.");
+      }
+    });
+  }
+
   return (
     <div className="flex flex-col items-end gap-1.5">
-      <button
-        type="button"
-        onClick={run}
-        disabled={pending}
-        className={buttonClasses("secondary", "sm")}
-      >
-        <RefreshCw size={14} className={pending ? "animate-spin" : undefined} />
-        {pending ? "Syncing…" : "Sync master list"}
-      </button>
+      <div className="flex items-center gap-2">
+        {ruledOutCount > 0 && (
+          <button
+            type="button"
+            onClick={purge}
+            disabled={pending}
+            className={buttonClasses("danger", "sm")}
+          >
+            <Trash2 size={14} /> Remove {ruledOutCount} ruled out
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={run}
+          disabled={pending}
+          className={buttonClasses("secondary", "sm")}
+        >
+          <RefreshCw size={14} className={pending ? "animate-spin" : undefined} />
+          {pending ? "Syncing…" : "Sync master list"}
+        </button>
+      </div>
       {result && (
         <p className="max-w-sm text-right text-xs text-pulse-success">{result}</p>
       )}
