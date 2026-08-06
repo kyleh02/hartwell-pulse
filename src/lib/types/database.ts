@@ -439,6 +439,7 @@ export interface BusinessSettings {
   bank_bsb: string | null;
   bank_account: string | null;
   payment_terms_days: number;
+  reminder_days_before: number; // heads-up before due; 0 disables
   gst_mode: GstMode;
   invoice_email_message: string | null;
   updated_at: string;
@@ -481,6 +482,7 @@ export interface Invoice {
   paid_at: string | null;
   recurring: boolean;
   reminder_sent_at: string | null;
+  pre_reminder_sent_at: string | null;
   email_message: string | null;
   recurring_active: boolean | null;
   recurring_anchor_day: number | null;

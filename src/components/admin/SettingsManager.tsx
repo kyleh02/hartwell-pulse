@@ -18,6 +18,7 @@ function defaultBusiness(): BusinessSettings {
     bank_bsb: null,
     bank_account: null,
     payment_terms_days: 14,
+    reminder_days_before: 3,
     gst_mode: "add",
     invoice_email_message: null,
     updated_at: "",
@@ -55,6 +56,7 @@ export function SettingsManager({
         bank_bsb: biz.bank_bsb,
         bank_account: biz.bank_account,
         payment_terms_days: biz.payment_terms_days,
+        reminder_days_before: biz.reminder_days_before,
         gst_mode: biz.gst_mode,
         invoice_email_message: biz.invoice_email_message,
       })
@@ -139,6 +141,11 @@ export function SettingsManager({
           <label className="flex flex-col gap-1">
             <span className="mono-label">Default terms (days)</span>
             <input type="number" className={field} value={biz.payment_terms_days} onChange={(e) => setField("payment_terms_days", Number(e.target.value))} />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="mono-label">Remind before due (days)</span>
+            <input type="number" min={0} className={field} value={biz.reminder_days_before ?? 3} onChange={(e) => setField("reminder_days_before", Number(e.target.value))} />
+            <span className="text-[11px] text-pulse-text-mute">A heads-up this many days before an invoice is due. 0 turns it off. Overdue chasing runs regardless.</span>
           </label>
           <label className="flex flex-col gap-1">
             <span className="mono-label">Default GST</span>
