@@ -10,6 +10,39 @@ function fmt(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/**
+ * A monthly service period runs from the billing day to the day before the
+ * next one: billed on the 6th, the period is 6 August to 5 September.
+ */
+function servicePeriod(y: number, m: number, anchor: number) {
+  const start = new Date(y, m - 1, anchor);
+  const end = new Date(y, m, anchor);
+  end.setDate(end.getDate() - 1);
+  const long = (d: Date) =>
+    d.toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" });
+  const shortNoYear = (d: Date) =>
+    d.toLocaleDateString("en-AU", { day: "numeric", month: "long" });
+  return {
+    service_start: long(start),
+    service_end: long(end),
+    // Same year reads better without repeating it: "6 August to 5 September 2026".
+    service_period:
+      start.getFullYear() === end.getFullYear()
+        ? `${shortNoYear(start)} to ${long(end)}`
+        : `${long(start)} to ${long(end)}`,
+  };
+}
+
+/**
+ * Substitute the period tokens so a description written once stays true every
+ * cycle. Without this a template saying "Service period 6 August to 5
+ * September" would keep saying August a year later.
+ */
+function fill(text: string | null, vars: Record<string, string>): string | null {
+  if (!text) return text;
+  return text.replace(/\{(service_start|service_end|service_period)\}/g, (_, k) => vars[k] ?? "");
+}
+
 // Today's calendar date in the business timezone (QLD — no daylight saving), so a
 // billing day matches what the admin set regardless of the cron's UTC runtime.
 function businessToday(): { y: number; m: number; d: number } {
@@ -89,8 +122,13 @@ export async function GET(req: NextRequest) {
       const { data: number, error: numErr } = await supabase.rpc("next_invoice_number");
       if (numErr || !number) throw new Error(numErr?.message ?? "no invoice number");
 
+      // A template may bill on its own terms, e.g. a hosting retainer on 7 days
+      // while everything else runs on the business default.
+      const templateTerms = t.recurring_terms_days ?? terms;
       const due = new Date(y, m - 1, d);
-      due.setDate(due.getDate() + terms);
+      due.setDate(due.getDate() + templateTerms);
+
+      const period_vars = servicePeriod(y, m, anchor);
 
       // Dedup: the unique index makes a repeat insert for (template, period) fail
       // with 23505 — treat that as "already billed this month", not an error.
@@ -108,8 +146,8 @@ export async function GET(req: NextRequest) {
           subtotal: t.subtotal,
           gst: t.gst,
           total: t.total,
-          notes: t.notes,
-          email_message: t.email_message,
+          notes: fill(t.notes, period_vars),
+          email_message: fill(t.email_message, period_vars),
           created_by: t.created_by,
           recurring_source_id: t.id,
           recurring_period: period,
@@ -148,8 +186,8 @@ export async function GET(req: NextRequest) {
       const rows = ((lines as InvoiceLineItem[] | null) ?? []).map((l) => ({
         invoice_id: newId,
         client_id: t.client_id,
-        title: l.title,
-        description: l.description,
+        title: fill(l.title, period_vars),
+        description: fill(l.description, period_vars),
         quantity: l.quantity,
         unit_amount: l.unit_amount,
         amount: l.amount,

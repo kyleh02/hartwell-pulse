@@ -1,17 +1,21 @@
 import Link from "next/link";
 import { Receipt, Plus } from "lucide-react";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { listAdminInvoices } from "@/lib/invoices";
+import { listAdminInvoices, getBusinessSettings } from "@/lib/invoices";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { buttonClasses } from "@/components/ui/Button";
 import { InvoicesLibrary } from "@/components/invoices/InvoicesLibrary";
+import { ScheduledInvoices } from "@/components/invoices/ScheduledInvoices";
 
 export const metadata = { title: "Invoices" };
 
 export default async function AdminInvoicesPage() {
   const supabase = await createServerSupabase();
-  const invoices = await listAdminInvoices(supabase);
+  const [invoices, business] = await Promise.all([
+    listAdminInvoices(supabase),
+    getBusinessSettings(supabase),
+  ]);
 
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -36,7 +40,13 @@ export default async function AdminInvoicesPage() {
           description="Start one with New invoice. Set your prices and bank details in Settings first."
         />
       ) : (
-        <InvoicesLibrary invoices={invoices} today={today} />
+        <>
+          <ScheduledInvoices
+            invoices={invoices}
+            defaultTerms={business?.payment_terms_days ?? 14}
+          />
+          <InvoicesLibrary invoices={invoices} today={today} />
+        </>
       )}
     </div>
   );

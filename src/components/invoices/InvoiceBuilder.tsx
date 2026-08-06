@@ -77,6 +77,9 @@ export function InvoiceBuilder({
     invoice.recurring_active ?? false,
   );
   const [anchorDay, setAnchorDay] = useState(invoice.recurring_anchor_day ?? 1);
+  const [recurringTerms, setRecurringTerms] = useState(
+    String(invoice.recurring_terms_days ?? ""),
+  );
   const [status, setStatus] = useState<InvoiceStatus>(invoice.status);
   const [saved, setSaved] = useState(true);
   const [pending, startTransition] = useTransition();
@@ -138,6 +141,7 @@ export function InvoiceBuilder({
       email_message: emailMessage,
       recurring_active: recurringActive,
       recurring_anchor_day: anchorDay,
+      recurring_terms_days: recurringTerms === "" ? null : Number(recurringTerms),
       lines: lines.map((l) => ({
         title: l.title,
         description: l.description,
@@ -418,6 +422,36 @@ export function InvoiceBuilder({
                 />
                 of each month (auto-sends until you switch this off)
               </label>
+            )}
+            {recurringActive && (
+              <>
+                <label className="flex items-center gap-2 pl-6 text-xs text-pulse-text-mute">
+                  Terms
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="default"
+                    value={recurringTerms}
+                    disabled={!editable}
+                    onChange={(e) => {
+                      setRecurringTerms(e.target.value);
+                      touch();
+                    }}
+                    className={`${fieldCls} w-20 text-right`}
+                  />
+                  days for this retainer (blank uses the business default)
+                </label>
+                <p className="pl-6 text-[11px] text-pulse-text-mute">
+                  Write{" "}
+                  <code className="data-mono text-pulse-gold">{"{service_period}"}</code>{" "}
+                  in a line description or the notes and each generated invoice
+                  fills in its own dates, e.g. 6 August to 5 September 2026.{" "}
+                  <code className="data-mono text-pulse-gold">{"{service_start}"}</code>{" "}
+                  and{" "}
+                  <code className="data-mono text-pulse-gold">{"{service_end}"}</code>{" "}
+                  work too.
+                </p>
+              </>
             )}
           </div>
 

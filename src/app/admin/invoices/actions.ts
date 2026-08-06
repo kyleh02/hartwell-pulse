@@ -67,6 +67,7 @@ export interface SaveInvoiceInput {
   email_message: string;
   recurring_active: boolean;
   recurring_anchor_day: number;
+  recurring_terms_days: number | null;
   lines: {
     title: string;
     description: string;
@@ -100,6 +101,9 @@ export async function saveInvoice(invoiceId: string, input: SaveInvoiceInput) {
       recurring_active: input.recurring_active,
       recurring_anchor_day: input.recurring_active
         ? input.recurring_anchor_day
+        : null,
+      recurring_terms_days: input.recurring_active
+        ? input.recurring_terms_days
         : null,
       discount: totals.discount,
       subtotal: totals.subtotal,

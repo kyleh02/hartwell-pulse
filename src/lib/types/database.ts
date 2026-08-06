@@ -486,6 +486,7 @@ export interface Invoice {
   email_message: string | null;
   recurring_active: boolean | null;
   recurring_anchor_day: number | null;
+  recurring_terms_days: number | null; // null = use the business default
   recurring_source_id: string | null;
   recurring_period: string | null;
   created_at: string;
