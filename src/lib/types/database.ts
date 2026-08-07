@@ -296,6 +296,26 @@ export interface CrmList {
 
 export interface CrmOrganisation {
   id: string;
+  // ---- the 7 August 2026 pipeline and its outbox ----
+  rank: number | null;
+  priority_tier: number | null;
+  channel: string | null;
+  scheduled_send_at: string | null;
+  /** Marked drafted by hand. Not the same as sent. */
+  scheduled_at: string | null;
+  followup_due: string | null;
+  hook: string | null;
+  hook_verified_at: string | null;
+  pipeline_notes: string | null;
+  /** Shown as a warning that cannot be dismissed. */
+  hard_warning: string | null;
+  email_subject: string | null;
+  email_body: string | null;
+  /** Set only by a human reading the email. The sender refuses without it. */
+  send_approved_at: string | null;
+  send_approved_checks: Record<string, unknown>;
+  send_attempted_at: string | null;
+  send_error: string | null;
   brand: string; // 'ironpeak' today; the column exists so Hartwell can share
   list_id: string | null; // which source list this prospect came from
   legal_name: string;

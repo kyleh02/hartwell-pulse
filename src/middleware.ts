@@ -10,6 +10,9 @@ const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/api/webhooks/(.*)",
   "/api/cron/(.*)",
+  // The opt-out link at the foot of every outreach email. The person clicking
+  // it has no account, and requiring one to be left alone would be absurd.
+  "/unsubscribe/(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

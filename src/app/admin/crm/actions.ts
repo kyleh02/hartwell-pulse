@@ -965,7 +965,6 @@ export async function replacePipeline(): Promise<{
     const orgFields = {
       brand: "ironpeak",
       legal_name: row.company,
-      trading_name: row.tradingName ?? null,
       state: row.state,
       domain: row.domain === "NO WEBSITE" ? null : row.domain,
       website_url:
@@ -974,14 +973,30 @@ export async function replacePipeline(): Promise<{
       priority_tier: row.tier,
       channel: row.channel,
       stage: row.stage,
-      scheduled_send_at: row.scheduledSendAt ?? null,
+      // sendImmediately means "on receipt, override the window", which is a
+      // time already past rather than a special case for the sender to know
+      // about. Coastal Aviation's compromised site is the only one.
+      scheduled_send_at:
+        row.scheduledSendAt ?? (row.sendImmediately ? new Date().toISOString() : null),
       followup_due: row.followupDue ?? null,
       hook: row.hook,
       hook_verified_at: row.hookVerified,
       pipeline_notes: row.notes,
       hard_warning: row.hardWarning ?? null,
       source_status: row.stage,
-      next_action: row.stage === "queued" ? "Send the written email" : null,
+      email_subject: row.emailSubject,
+      // Only a "ready" email is loaded into the outbox. "held" and
+      // "not-written" records carry their blocker instead, so there is nothing
+      // sitting there that could be approved by accident.
+      email_body: row.emailStatus === "ready" ? row.emailBody : null,
+      // Replacing the data always clears approval. An email that changed is
+      // not the email that was read and approved.
+      send_approved_at: null,
+      send_error: row.emailBlocker,
+      next_action:
+        row.emailStatus === "ready"
+          ? "Approve the email so it sends at its scheduled time"
+          : row.emailBlocker ?? null,
     };
 
     let orgId: string;
@@ -1011,7 +1026,6 @@ export async function replacePipeline(): Promise<{
     const contactFields = {
       first_name: parts[0] ?? null,
       surname: parts.length > 1 ? parts.slice(1).join(" ") : null,
-      role_title: row.contactTitle ?? null,
       name_verified: row.nameVerified,
       fallback_greeting: row.fallbackGreeting ?? null,
       // Verbatim. Never trimmed or lowercased: the exact string as published
@@ -1104,5 +1118,126 @@ export async function setScheduled(
     .eq("id", organisationId);
   if (error) throw new Error(error.message);
   revalidatePath("/admin/crm");
+  revalidatePath("/admin/crm/plan");
+}
+
+/** The email that will go out, saved on the record. */
+export async function saveOutreachEmail(
+  organisationId: string,
+  subject: string,
+  body: string,
+): Promise<void> {
+  const { supabase } = await adminSupabase();
+  // Editing the email un-approves it. Approval means "I read this and it may
+  // go"; a body that changed afterwards was never the thing that was read.
+  const { error } = await supabase
+    .from("crm_organisations")
+    .update({
+      email_subject: subject.trim() || null,
+      email_body: body.trim() || null,
+      send_approved_at: null,
+      send_error: null,
+    })
+    .eq("id", organisationId);
+  if (error) throw new Error(error.message);
+  revalidatePath(`/admin/crm/${organisationId}`);
+  revalidatePath("/admin/crm/plan");
+}
+
+export type ApproveResult =
+  | { ok: true; scheduledFor: string | null }
+  | { ok: false; message: string };
+
+/**
+ * Approve an email to be sent automatically at its scheduled time.
+ *
+ * The nine pre-send checks are ticked HERE, not at send time, because nobody
+ * is at the keyboard at 8:47 in the morning. That is the honest place for them:
+ * a checklist confirmed by a machine on a human's behalf is not a check.
+ *
+ * It runs the guard as a dry run before accepting, so a record that would be
+ * refused at send time is refused now, while there is someone to read why.
+ */
+export async function approveForSending(
+  organisationId: string,
+  checks: Record<string, boolean>,
+): Promise<ApproveResult> {
+  const { supabase } = await adminSupabase();
+
+  const ticked = Object.values(checks).filter(Boolean).length;
+  if (ticked < 9) {
+    return {
+      ok: false,
+      message: `All nine pre-send checks have to be ticked. ${ticked} of 9 are.`,
+    };
+  }
+
+  const { data: row } = await supabase
+    .from("crm_organisations")
+    .select("email_subject, email_body, scheduled_send_at, stage, crm_contacts(id)")
+    .eq("id", organisationId)
+    .maybeSingle();
+  const org = row as {
+    email_subject: string | null;
+    email_body: string | null;
+    scheduled_send_at: string | null;
+    stage: string;
+    crm_contacts: { id: string }[] | null;
+  } | null;
+  if (!org) return { ok: false, message: "That record no longer exists." };
+  if (!org.email_subject || !org.email_body) {
+    return { ok: false, message: "Write the subject and the email first." };
+  }
+  if (!org.scheduled_send_at) {
+    return { ok: false, message: "Give it a send time first." };
+  }
+  const contactId = org.crm_contacts?.[0]?.id;
+  if (!contactId) return { ok: false, message: "No contact on this record." };
+
+  // Ask the guard now, while there is somebody here to read the answer.
+  const { error: dryErr } = await supabase.rpc("crm_dry_run_touch", {
+    p_contact_id: contactId,
+    p_checks: checks,
+  });
+  if (dryErr) return { ok: false, message: dryErr.message };
+
+  const { error } = await supabase
+    .from("crm_organisations")
+    .update({
+      send_approved_at: new Date().toISOString(),
+      send_approved_checks: checks,
+      send_error: null,
+    })
+    .eq("id", organisationId);
+  if (error) return { ok: false, message: error.message };
+
+  revalidatePath(`/admin/crm/${organisationId}`);
+  revalidatePath("/admin/crm/plan");
+  return { ok: true, scheduledFor: org.scheduled_send_at };
+}
+
+/** Take an approved email back out of the outbox. */
+export async function unapproveSending(organisationId: string): Promise<void> {
+  const { supabase } = await adminSupabase();
+  const { error } = await supabase
+    .from("crm_organisations")
+    .update({ send_approved_at: null })
+    .eq("id", organisationId);
+  if (error) throw new Error(error.message);
+  revalidatePath(`/admin/crm/${organisationId}`);
+  revalidatePath("/admin/crm/plan");
+}
+
+/** Move a send to a different minute. Never on the hour or the half hour. */
+export async function setScheduledSendAt(
+  organisationId: string,
+  iso: string | null,
+): Promise<void> {
+  const { supabase } = await adminSupabase();
+  const { error } = await supabase
+    .from("crm_organisations")
+    .update({ scheduled_send_at: iso, send_approved_at: null })
+    .eq("id", organisationId);
+  if (error) throw new Error(error.message);
   revalidatePath("/admin/crm/plan");
 }

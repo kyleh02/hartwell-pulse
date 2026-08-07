@@ -4,6 +4,7 @@ import { ChevronLeft } from "lucide-react";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getCrmMetrics, getCrmSettings, getProspect } from "@/lib/crm";
 import { ProspectDetail } from "@/components/crm/ProspectDetail";
+import { OutreachComposer } from "@/components/crm/OutreachComposer";
 
 export const metadata = { title: "Prospect" };
 
@@ -31,6 +32,23 @@ export default async function CrmProspectPage({
       >
         <ChevronLeft size={15} /> Pipeline
       </Link>
+      {/* The email that will go out, and the approval that lets it. Only for
+          Ironpeak: the Hartwell pipeline has no automated sending. */}
+      {detail.organisation.brand === "ironpeak" && (
+        <div className="mb-4">
+          <OutreachComposer
+            organisationId={detail.organisation.id}
+            initialSubject={detail.organisation.email_subject}
+            initialBody={detail.organisation.email_body}
+            scheduledSendAt={detail.organisation.scheduled_send_at}
+            approvedAt={detail.organisation.send_approved_at}
+            sendError={detail.organisation.send_error}
+            hardWarning={detail.organisation.hard_warning}
+            recipient={detail.contact?.email_as_published ?? null}
+          />
+        </div>
+      )}
+
       <ProspectDetail
         detail={detail}
         goalDone={metrics.sent_today}
