@@ -6,6 +6,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { FOLLOW_UP_DAYS } from "@/lib/crm-shared";
 import { SEED_ORGS, SEED_GRANTS } from "@/lib/crm-seed-data";
 import { PIPELINE_MASTER } from "@/lib/crm-pipeline-master";
+import { PIPELINE_V2 } from "@/lib/crm-pipeline-v2";
 
 /**
  * CRM actions. The crm_* tables carry an admin-only RLS policy, so these use
@@ -919,4 +920,189 @@ export async function saveCrmGoals(daily: number, weekly: number) {
     .eq("id", true);
   if (error) throw new Error(error.message);
   revalidatePath("/admin/crm");
+}
+
+/**
+ * Replace the whole Ironpeak pipeline with the 7 August 2026 handoff.
+ *
+ * REPLACE, not merge. The earlier datasets held 76 records of which 51 were
+ * triaged out, and the offer was repositioned from capability statements to
+ * websites, so almost every hook changed. Merging would leave ruled-out
+ * companies sitting alongside live ones and old capability-statement hooks
+ * attached to records whose email now leads with a website fault.
+ *
+ * The one thing not thrown away is the touch log. Fourteen of these companies
+ * have already been emailed, and those sends are the Spam Act record. So a
+ * company that already exists is UPDATED in place, keeping its id and
+ * therefore its touches, and only companies absent from the new list are
+ * deleted. A deleted company with a logged send is kept regardless: a
+ * compliance record outranks a tidy list.
+ */
+export async function replacePipeline(): Promise<{
+  updated: number;
+  created: number;
+  removed: number;
+  keptWithHistory: number;
+}> {
+  const { supabase } = await adminSupabase();
+
+  const { data: orgData, error: oErr } = await supabase
+    .from("crm_organisations")
+    .select("id, legal_name")
+    .eq("brand", "ironpeak");
+  if (oErr) throw new Error(oErr.message);
+  const existing =
+    (orgData as { id: string; legal_name: string }[] | null) ?? [];
+  const byName = new Map(existing.map((o) => [o.legal_name.toLowerCase(), o]));
+
+  const keepNames = new Set(PIPELINE_V2.map((r) => r.company.toLowerCase()));
+
+  let updated = 0;
+  let created = 0;
+
+  for (const row of PIPELINE_V2) {
+    const org = byName.get(row.company.toLowerCase());
+    const orgFields = {
+      brand: "ironpeak",
+      legal_name: row.company,
+      trading_name: row.tradingName ?? null,
+      state: row.state,
+      domain: row.domain === "NO WEBSITE" ? null : row.domain,
+      website_url:
+        row.domain === "NO WEBSITE" ? null : `https://${row.domain}`,
+      rank: row.rank,
+      priority_tier: row.tier,
+      channel: row.channel,
+      stage: row.stage,
+      scheduled_send_at: row.scheduledSendAt ?? null,
+      followup_due: row.followupDue ?? null,
+      hook: row.hook,
+      hook_verified_at: row.hookVerified,
+      pipeline_notes: row.notes,
+      hard_warning: row.hardWarning ?? null,
+      source_status: row.stage,
+      next_action: row.stage === "queued" ? "Send the written email" : null,
+    };
+
+    let orgId: string;
+    if (org) {
+      const { error } = await supabase
+        .from("crm_organisations")
+        .update(orgFields)
+        .eq("id", org.id);
+      if (error) throw new Error(`${row.company}: ${error.message}`);
+      orgId = org.id;
+      updated++;
+    } else {
+      const { data: made, error } = await supabase
+        .from("crm_organisations")
+        .insert(orgFields)
+        .select("id")
+        .single();
+      if (error || !made) {
+        throw new Error(`${row.company}: ${error?.message ?? "insert failed"}`);
+      }
+      orgId = (made as { id: string }).id;
+      created++;
+    }
+
+    // ---- the single contact ----
+    const parts = row.contactName.trim().split(/\s+/);
+    const contactFields = {
+      first_name: parts[0] ?? null,
+      surname: parts.length > 1 ? parts.slice(1).join(" ") : null,
+      role_title: row.contactTitle ?? null,
+      name_verified: row.nameVerified,
+      fallback_greeting: row.fallbackGreeting ?? null,
+      // Verbatim. Never trimmed or lowercased: the exact string as published
+      // is the evidence.
+      email_as_published: row.email,
+      email_source_note: row.emailSourceNote,
+      // Everything in this file was confirmed published on the company's own
+      // site on 7 August 2026, with Tynbell the one exception, and Tynbell is
+      // blocked so it cannot send anyway.
+      email_verified_at: "2026-08-07T00:00:00+10:00",
+      consent_basis: "inferred_published",
+      relevance_note:
+        row.channel === "DIDG"
+          ? "Received a Defence Industry Development Grant."
+          : "Named as a subcontractor in a public Australian Industry Capability plan on defence.gov.au.",
+      is_sole_contact_for_org: true,
+    };
+
+    const { data: had } = await supabase
+      .from("crm_contacts")
+      .select("id")
+      .eq("organisation_id", orgId)
+      .maybeSingle();
+
+    if (had) {
+      const { error } = await supabase
+        .from("crm_contacts")
+        .update(contactFields)
+        .eq("id", (had as { id: string }).id);
+      if (error) throw new Error(`${row.company} contact: ${error.message}`);
+    } else {
+      const { error } = await supabase
+        .from("crm_contacts")
+        .insert({ organisation_id: orgId, ...contactFields });
+      if (error) throw new Error(`${row.company} contact: ${error.message}`);
+    }
+  }
+
+  // ---- remove everything the new list does not carry ----
+  let removed = 0;
+  let keptWithHistory = 0;
+
+  for (const o of existing) {
+    if (keepNames.has(o.legal_name.toLowerCase())) continue;
+    const { count } = await supabase
+      .from("crm_touches")
+      .select("id", { count: "exact", head: true })
+      .eq("organisation_id", o.id);
+    if ((count ?? 0) > 0) {
+      keptWithHistory++;
+      await supabase
+        .from("crm_organisations")
+        .update({
+          stage: "lost",
+          lost_reason: "Not in the 7 August 2026 pipeline. Kept: has a logged send.",
+        })
+        .eq("id", o.id);
+      continue;
+    }
+    const { error } = await supabase
+      .from("crm_organisations")
+      .delete()
+      .eq("id", o.id);
+    if (error) throw new Error(`Removing ${o.legal_name}: ${error.message}`);
+    removed++;
+  }
+
+  revalidatePath("/admin/crm");
+  return { updated, created, removed, keptWithHistory };
+}
+
+/**
+ * Mark a queued record as drafted or scheduled in Outlook.
+ *
+ * Separate from logging the send, deliberately. Kyle writes and schedules
+ * ahead of time and Outlook sends later, so one flag could only ever be a lie
+ * in one direction: either claiming an email went out while it sits in a
+ * drafts folder, or losing the work of having written it. Logging the actual
+ * send stays the thing that advances the stage, counts toward the daily goal
+ * and stands as the Spam Act record.
+ */
+export async function setScheduled(
+  organisationId: string,
+  scheduled: boolean,
+): Promise<void> {
+  const { supabase } = await adminSupabase();
+  const { error } = await supabase
+    .from("crm_organisations")
+    .update({ scheduled_at: scheduled ? new Date().toISOString() : null })
+    .eq("id", organisationId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/admin/crm");
+  revalidatePath("/admin/crm/plan");
 }

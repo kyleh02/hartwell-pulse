@@ -13,6 +13,9 @@ import { CrmHealth } from "@/components/crm/CrmHealth";
 import { PipelineView } from "@/components/crm/PipelineView";
 import { ImportProspects } from "@/components/crm/ImportProspects";
 import { SyncMaster } from "@/components/crm/SyncMaster";
+import { ReplacePipeline } from "@/components/crm/ReplacePipeline";
+import { CalendarClock } from "lucide-react";
+import { buttonClasses } from "@/components/ui/Button";
 import { cn } from "@/lib/utils/cn";
 
 export const metadata = { title: "Pipeline" };
@@ -62,10 +65,21 @@ export default async function AdminCrmPage({
         title="Pipeline"
         description="Who you are reaching out to, grouped by where the names came from, and where each one sits. The rules are enforced rather than displayed: a send is blocked until its consent trail is complete."
         actions={
-          brand === "ironpeak" && rows.length > 0 ? (
-            <SyncMaster
-              ruledOutCount={rows.filter((r) => r.stage === "lost").length}
-            />
+          brand === "ironpeak" ? (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Link
+                href="/admin/crm/plan"
+                className={buttonClasses("secondary", "sm")}
+              >
+                <CalendarClock size={14} /> Send plan
+              </Link>
+              <ReplacePipeline />
+              {rows.length > 0 && (
+                <SyncMaster
+                  ruledOutCount={rows.filter((r) => r.stage === "lost").length}
+                />
+              )}
+            </div>
           ) : undefined
         }
       />
