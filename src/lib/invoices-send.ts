@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { formatMoney, DEFAULT_INVOICE_EMAIL } from "@/lib/invoices-shared";
 import { sendEmail, emailLayout, renderMessage } from "@/lib/email";
+import { resolveRecipients, type Recipient } from "@/lib/recipients";
 import type { Invoice } from "@/lib/types/database";
 
 function prettyDate(iso: string): string {
@@ -12,39 +13,23 @@ function prettyDate(iso: string): string {
   });
 }
 
-export interface InvoiceRecipient {
-  clerk_user_id: string;
-  email: string | null;
-  full_name: string | null;
-}
+export type InvoiceRecipient = Recipient;
 
 /**
  * Who hears about this invoice: the send, the heads-up before it is due, and
- * the overdue reminder. One resolver so all three can never drift apart.
- *
- * An empty recipient_user_ids means everyone on the account. That is what
- * every invoice predating the column carries, and the right answer for a
- * client with one contact.
- *
- * A chosen id that is no longer on the account simply drops out. The account
- * is the source of truth for who exists, and re-adding someone who has left
- * because their id lingers on an old invoice would be worse than silence. If
- * that empties the list, the callers stop rather than quietly falling back to
- * everyone: falling back would email exactly the person who was deselected.
+ * the overdue reminder. All three call this, so they can never drift apart.
+ * The rule itself lives in resolveRecipients — see the note there on why an
+ * empty list means everyone and an empty result means stop.
  */
 export async function invoiceRecipients(
   supabase: SupabaseClient,
   invoice: Pick<Invoice, "client_id" | "recipient_user_ids">,
 ): Promise<InvoiceRecipient[]> {
-  const { data } = await supabase
-    .from("client_users")
-    .select("clerk_user_id, email, full_name")
-    .eq("client_id", invoice.client_id)
-    .eq("role", "client");
-  const all = (data as InvoiceRecipient[] | null) ?? [];
-  const chosen = invoice.recipient_user_ids ?? [];
-  if (chosen.length === 0) return all;
-  return all.filter((u) => chosen.includes(u.clerk_user_id));
+  return resolveRecipients(
+    supabase,
+    invoice.client_id,
+    invoice.recipient_user_ids,
+  );
 }
 
 /**

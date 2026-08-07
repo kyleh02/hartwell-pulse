@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { getPulseSession } from "@/lib/auth/session";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getReportMetricData } from "@/lib/reports";
+import { sendReportWith, type SendReportResult } from "@/lib/reports-send";
 import type { Brand } from "@/lib/types/database";
 import type { ReportBlock, SaveReportInput } from "@/lib/reports-shared";
 import { metaFor, monthLabel } from "@/lib/metrics";
@@ -137,7 +138,20 @@ export async function saveReport(reportId: string, input: SaveReportInput) {
   if (!report) throw new Error("Report not found");
   const clientId = (report as { client_id: string }).client_id;
 
-  await supabase.from("reports").update({ title: input.title }).eq("id", reportId);
+  // Checked, like the invoice save. An unchecked write here means the summary,
+  // the recipients and the covering note silently keep their old values while
+  // the page says "saved".
+  const { error: repErr } = await supabase
+    .from("reports")
+    .update({
+      title: input.title,
+      summary: input.summary || null,
+      recipient_user_ids: input.recipient_user_ids,
+      email_message: input.email_message || null,
+    })
+    .eq("id", reportId);
+  if (repErr) throw new Error(`Could not save the report: ${repErr.message}`);
+
   await supabase.from("report_sections").delete().eq("report_id", reportId);
 
   if (input.sections.length) {
@@ -183,6 +197,39 @@ export async function setReportBrand(
   revalidatePath(`/admin/reports/${reportId}`);
   revalidatePath("/admin/reports");
   return { ok: true, id: reportId };
+}
+
+/** Email a published report to the people chosen on it. */
+export async function sendReport(reportId: string): Promise<SendReportResult> {
+  const { supabase } = await adminSupabase();
+  const res = await sendReportWith(supabase, reportId);
+  revalidatePath(`/admin/reports/${reportId}`);
+  revalidatePath("/admin/reports");
+  return res;
+}
+
+/**
+ * The same email to Kyle, and nothing else. Reads the SAVED row rather than
+ * anything on screen, so what arrives is what a client would get.
+ */
+export async function sendTestReport(
+  reportId: string,
+): Promise<SendReportResult> {
+  const { supabase, session } = await adminSupabase();
+  const { data: me } = await supabase
+    .from("client_users")
+    .select("email")
+    .eq("clerk_user_id", session.clerkUserId)
+    .maybeSingle();
+  const to = (me as { email: string | null } | null)?.email;
+  if (!to) {
+    return {
+      ok: false,
+      message:
+        "No email address on your own user record, so there is nowhere to send the test.",
+    };
+  }
+  return sendReportWith(supabase, reportId, { testTo: to });
 }
 
 export async function setReportStatus(

@@ -42,8 +42,19 @@ export interface SectionInput {
   pageBreak: boolean;
 }
 
+/**
+ * Lives here rather than beside the sender because the editor needs it too,
+ * and reports-send.ts is server-only.
+ */
+export const DEFAULT_REPORT_EMAIL =
+  "Hi {name},\n\nYour {month} report is ready to read in the portal. It covers how things went last month and what I am working on next.\n\nHave a read when you get a moment, and tell me anything you want looked at more closely.\n\nThanks,\nKyle";
+
 export interface SaveReportInput {
   title: string;
+  /** The opening block, above the first section. Markdown, same subset. */
+  summary: string;
+  recipient_user_ids: string[];
+  email_message: string;
   sections: SectionInput[];
 }
 
@@ -81,6 +92,34 @@ export function metricKeyOf(serviceKey: string, metricKey: string): string {
 export function sectionBlocks(section: ReportSection): ReportBlock[] {
   const content = section.content as ReportSectionContent | null;
   return content?.blocks ?? [];
+}
+
+/**
+ * Placeholders left in a draft: "[ADD: PageSpeed scores]", "TODO", "TBC", "XXX".
+ *
+ * A report is written before all its numbers are in, and the gaps get marked
+ * so they can be found again. The one time they will not be found again is the
+ * moment of sending, which is the only moment it matters. Cheap to check, and
+ * the alternative is a client reading a square bracket.
+ */
+export function findPlaceholders(input: {
+  summary: string;
+  sections: { title: string; body: string }[];
+}): string[] {
+  const found: string[] = [];
+  const scan = (where: string, text: string) => {
+    if (!text) return;
+    // Square brackets holding a note to self, or a bare marker word.
+    const re = /\[[^\]\n]{2,80}\]|\b(TODO|TBC|TBD|XXX|FIXME)\b/gi;
+    for (const m of text.match(re) ?? []) {
+      // A markdown link "[label](url)" is real content, not a gap.
+      if (m.startsWith("[") && text.includes(`${m}(`)) continue;
+      found.push(`${where}: ${m.length > 60 ? `${m.slice(0, 57)}...` : m}`);
+    }
+  };
+  scan("Opening", input.summary);
+  for (const s of input.sections) scan(s.title || "Untitled section", s.body);
+  return found;
 }
 
 export function sectionPageBreak(section: ReportSection): boolean {

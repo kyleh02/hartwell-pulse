@@ -23,8 +23,19 @@ export function ReportDocument({
   hiddenIndices?: number[];
 }) {
   const hidden = new Set(hiddenIndices);
+  const summary = bundle.report.summary?.trim();
   return (
     <article className="space-y-12">
+      {/* The opening block: everything above the first heading in the draft.
+          The importer has always stored this, and nothing ever rendered it, so
+          a report's at-a-glance table went straight into the database and was
+          never seen by anyone. */}
+      {summary && (
+        <section className="report-section report-lead">
+          <ReportText body={summary} />
+        </section>
+      )}
+
       {bundle.sections.map((section, i) => {
         const blocks = sectionBlocks(section);
         const metricBlocks = blocks.filter(

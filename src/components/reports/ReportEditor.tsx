@@ -18,10 +18,14 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Plus, Trash2 } from "lucide-react";
+import { GripVertical, Plus, Trash2, Send, MailCheck } from "lucide-react";
 import type { Brand, InsightSnippet, ReportSectionKind } from "@/lib/types/database";
 import type { ReportBundle } from "@/lib/reports-shared";
-import { sectionBlocks, sectionPageBreak } from "@/lib/reports-shared";
+import {
+  sectionBlocks,
+  sectionPageBreak,
+  findPlaceholders,
+} from "@/lib/reports-shared";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SectionCard, type EditSection } from "@/components/reports/SectionCard";
@@ -33,11 +37,18 @@ import {
   saveReport,
   setReportStatus,
   setReportBrand,
+  sendReport,
+  sendTestReport,
   deleteReport,
   uploadReportImage,
   createSnippet,
   deleteSnippet,
 } from "@/app/admin/reports/actions";
+import { DEFAULT_REPORT_EMAIL } from "@/lib/reports-shared";
+import {
+  RecipientPicker,
+  type InvoicePerson,
+} from "@/components/invoices/RecipientPicker";
 
 function newId() {
   return globalThis.crypto?.randomUUID?.() ?? `id-${Math.random().toString(36).slice(2)}`;
@@ -97,13 +108,25 @@ export function ReportEditor({
   bundle,
   imageUrls: initialImageUrls,
   snippets: initialSnippets,
+  people = [],
 }: {
   bundle: ReportBundle;
   imageUrls: Record<string, string>;
   snippets: InsightSnippet[];
+  people?: InvoicePerson[];
 }) {
   const [title, setTitle] = useState(bundle.report.title);
+  const [summary, setSummary] = useState(bundle.report.summary ?? "");
   const [status, setStatus] = useState(bundle.report.status);
+  const [recipients, setRecipients] = useState<string[]>(
+    () => bundle.report.recipient_user_ids ?? [],
+  );
+  const [emailMessage, setEmailMessage] = useState(
+    () => bundle.report.email_message ?? DEFAULT_REPORT_EMAIL,
+  );
+  const [sentAt, setSentAt] = useState(bundle.report.sent_at);
+  const [sendNote, setSendNote] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [sections, setSections] = useState<EditSection[]>(() =>
     bundle.sections.map((s) => ({
       key: s.id,
@@ -122,6 +145,9 @@ export function ReportEditor({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+
+  // Recomputed as you type, so the warning clears the moment a gap is filled.
+  const placeholders = findPlaceholders({ summary, sections });
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -189,6 +215,9 @@ export function ReportEditor({
   function buildInput() {
     return {
       title,
+      summary,
+      recipient_user_ids: recipients,
+      email_message: emailMessage,
       sections: sections.map((s) => ({
         kind: s.kind,
         title: s.title,
@@ -238,6 +267,67 @@ export function ReportEditor({
       setStatus("draft");
     });
   }
+  /**
+   * Save, then send. Always in that order: the email is a link to what is
+   * stored, so sending unsaved work would point the client at the old version.
+   */
+  function send() {
+    const going =
+      recipients.length === 0
+        ? people
+        : people.filter((p) => recipients.includes(p.clerk_user_id));
+    const who = going
+      .map((p) => `${p.full_name ?? "Unnamed"}${p.email ? ` (${p.email})` : ""}`)
+      .join("\n");
+    // Last look at anything still marked as a gap. This is the only moment it
+    // matters and the one moment it is easiest to forget.
+    const gaps = placeholders.length
+      ? `\n\nStill unfilled:\n${placeholders.slice(0, 6).join("\n")}${
+          placeholders.length > 6
+            ? `\nand ${placeholders.length - 6} more`
+            : ""
+        }`
+      : "";
+    if (
+      !window.confirm(
+        `Send "${title}" to:\n${who || "nobody, check Send to"}${gaps}\n\nThey get an email with a link and a notification in the portal.`,
+      )
+    )
+      return;
+    setSendError(null);
+    setSendNote(null);
+    startTransition(async () => {
+      await saveReport(bundle.report.id, buildInput());
+      setSaved(true);
+      const res = await sendReport(bundle.report.id);
+      if (!res.ok) {
+        setSendError(res.message);
+        return;
+      }
+      setSentAt(new Date().toISOString());
+      setSendNote(`Sent to ${res.sentTo.join(", ")}.`);
+    });
+  }
+
+  function sendTest() {
+    setSendError(null);
+    setSendNote(null);
+    startTransition(async () => {
+      // Save first, so the proof reflects what is stored rather than what is
+      // on screen. That distinction is the whole point of a test send.
+      await saveReport(bundle.report.id, buildInput());
+      setSaved(true);
+      const res = await sendTestReport(bundle.report.id);
+      if (!res.ok) {
+        setSendError(res.message);
+        return;
+      }
+      setSendNote(
+        `Test sent to ${res.sentTo.join(", ")}. Nothing was recorded and the client got nothing.`,
+      );
+    });
+  }
+
   function remove() {
     if (
       !window.confirm(
@@ -294,9 +384,23 @@ The report and every section in it are permanently removed, along with any image
             Save
           </Button>
           {status === "published" ? (
-            <Button variant="ghost" size="sm" onClick={unpublish} disabled={pending}>
-              Unpublish
-            </Button>
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={sendTest}
+                disabled={pending}
+                title="Send this report to yourself, exactly as the client would get it"
+              >
+                <MailCheck size={14} /> Test to me
+              </Button>
+              <Button size="sm" onClick={send} disabled={pending}>
+                <Send size={14} /> {sentAt ? "Send again" : "Send"}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={unpublish} disabled={pending}>
+                Unpublish
+              </Button>
+            </>
           ) : (
             <>
               {/* Drafts only: a published report has been sent, so it gets
@@ -312,15 +416,54 @@ The report and every section in it are permanently removed, along with any image
         </div>
       </div>
 
-      {(brandError || deleteError) && (
+      {(brandError || deleteError || sendError) && (
         <p className="mb-6 rounded-[var(--radius-card)] border border-pulse-danger/40 bg-pulse-danger/10 px-4 py-3 text-sm text-pulse-danger">
-          {brandError ?? deleteError}
+          {brandError ?? deleteError ?? sendError}
+        </p>
+      )}
+
+      {placeholders.length > 0 && (
+        <div className="mb-6 rounded-[var(--radius-card)] border border-pulse-warn/40 bg-pulse-warn/10 px-4 py-3">
+          <p className="text-sm text-pulse-warn">
+            {placeholders.length === 1
+              ? "One spot still has a placeholder in it."
+              : `${placeholders.length} spots still have placeholders in them.`}
+          </p>
+          <ul className="data-mono mt-1.5 space-y-0.5 text-[11px] text-pulse-warn/80">
+            {placeholders.slice(0, 6).map((p, i) => (
+              <li key={i}>{p}</li>
+            ))}
+            {placeholders.length > 6 && <li>and {placeholders.length - 6} more</li>}
+          </ul>
+        </div>
+      )}
+
+      {sendNote && (
+        <p className="mb-6 rounded-[var(--radius-card)] border border-pulse-success/40 bg-pulse-success/10 px-4 py-3 text-sm text-pulse-success">
+          {sendNote}
         </p>
       )}
 
       <div className="lg:grid lg:grid-cols-[1fr_280px] lg:gap-6">
         {/* sections */}
         <div>
+          {/* The opening block. Everything above the first heading in an
+              imported draft lands here, which is usually the at-a-glance
+              table, so it needs to be editable and not just stored. */}
+          <div className="mb-3 rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-4">
+            <p className="mono-label mb-2">Opening</p>
+            <textarea
+              value={summary}
+              onChange={(e) => {
+                setSummary(e.target.value);
+                touch();
+              }}
+              rows={5}
+              placeholder="The first thing they read, above the sections. Leave it empty to start straight at the first section."
+              className="w-full resize-y rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 p-3 text-sm leading-relaxed text-pulse-text placeholder:text-pulse-text-mute focus:border-pulse-border-strong focus:outline-none"
+            />
+          </div>
+
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -368,8 +511,49 @@ The report and every section in it are permanently removed, along with any image
           </div>
         </div>
 
-        {/* snippet library */}
-        <aside className="mt-6 lg:mt-0">
+        {/* delivery + snippet library */}
+        <aside className="mt-6 space-y-3 lg:mt-0">
+          <div className="rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-4">
+            <p className="mono-label mb-3">Send to</p>
+            <RecipientPicker
+              people={people}
+              selected={recipients}
+              onChange={(ids) => {
+                setRecipients(ids);
+                touch();
+              }}
+            />
+
+            <p className="mono-label mb-1.5 mt-4">Covering note</p>
+            <textarea
+              value={emailMessage}
+              onChange={(e) => {
+                setEmailMessage(e.target.value);
+                touch();
+              }}
+              rows={7}
+              className="w-full resize-y rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 p-2.5 text-xs leading-relaxed text-pulse-text focus:border-pulse-border-strong focus:outline-none"
+            />
+            <p className="mt-1 text-[11px] text-pulse-text-mute">
+              The email itself. {"{name}"} is their first name, {"{month}"},{" "}
+              {"{client}"} and {"{title}"} fill in too. The report is a link,
+              never an attachment.
+            </p>
+
+            {sentAt && (
+              <p className="mt-3 border-t border-pulse-border pt-3 text-[11px] text-pulse-text-mute">
+                Last sent{" "}
+                {new Date(sentAt).toLocaleString("en-AU", {
+                  day: "numeric",
+                  month: "short",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+                .
+              </p>
+            )}
+          </div>
+
           <SnippetManager
             snippets={snippets}
             setSnippets={setSnippets}

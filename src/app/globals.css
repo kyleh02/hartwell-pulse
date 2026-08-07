@@ -214,6 +214,13 @@
     margin-bottom: 0;
   }
 
+  /* The opening block of a report reads a shade larger than the sections
+     under it, the way a standfirst does. Not a different colour or weight:
+     size alone is enough to say "start here". */
+  .report-lead .report-prose {
+    font-size: 0.9375rem;
+  }
+
   /* A card that responds to being pointed at. Border and a 1px rise only:
      anything more and a page of them starts to feel like a trampoline. */
   .lift {

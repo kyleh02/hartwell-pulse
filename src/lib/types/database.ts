@@ -109,6 +109,14 @@ export interface Report {
   status: ReportStatus;
   /** Which letterhead the report is dressed in. See src/lib/brand.ts. */
   brand: Brand;
+  /**
+   * Clerk user ids this report goes to. EMPTY MEANS EVERYONE on the client
+   * account, same rule as invoices — see src/lib/recipients.ts.
+   */
+  recipient_user_ids: string[];
+  /** When it was actually emailed out, as opposed to merely published. */
+  sent_at: string | null;
+  email_message: string | null;
   template_key: string | null;
   summary: string | null;
   published_at: string | null;

@@ -28,6 +28,19 @@ export default async function EditReportPage({
     .map((b) => b.path);
   const imageUrls = await resolveImageUrls(supabase, imagePaths);
 
+  // Everyone on the client's account, so the report can be pointed at some of
+  // them. Ordered by name so the list does not reshuffle between visits.
+  const { data: peopleRows } = await supabase
+    .from("client_users")
+    .select("clerk_user_id, full_name, email")
+    .eq("client_id", bundle.report.client_id)
+    .eq("role", "client")
+    .order("full_name");
+  const people =
+    (peopleRows as
+      | { clerk_user_id: string; full_name: string | null; email: string | null }[]
+      | null) ?? [];
+
   return (
     <div>
       <Link
@@ -37,7 +50,12 @@ export default async function EditReportPage({
         <ArrowLeft size={15} strokeWidth={1.75} />
         All reports
       </Link>
-      <ReportEditor bundle={bundle} imageUrls={imageUrls} snippets={snippets} />
+      <ReportEditor
+        bundle={bundle}
+        imageUrls={imageUrls}
+        snippets={snippets}
+        people={people}
+      />
     </div>
   );
 }
