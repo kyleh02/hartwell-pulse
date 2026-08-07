@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { ArrowLeft, Plus, Trash2, Send } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Send, MailCheck } from "lucide-react";
 import type {
   BusinessSettings,
   GstMode,
@@ -21,6 +21,7 @@ import {
 import {
   saveInvoice,
   sendInvoice,
+  sendTestInvoice,
   setInvoiceStatus,
   deleteInvoice,
 } from "@/app/admin/invoices/actions";
@@ -82,6 +83,8 @@ export function InvoiceBuilder({
   );
   const [status, setStatus] = useState<InvoiceStatus>(invoice.status);
   const [saved, setSaved] = useState(true);
+  const [testNote, setTestNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const editable = status === "draft";
@@ -151,18 +154,53 @@ export function InvoiceBuilder({
     };
   }
   function save() {
+    setError(null);
     startTransition(async () => {
-      await saveInvoice(invoice.id, buildInput());
-      setSaved(true);
+      try {
+        await saveInvoice(invoice.id, buildInput());
+        setSaved(true);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not save.");
+      }
+    });
+  }
+  function test() {
+    setError(null);
+    setTestNote(null);
+    startTransition(async () => {
+      try {
+        // Save first, so the proof reflects what is stored rather than what is
+        // on screen. That distinction is the whole point of a test send.
+        await saveInvoice(invoice.id, buildInput());
+        setSaved(true);
+        const to = await sendTestInvoice(invoice.id);
+        setTestNote(`Test sent to ${to}. Nothing was recorded and the client got nothing.`);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not send the test.");
+      }
     });
   }
   function send() {
+    // A zero-total invoice is almost always a save that did not land.
+    if (totals.total === 0) {
+      if (
+        !window.confirm(
+          "This invoice totals $0.00.\n\nThat usually means the line items have not saved. Send it anyway?",
+        )
+      )
+        return;
+    }
     if (!window.confirm("Send this invoice to the client now? They'll get an email and a notification.")) return;
+    setError(null);
     startTransition(async () => {
-      await saveInvoice(invoice.id, buildInput());
-      await sendInvoice(invoice.id);
-      setStatus("sent");
-      setSaved(true);
+      try {
+        await saveInvoice(invoice.id, buildInput());
+        await sendInvoice(invoice.id);
+        setStatus("sent");
+        setSaved(true);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not send.");
+      }
     });
   }
   function mark(s: InvoiceStatus) {
@@ -258,6 +296,15 @@ export function InvoiceBuilder({
               <Button variant="secondary" size="sm" onClick={save} disabled={pending}>
                 Save
               </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={test}
+                disabled={pending}
+                title="Send this invoice to yourself, exactly as the client would get it"
+              >
+                <MailCheck size={14} /> Test to me
+              </Button>
               {recurringActive ? (
                 <span className="data-mono text-[11px] text-pulse-gold">
                   auto-sends monthly
@@ -284,6 +331,21 @@ export function InvoiceBuilder({
           ) : null}
         </div>
       </div>
+
+      {(error || testNote) && (
+        <div className="no-print -mt-3 mb-6">
+          {error && (
+            <p className="rounded-[var(--radius-card)] border border-pulse-danger/40 bg-pulse-danger/10 px-4 py-3 text-sm text-pulse-danger">
+              {error}
+            </p>
+          )}
+          {testNote && !error && (
+            <p className="rounded-[var(--radius-card)] border border-pulse-success/40 bg-pulse-success/10 px-4 py-3 text-sm text-pulse-success">
+              {testNote}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* editor */}

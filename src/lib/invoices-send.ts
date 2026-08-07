@@ -19,11 +19,15 @@ function prettyDate(iso: string): string {
  *
  * opts.adminNotice=true also drops an in-portal heads-up to the admin(s), used by
  * the recurring auto-send so a machine never bills a client silently.
+ *
+ * opts.testTo sends the identical email to one address and does nothing else:
+ * no client notification, no status change, nothing recorded. It exists so a
+ * proof can be read in a real inbox before a client ever sees it.
  */
 export async function sendInvoiceWith(
   supabase: SupabaseClient,
   invoiceId: string,
-  opts: { adminNotice?: boolean } = {},
+  opts: { adminNotice?: boolean; testTo?: string } = {},
 ): Promise<void> {
   const { data: inv } = await supabase
     .from("invoices")
@@ -66,10 +70,23 @@ export async function sendInvoiceWith(
     "due date": prettyDate(invoice.due_date),
   });
 
-  const subject = `New invoice ${invoice.invoice_number}`;
+  const subject = opts.testTo
+    ? `[Test] New invoice ${invoice.invoice_number}`
+    : `New invoice ${invoice.invoice_number}`;
   const notifTitle = `New invoice ${invoice.invoice_number} for ${formatMoney(invoice.total)}`;
   const notifBody = `Due ${prettyDate(invoice.due_date)}.`;
   const now = new Date().toISOString();
+
+  if (opts.testTo) {
+    const html = emailLayout(
+      `New invoice — ${invoice.invoice_number}`,
+      messageHtml,
+      "View invoice",
+      `/invoices/${invoiceId}`,
+    );
+    await sendEmail({ to: opts.testTo, subject, html });
+    return; // A proof changes nothing: no notification, no status, no record.
+  }
 
   for (const u of (users as { clerk_user_id: string; email: string | null }[] | null) ?? []) {
     await supabase.from("notifications").insert({

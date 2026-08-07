@@ -87,7 +87,11 @@ export async function saveInvoice(invoiceId: string, input: SaveInvoiceInput) {
   const clientId = (inv as { client_id: string }).client_id;
 
   const totals = computeTotals(input.lines, input.gst_mode);
-  await supabase
+  // This update MUST be checked. It was not, and a rejected write here is
+  // invisible and expensive: the invoice keeps its empty defaults, the send
+  // that follows reads those defaults back, and the client receives a $0
+  // invoice on the wrong terms. Fail loudly instead.
+  const { error: invErr } = await supabase
     .from("invoices")
     .update({
       issue_date: input.issue_date,
@@ -111,8 +115,13 @@ export async function saveInvoice(invoiceId: string, input: SaveInvoiceInput) {
       total: totals.total,
     })
     .eq("id", invoiceId);
+  if (invErr) throw new Error(`Could not save the invoice: ${invErr.message}`);
 
-  await supabase.from("invoice_line_items").delete().eq("invoice_id", invoiceId);
+  const { error: delErr } = await supabase
+    .from("invoice_line_items")
+    .delete()
+    .eq("invoice_id", invoiceId);
+  if (delErr) throw new Error(`Could not save the invoice: ${delErr.message}`);
   if (input.lines.length > 0) {
     const rows = input.lines.map((l, i) => ({
       invoice_id: invoiceId,
@@ -168,4 +177,30 @@ export async function deleteInvoice(invoiceId: string) {
 
   revalidatePath("/admin/invoices");
   redirect("/admin/invoices");
+}
+
+/**
+ * Send the invoice email to yourself, exactly as the client would receive it.
+ *
+ * Reads the saved row, like the real send does, so a proof shows what is
+ * actually stored rather than what is on screen. If the numbers look wrong in
+ * the test, they are wrong in the database.
+ */
+export async function sendTestInvoice(invoiceId: string): Promise<string> {
+  const { supabase, session } = await adminSupabase();
+
+  const { data: me } = await supabase
+    .from("client_users")
+    .select("email")
+    .eq("clerk_user_id", session.clerkUserId)
+    .maybeSingle();
+  const to = (me as { email: string | null } | null)?.email;
+  if (!to) {
+    throw new Error(
+      "No email address on your own user record, so there is nowhere to send the test.",
+    );
+  }
+
+  await sendInvoiceWith(supabase, invoiceId, { testTo: to });
+  return to;
 }
