@@ -225,3 +225,109 @@ export async function uploadReportImage(
 
   return { path, url: signed?.signedUrl ?? "" };
 }
+
+/**
+ * Create a report from a Markdown draft.
+ *
+ * Reports get written as Markdown before they get typed into a form, so this
+ * takes the draft as it stands. Level-2 headings become sections in order, and
+ * anything above the first one becomes the summary, which is where the title
+ * block and the at-a-glance table naturally sit.
+ *
+ * Tables, bold and subheadings survive: ReportText renders that subset, so what
+ * was drafted is what the client reads.
+ */
+export async function importReportMarkdown(
+  clientId: string,
+  periodMonth: string,
+  markdown: string,
+): Promise<string> {
+  const { supabase, session } = await adminSupabase();
+
+  const text = markdown.replace(/\r\n/g, "\n").trim();
+  if (!text) throw new Error("Paste the report first.");
+
+  const lines = text.split("\n");
+  // A leading "# Heading" is the report's own title, not a section.
+  let title = `${monthLabel(periodMonth)} report`;
+  let start = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    if (lines[i].startsWith("# ")) {
+      title = lines[i].slice(2).trim();
+      start = i + 1;
+    }
+    break;
+  }
+
+  const preamble: string[] = [];
+  const sections: { title: string; body: string[] }[] = [];
+  for (const line of lines.slice(start)) {
+    if (line.startsWith("## ")) {
+      sections.push({ title: line.slice(3).trim(), body: [] });
+      continue;
+    }
+    if (sections.length === 0) preamble.push(line);
+    else sections[sections.length - 1].body.push(line);
+  }
+
+  const tidy = (arr: string[]) =>
+    arr
+      .join("\n")
+      // Drop the rules that separate sections in the draft: the section cards
+      // already provide that separation.
+      .replace(/^\s*-{3,}\s*$/gm, "")
+      .trim();
+
+  const { data: existing } = await supabase
+    .from("reports")
+    .select("id")
+    .eq("client_id", clientId)
+    .eq("period_month", periodMonth)
+    .maybeSingle();
+  if (existing) {
+    throw new Error(
+      "A report already exists for that month. Open it and paste into a section, or pick another month.",
+    );
+  }
+
+  const { data: created, error } = await supabase
+    .from("reports")
+    .insert({
+      client_id: clientId,
+      period_month: periodMonth,
+      title,
+      status: "draft",
+      summary: tidy(preamble) || null,
+      created_by: session.clerkUserId,
+    })
+    .select("id")
+    .single();
+  if (error || !created) throw new Error(error?.message ?? "Could not create the report.");
+  const reportId = (created as { id: string }).id;
+
+  const rows = sections
+    .map((sec, i) => ({
+      report_id: reportId,
+      client_id: clientId,
+      kind: "custom" as const,
+      title: sec.title,
+      body: tidy(sec.body),
+      content: { blocks: [] },
+      position: i,
+    }))
+    .filter((r) => r.title || r.body);
+
+  if (rows.length > 0) {
+    const { error: sErr } = await supabase.from("report_sections").insert(rows);
+    if (sErr) {
+      // A report with no sections is confusing to find later. Clean up and let
+      // Kyle retry rather than leaving a shell behind.
+      await supabase.from("reports").delete().eq("id", reportId);
+      throw new Error(sErr.message);
+    }
+  }
+
+  revalidatePath("/admin/reports");
+  return reportId;
+}

@@ -8,12 +8,26 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { buttonClasses } from "@/components/ui/Button";
+import { ImportReport } from "@/components/reports/ImportReport";
 
 export const metadata = { title: "Reports" };
 
 export default async function AdminReportsPage() {
   const supabase = await createServerSupabase();
-  const reports = await listAdminReports(supabase);
+  const [reports, { data: clientRows }] = await Promise.all([
+    listAdminReports(supabase),
+    supabase
+      .from("clients")
+      .select("id, business_name, deleted_at, purged_at")
+      .order("business_name"),
+  ]);
+  const clients = (
+    (clientRows as
+      | { id: string; business_name: string; deleted_at: string | null; purged_at: string | null }[]
+      | null) ?? []
+  )
+    .filter((c) => !c.deleted_at && !c.purged_at)
+    .map((c) => ({ id: c.id, business_name: c.business_name }));
 
   return (
     <div>
@@ -22,9 +36,12 @@ export default async function AdminReportsPage() {
         title="Reports"
         description="Build a monthly report from a client's metrics, add your insights and recommendations, and publish it to their portal."
         actions={
-          <Link href="/admin/reports/new" className={buttonClasses("primary", "md")}>
-            <Plus size={16} strokeWidth={2} /> New report
-          </Link>
+          <>
+            <ImportReport clients={clients} />
+            <Link href="/admin/reports/new" className={buttonClasses("primary", "md")}>
+              <Plus size={16} strokeWidth={2} /> New report
+            </Link>
+          </>
         }
       />
 
