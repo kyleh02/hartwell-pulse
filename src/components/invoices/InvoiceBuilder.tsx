@@ -42,6 +42,7 @@ import {
 } from "@/components/invoices/RecipientPicker";
 import { PrintButton } from "@/components/invoices/PrintButton";
 import { SendHistory } from "@/components/invoices/SendHistory";
+import { LastSent } from "@/components/invoices/LastSent";
 import { Button } from "@/components/ui/Button";
 import { celebrate } from "@/lib/celebrate";
 import { Badge } from "@/components/ui/Badge";
@@ -368,6 +369,7 @@ export function InvoiceBuilder({
           <p className="text-xs text-pulse-text-mute">
             {formatMoney(totals.total)} total
           </p>
+          <LastSent sends={sends} events={emailEvents} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone={STATUS_TONE[status]}>{status}</Badge>
