@@ -23,6 +23,7 @@ import type { InsightSnippet, ReportSectionKind } from "@/lib/types/database";
 import type { ReportBundle } from "@/lib/reports-shared";
 import { sectionBlocks } from "@/lib/reports-shared";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { SectionCard, type EditSection } from "@/components/reports/SectionCard";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -30,6 +31,7 @@ import { monthLabel } from "@/lib/metrics";
 import {
   saveReport,
   setReportStatus,
+  deleteReport,
   uploadReportImage,
   createSnippet,
   deleteSnippet,
@@ -112,6 +114,8 @@ export function ReportEditor({
   const [imageUrls, setImageUrls] = useState(initialImageUrls);
   const [snippets, setSnippets] = useState(initialSnippets);
   const [saved, setSaved] = useState(true);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   const sensors = useSensors(
@@ -202,6 +206,25 @@ export function ReportEditor({
       setStatus("draft");
     });
   }
+  function remove() {
+    if (
+      !window.confirm(
+        `Delete "${title}" for ${bundle.client.business_name}?
+
+The report and every section in it are permanently removed, along with any images uploaded to it. This cannot be undone.`,
+      )
+    )
+      return;
+    setDeleteError(null);
+    startTransition(async () => {
+      const res = await deleteReport(bundle.report.id);
+      if (!res.ok) {
+        setDeleteError(res.message);
+        return;
+      }
+      router.push("/admin/reports");
+    });
+  }
 
   return (
     <div>
@@ -242,12 +265,25 @@ export function ReportEditor({
               Unpublish
             </Button>
           ) : (
-            <Button size="sm" onClick={publish} disabled={pending}>
-              Publish
-            </Button>
+            <>
+              {/* Drafts only: a published report has been sent, so it gets
+                  unpublished as a considered act before it can be destroyed. */}
+              <Button variant="danger" size="sm" onClick={remove} disabled={pending}>
+                <Trash2 size={14} /> Delete
+              </Button>
+              <Button size="sm" onClick={publish} disabled={pending}>
+                Publish
+              </Button>
+            </>
           )}
         </div>
       </div>
+
+      {deleteError && (
+        <p className="mb-6 rounded-[var(--radius-card)] border border-pulse-danger/40 bg-pulse-danger/10 px-4 py-3 text-sm text-pulse-danger">
+          {deleteError}
+        </p>
+      )}
 
       <div className="lg:grid lg:grid-cols-[1fr_280px] lg:gap-6">
         {/* sections */}

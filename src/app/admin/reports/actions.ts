@@ -339,3 +339,53 @@ export async function importReportMarkdown(
   revalidatePath("/admin/reports");
   return { ok: true, id: reportId };
 }
+
+/**
+ * Permanently delete a DRAFT report.
+ *
+ * Drafts only, deliberately, and the check is on the stored row rather than
+ * whatever the page thinks: a published report has been sent to a client and
+ * may already have been read, so it should be unpublished as a considered act
+ * before it can be destroyed. That mirrors how invoices work, where a sent one
+ * is voided rather than deleted.
+ *
+ * Sections cascade away with the report. Uploaded images do not, so they are
+ * swept here: an orphaned file in a private bucket is invisible and pays rent
+ * forever.
+ */
+export async function deleteReport(reportId: string): Promise<ImportResult> {
+  const { supabase } = await adminSupabase();
+
+  const { data: report } = await supabase
+    .from("reports")
+    .select("id, status, client_id, title")
+    .eq("id", reportId)
+    .maybeSingle();
+  const r = report as
+    | { id: string; status: string; client_id: string; title: string }
+    | null;
+  if (!r) return { ok: false, message: "That report no longer exists." };
+  if (r.status !== "draft") {
+    return {
+      ok: false,
+      message:
+        "Published reports cannot be deleted. Unpublish it first, which also removes it from the client's portal.",
+    };
+  }
+
+  // Images live under {client_id}/{report_id}/ in the private bucket.
+  const prefix = `${r.client_id}/${reportId}`;
+  const { data: files } = await supabase.storage.from("pulse-reports").list(prefix);
+  const paths = ((files as { name: string }[] | null) ?? []).map(
+    (f) => `${prefix}/${f.name}`,
+  );
+  if (paths.length > 0) {
+    await supabase.storage.from("pulse-reports").remove(paths);
+  }
+
+  const { error } = await supabase.from("reports").delete().eq("id", reportId);
+  if (error) return { ok: false, message: error.message };
+
+  revalidatePath("/admin/reports");
+  return { ok: true, id: reportId };
+}
