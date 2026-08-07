@@ -439,6 +439,29 @@ export interface Notification {
   created_at: string;
 }
 
+export type EmailStatus =
+  | "sent"
+  | "delivered"
+  | "opened"
+  | "clicked"
+  | "bounced"
+  | "complained"
+  | "failed";
+
+/** One row per address per email, moved along by the Resend webhook. */
+export interface EmailEvent {
+  id: string;
+  provider_id: string | null;
+  recipient: string;
+  subject: string | null;
+  ref_kind: "invoice" | "report" | "message" | "other" | null;
+  ref_id: string | null;
+  status: EmailStatus;
+  detail: string | null;
+  sent_at: string;
+  updated_at: string;
+}
+
 /** One row per time an invoice was emailed, snapshotting what it said then. */
 export interface InvoiceSend {
   id: string;

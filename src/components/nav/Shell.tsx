@@ -4,11 +4,16 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Search as SearchIcon } from "lucide-react";
 import { Wordmark } from "@/components/brand/Wordmark";
+import {
+  CommandPalette,
+  openCommandPalette as openPalette,
+} from "@/components/nav/CommandPalette";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { TabUnreadBadge } from "@/components/notifications/TabUnreadBadge";
 import { WelcomeFlash } from "@/components/ui/WelcomeFlash";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { UnreadMessagesBadge } from "@/components/messages/UnreadMessagesBadge";
 import { clientNav, adminNav, isNavActive, type NavItem } from "@/lib/nav";
 import { cn } from "@/lib/utils/cn";
@@ -147,6 +152,7 @@ export function Shell({
     <div className="min-h-screen bg-pulse-bg">
       <TabUnreadBadge />
       <WelcomeFlash name={user.name} />
+      <CommandPalette variant={variant} />
       {/* ---------- desktop sidebar ---------- */}
       <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-pulse-border bg-pulse-bg bg-grid pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] lg:flex">
         <div className="flex h-16 items-center border-b border-pulse-border px-5">
@@ -204,6 +210,20 @@ export function Shell({
             <div className="lg:hidden">
               <Wordmark size="sm" />
             </div>
+            {/* A shortcut nobody knows about is a shortcut nobody uses, so it
+                gets a visible button. On a phone it is the only way in, since
+                there is no keyboard to press it on. */}
+            <button
+              type="button"
+              onClick={openPalette}
+              className="flex h-9 items-center gap-2 rounded-[var(--radius-input)] border border-pulse-border px-3 text-pulse-text-mute transition-colors hover:border-pulse-border-strong hover:text-pulse-text"
+            >
+              <SearchIcon size={15} />
+              <span className="hidden text-sm sm:inline">Search</span>
+              <span className="data-mono hidden text-[11px] text-pulse-text-mute lg:inline">
+                ⌘K
+              </span>
+            </button>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             {variant === "client" && (
@@ -211,6 +231,7 @@ export function Shell({
                 <ClientLogo name={clientName} logoUrl={clientLogoUrl} />
               </div>
             )}
+            <ThemeToggle />
             <NotificationBell />
           </div>
           </div>

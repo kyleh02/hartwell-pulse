@@ -106,7 +106,7 @@ export async function sendInvoiceWith(
       "View invoice",
       `/invoices/${invoiceId}`,
     );
-    await sendEmail({ to: opts.testTo, subject, html });
+    await sendEmail({ to: opts.testTo, subject, html, ref: { kind: "invoice", id: invoiceId } });
     return; // A proof changes nothing: no notification, no status, no record.
   }
 
@@ -139,7 +139,7 @@ export async function sendInvoiceWith(
         "View invoice",
         `/invoices/${invoiceId}`,
       );
-      await sendEmail({ to: u.email, subject, html });
+      await sendEmail({ to: u.email, subject, html, ref: { kind: "invoice", id: invoiceId } });
       delivered.push(u.email);
     }
   }

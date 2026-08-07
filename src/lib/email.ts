@@ -12,32 +12,92 @@ export function escapeHtml(s: string): string {
   );
 }
 
+/**
+ * What this email was about, so a delivery result can be shown next to the
+ * thing it belongs to rather than in a log nobody reads.
+ */
+export interface EmailRef {
+  kind: "invoice" | "report" | "message" | "other";
+  id?: string | null;
+}
+
 /** Send an email via Resend. No-ops (logs) when RESEND_API_KEY isn't set yet. */
 export async function sendEmail({
   to,
   subject,
   html,
+  ref,
 }: {
   to: string;
   subject: string;
   html: string;
+  ref?: EmailRef;
 }): Promise<{ ok?: boolean; skipped?: boolean; error?: string }> {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
-    console.warn(`[email] RESEND_API_KEY not set — skipping email to ${to}: ${subject}`);
+    console.warn(`[email] RESEND_API_KEY not set, skipping email to ${to}: ${subject}`);
     return { skipped: true };
   }
   try {
     const resend = new Resend(key);
-    const { error } = await resend.emails.send({ from: FROM, to, subject, html });
+    const { data, error } = await resend.emails.send({ from: FROM, to, subject, html });
     if (error) {
       console.error("[email] send failed:", error);
+      await recordEmail({ to, subject, ref, status: "failed", detail: String(error) });
       return { error: String(error) };
     }
+    await recordEmail({
+      to,
+      subject,
+      ref,
+      status: "sent",
+      providerId: (data as { id?: string } | null)?.id ?? null,
+    });
     return { ok: true };
   } catch (e) {
     console.error("[email] exception:", e);
+    await recordEmail({
+      to,
+      subject,
+      ref,
+      status: "failed",
+      detail: e instanceof Error ? e.message : "send failed",
+    });
     return { error: e instanceof Error ? e.message : "send failed" };
+  }
+}
+
+/**
+ * The opening row for a message, which the Resend webhook later moves along to
+ * delivered, bounced or complained.
+ *
+ * Never allowed to break a send. Telemetry that can stop an invoice reaching a
+ * client is worse than no telemetry, so every failure here is swallowed after
+ * a log line.
+ */
+async function recordEmail(args: {
+  to: string;
+  subject: string;
+  ref?: EmailRef;
+  status: "sent" | "failed";
+  providerId?: string | null;
+  detail?: string;
+}): Promise<void> {
+  try {
+    const { createAdminSupabase } = await import("@/lib/supabase/admin");
+    await createAdminSupabase()
+      .from("email_events")
+      .insert({
+        provider_id: args.providerId ?? null,
+        recipient: args.to,
+        subject: args.subject,
+        ref_kind: args.ref?.kind ?? "other",
+        ref_id: args.ref?.id ?? null,
+        status: args.status,
+        detail: args.detail ?? null,
+      });
+  } catch (e) {
+    console.error("[email] could not record the send:", e);
   }
 }
 

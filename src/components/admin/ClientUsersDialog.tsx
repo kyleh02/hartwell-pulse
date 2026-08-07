@@ -2,10 +2,14 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Users, X, Copy, Check, Plus, Pencil } from "lucide-react";
+import { Users, X, Copy, Check, Plus, Pencil, KeyRound } from "lucide-react";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import { useSupabaseClient } from "@/lib/supabase/client";
-import { addClientUser, updateClientUserEmail } from "@/app/admin/clients/actions";
+import {
+  addClientUser,
+  updateClientUserEmail,
+  resetClientUserPassword,
+} from "@/app/admin/clients/actions";
 
 const fieldCls =
   "w-full rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 px-3 py-2 text-sm text-pulse-text focus:border-pulse-border-strong focus:outline-none";
@@ -86,6 +90,34 @@ export function ClientUsersDialog({
         void loadUsers();
       } catch (err) {
         setEditError(err instanceof Error ? err.message : "Something went wrong.");
+      }
+    });
+  }
+
+  /**
+   * Hand out a fresh temporary password for somebody who cannot get in.
+   *
+   * It reuses the same result panel the "add a user" flow uses, so the details
+   * come out in the same copyable shape Kyle already pastes into an email.
+   */
+  function resetPassword(u: UserRow) {
+    if (
+      !window.confirm(
+        `Give ${u.full_name ?? u.email} a new temporary password?
+
+Their current password stops working straight away and they are signed out everywhere. You will get the new one to pass on.`,
+      )
+    )
+      return;
+    setError(null);
+    setResult(null);
+    setCopied(false);
+    startTransition(async () => {
+      try {
+        const res = await resetClientUserPassword(u.clerk_user_id);
+        setResult({ email: res.email, password: res.password });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not reset that.");
       }
     });
   }
@@ -251,6 +283,16 @@ export function ClientUsersDialog({
                               className="shrink-0 text-pulse-text-mute transition-colors hover:text-pulse-text"
                             >
                               <Pencil size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => resetPassword(u)}
+                              disabled={pending}
+                              aria-label={`Reset password for ${u.full_name ?? u.email}`}
+                              title="They cannot log in: issue a new temporary password"
+                              className="shrink-0 text-pulse-text-mute transition-colors hover:text-pulse-gold disabled:opacity-50"
+                            >
+                              <KeyRound size={13} />
                             </button>
                           </span>
                         </div>

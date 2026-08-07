@@ -6,7 +6,7 @@ import {
   listPricingItems,
 } from "@/lib/invoices";
 import { InvoiceBuilder } from "@/components/invoices/InvoiceBuilder";
-import type { InvoiceSend } from "@/lib/types/database";
+import type { EmailEvent, InvoiceSend } from "@/lib/types/database";
 
 export const metadata = { title: "Invoice" };
 
@@ -46,6 +46,16 @@ export default async function EditInvoicePage({
     .order("sent_at", { ascending: false });
   const sends = (sendRows as InvoiceSend[] | null) ?? [];
 
+  // Delivery results for those sends. Admin-only under RLS, so this returns
+  // nothing at all for anyone else.
+  const { data: eventRows } = await supabase
+    .from("email_events")
+    .select("*")
+    .eq("ref_kind", "invoice")
+    .eq("ref_id", invoiceId)
+    .order("sent_at", { ascending: true });
+  const events = (eventRows as EmailEvent[] | null) ?? [];
+
   return (
     <InvoiceBuilder
       bundle={bundle}
@@ -53,6 +63,7 @@ export default async function EditInvoicePage({
       pricingItems={pricing}
       people={people}
       sends={sends}
+      emailEvents={events}
     />
   );
 }

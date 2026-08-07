@@ -1,4 +1,5 @@
-import type { InvoiceSend } from "@/lib/types/database";
+import type { EmailEvent, InvoiceSend } from "@/lib/types/database";
+import { DeliveryDot } from "@/components/ui/DeliveryDot";
 import { formatMoney } from "@/lib/invoices-shared";
 
 function when(iso: string): string {
@@ -21,8 +22,37 @@ function when(iso: string): string {
  * Addresses rather than names, because the row is evidence of delivery and an
  * address is what was actually delivered to.
  */
-export function SendHistory({ sends }: { sends: InvoiceSend[] }) {
+export function SendHistory({
+  sends,
+  events = [],
+}: {
+  sends: InvoiceSend[];
+  events?: EmailEvent[];
+}) {
   if (sends.length === 0) return null;
+
+  /**
+   * The delivery result for one address on one send.
+   *
+   * Matched by "the nearest event for that address at or after this send",
+   * because the email row carries no invoice_sends id and adding one would
+   * mean the sender knowing about its own audit trail. Sends to the same
+   * person are minutes apart at worst, so nearest-after is unambiguous in
+   * practice, and an unmatched send simply shows no marker rather than
+   * guessing.
+   */
+  const statusFor = (address: string, sentAt: string) => {
+    const t = new Date(sentAt).getTime();
+    return events
+      .filter(
+        (e) =>
+          e.recipient.toLowerCase() === address.toLowerCase() &&
+          new Date(e.sent_at).getTime() >= t - 60_000,
+      )
+      .sort(
+        (a, b) => new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime(),
+      )[0];
+  };
 
   return (
     <div className="no-print rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-4">
@@ -44,11 +74,28 @@ export function SendHistory({ sends }: { sends: InvoiceSend[] }) {
             <p className="data-mono text-pulse-text-dim">
               {formatMoney(Number(s.total))}
             </p>
-            <p className="data-mono break-all text-[11px] text-pulse-text-mute">
-              {s.sent_to.length > 0
-                ? s.sent_to.join(", ")
-                : "recipients not recorded"}
-            </p>
+            {s.sent_to.length > 0 ? (
+              <ul className="mt-0.5 space-y-0.5">
+                {s.sent_to.map((address) => {
+                  const ev = statusFor(address, s.sent_at);
+                  return (
+                    <li
+                      key={address}
+                      className="flex flex-wrap items-center gap-x-2 gap-y-0.5"
+                    >
+                      <span className="data-mono break-all text-[11px] text-pulse-text-mute">
+                        {address}
+                      </span>
+                      {ev && <DeliveryDot status={ev.status} />}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="data-mono text-[11px] text-pulse-text-mute">
+                recipients not recorded
+              </p>
+            )}
           </li>
         ))}
       </ol>

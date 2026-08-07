@@ -14,6 +14,7 @@ import type {
   BusinessSettings,
   GstMode,
   InvoiceBrand,
+  EmailEvent,
   InvoiceLineItem,
   InvoiceSend,
   InvoiceStatus,
@@ -62,12 +63,14 @@ export function InvoiceBuilder({
   business,
   people = [],
   sends = [],
+  emailEvents = [],
 }: {
   bundle: InvoiceBundle;
   pricingItems: PricingItem[];
   business: BusinessSettings | null;
   people?: InvoicePerson[];
   sends?: InvoiceSend[];
+  emailEvents?: EmailEvent[];
 }) {
   const { invoice } = bundle;
   const [lines, setLines] = useState<LineDraft[]>(() =>
@@ -784,7 +787,7 @@ export function InvoiceBuilder({
 
           {sends.length > 0 && (
             <div className="mt-4">
-              <SendHistory sends={sends} />
+              <SendHistory sends={sends} events={emailEvents} />
             </div>
           )}
         </div>

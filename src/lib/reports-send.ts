@@ -73,7 +73,7 @@ export async function sendReportWith(
     );
 
   if (opts.testTo) {
-    await sendEmail({ to: opts.testTo, subject, html: build("Kyle") });
+    await sendEmail({ to: opts.testTo, subject, html: build("Kyle"), ref: { kind: "report", id: reportId } });
     return { ok: true, sentTo: [opts.testTo] };
   }
 
@@ -108,7 +108,7 @@ export async function sendReportWith(
       emailed_at: now,
     });
     if (p.email) {
-      await sendEmail({ to: p.email, subject, html: build(firstName(p)) });
+      await sendEmail({ to: p.email, subject, html: build(firstName(p)), ref: { kind: "report", id: reportId } });
       sentTo.push(p.email);
     }
   }

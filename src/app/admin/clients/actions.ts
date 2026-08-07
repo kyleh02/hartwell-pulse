@@ -35,6 +35,67 @@ function tempPassword(): string {
 }
 
 /**
+ * Reissue a temporary password for someone on a client account.
+ *
+ * Deepayan was provisioned, given a password, and still replied "no way to
+ * login" — the details were lost somewhere between being generated and being
+ * read. There was no way to help him from inside the portal, which meant the
+ * Clerk dashboard, which is not a thing to be doing at 9pm.
+ *
+ * Deliberately NOT a "send a reset email". A reset link is one more email to
+ * be missed by the person who has already missed one, and it cannot be read
+ * out over the phone. This hands Kyle a password to pass on however he likes.
+ *
+ * Every other session is revoked at the same time. If somebody is locked out
+ * because a shared device is still signed in as them, leaving that session
+ * alive leaves the confusion in place.
+ */
+export async function resetClientUserPassword(
+  clerkUserId: string,
+): Promise<{ email: string; password: string; name: string }> {
+  const session = await getPulseSession();
+  if (session?.role !== "admin") throw new Error("Not authorised");
+
+  // Service role, matching the rest of this file: provisioning reads and
+  // writes rows across every client, which is exactly what RLS forbids. The
+  // admin check above is the gate.
+  const supabase = createAdminSupabase();
+  const { data: row } = await supabase
+    .from("client_users")
+    .select("email, full_name, role")
+    .eq("clerk_user_id", clerkUserId)
+    .maybeSingle();
+  const person = row as {
+    email: string | null;
+    full_name: string | null;
+    role: string;
+  } | null;
+  if (!person) throw new Error("That user doesn't exist.");
+  // Admins reset their own password through Clerk's own account UI, where it
+  // needs the current password. An admin who could silently rewrite another
+  // admin's credentials from a button is a different security model.
+  if (person.role !== "client") {
+    throw new Error("Only client logins can be reset from here.");
+  }
+
+  const password = tempPassword();
+  const clerk = await clerkClient();
+  await clerk.users.updateUser(clerkUserId, {
+    password,
+    skipPasswordChecks: true,
+    // Clerk's own prompt to change it at next sign-in. It is their password
+    // from then on, not one Kyle has a copy of.
+    signOutOfOtherSessions: true,
+  });
+
+  return {
+    email: person.email ?? "",
+    password,
+    name: person.full_name ?? "this person",
+  };
+}
+
+/**
  * Provision a brand-new client end to end, without ever touching the Clerk
  * dashboard: create their login (Clerk Backend API), the company record, and the
  * mapping that ties them together as a `client`. Returns one-time login details

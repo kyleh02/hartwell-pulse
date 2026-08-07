@@ -51,6 +51,38 @@
   --pulse-steel-bright: #9db9d9;
 }
 
+/* ---------- light theme ----------
+   Same brand, lit from the other side. Warm paper rather than plain white, so
+   it still reads as Hartwell rather than as a default Bootstrap page.
+
+   The gold is NOT the same gold. #b5a675 sits at about 2.3:1 against white,
+   which is fine for a hairline border and unreadable as text or as a button
+   fill. So the accent darkens on light backgrounds, and gold-light — which
+   means "more prominent on hover" rather than literally lighter — darkens
+   further. Every other token flips the same way its dark counterpart works, so
+   no component needs to know which theme it is in.
+
+   Set by a script in <head> before first paint, so there is no flash of the
+   wrong theme. Dark stays the default: it is the brand, and a portal that
+   silently changes appearance because of an OS setting is unsettling. */
+:root[data-theme="light"] {
+  --pulse-bg: #faf8f4;
+  --pulse-surface: #ffffff;
+  --pulse-surface-2: #f2efe8;
+  --pulse-border: rgba(26, 23, 20, 0.12);
+  --pulse-border-strong: rgba(26, 23, 20, 0.24);
+  --pulse-gold: #8a7645;
+  --pulse-gold-light: #6d5c35;
+  --pulse-text: #1a1714;
+  --pulse-text-dim: rgba(26, 23, 20, 0.66);
+  --pulse-text-mute: rgba(26, 23, 20, 0.45);
+  --pulse-success: #47764a;
+  --pulse-warn: #8a6620;
+  --pulse-danger: #9c4530;
+  --pulse-steel: #4a6c96;
+  --pulse-steel-bright: #395878;
+}
+
 /* Map brand tokens onto Tailwind's theme so utilities like `bg-pulse-surface`,
    `text-pulse-gold`, `border-pulse-border`, `font-mono` all work. */
 @theme inline {
@@ -306,12 +338,18 @@
   .print-reset {
     padding: 0 !important;
   }
-  :root {
+  /* Both theme selectors are listed so this beats :root[data-theme="light"],
+     which is more specific than a bare :root and would otherwise win. Paper is
+     paper whichever theme the screen was in. */
+  :root,
+  :root[data-theme="light"],
+  :root[data-theme="dark"] {
     --pulse-bg: #ffffff;
     --pulse-surface: #ffffff;
     --pulse-surface-2: #f6f5f1;
     --pulse-border: rgba(0, 0, 0, 0.12);
     --pulse-border-strong: rgba(0, 0, 0, 0.2);
+    --pulse-gold: #8a7645;
     --pulse-text: #1a1714;
     --pulse-text-dim: rgba(26, 23, 20, 0.72);
     --pulse-text-mute: rgba(26, 23, 20, 0.5);

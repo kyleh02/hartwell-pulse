@@ -6,6 +6,7 @@ import {
   Geist_Mono,
 } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
+import { THEME_SCRIPT } from "@/components/ui/ThemeToggle";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -111,6 +112,11 @@ export default function RootLayout({
         className={`${outfit.variable} ${jetbrainsMono.variable} ${hankenGrotesk.variable} ${geistMono.variable}`}
         suppressHydrationWarning
       >
+        <head>
+          {/* Before first paint, so the page never renders in one theme and
+              then flips to the other. */}
+          <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        </head>
         <body className="min-h-screen bg-pulse-bg text-pulse-text antialiased">
           {children}
         </body>
