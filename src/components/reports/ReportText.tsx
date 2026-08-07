@@ -8,6 +8,37 @@
 // clicks and position is in every report draft, and rendering one as
 // pipe-delimited text would make the whole report look broken.
 
+import { StatRow, BarChart, Compare } from "@/components/reports/ReportBlocks";
+import type { StatItem, BarItem } from "@/components/reports/ReportBlocks";
+
+/**
+ * Fenced blocks a report can declare, on top of the Markdown subset:
+ *
+ *   ```stats
+ *   Search impressions | 146
+ *   Search clicks | 12 | up from 0
+ *   ```
+ *
+ *   ```bar Top queries by impressions
+ *   secure supply | 7 | 3
+ *   ```                         (a third number draws a second, paler bar)
+ *
+ *   ```compare Mobile against desktop
+ *   Mobile | 9.9 | average position
+ *   Desktop | 40.2 | average position
+ *   Mobile ranks far better, though on a small sample.
+ *   ```
+ *
+ * They exist because a column of numbers in a table is data, and a report is
+ * meant to make a point. A bar chart shows at a glance that one query carries
+ * the whole result, which a table makes you work out.
+ */
+function parseRows(lines: string[]): string[][] {
+  return lines
+    .map((l) => l.split("|").map((c) => c.trim()))
+    .filter((r) => r[0]);
+}
+
 function inline(text: string, keyBase: string): React.ReactNode[] {
   const out: React.ReactNode[] = [];
   const re = /\*\*(.+?)\*\*/g;
@@ -60,6 +91,73 @@ export function ReportText({ body }: { body: string | null }) {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
+
+    // ---- fenced visual block ----
+    if (line.startsWith("```")) {
+      const header = line.slice(3).trim();
+      const [kind, ...titleParts] = header.split(/\s+/);
+      const title = titleParts.join(" ");
+      const inner: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].trim().startsWith("```")) {
+        inner.push(lines[i]);
+        i++;
+      }
+      flushBullets();
+      const rows = parseRows(inner);
+
+      if (kind === "stats") {
+        const items: StatItem[] = rows.map((r) => ({
+          label: r[0],
+          value: r[1] ?? "",
+          note: r[2] || undefined,
+        }));
+        blocks.push(<StatRow key={key++} items={items} />);
+        continue;
+      }
+      if (kind === "bar") {
+        const items: BarItem[] = rows.map((r) => ({
+          label: r[0],
+          display: r[1] ?? "",
+          value: Number(String(r[1] ?? "").replace(/[^0-9.-]/g, "")) || 0,
+          display2: r[2] || undefined,
+          value2:
+            r[2] === undefined
+              ? undefined
+              : Number(String(r[2]).replace(/[^0-9.-]/g, "")) || 0,
+        }));
+        blocks.push(
+          <BarChart key={key++} title={title || undefined} items={items} />,
+        );
+        continue;
+      }
+      if (kind === "compare" && rows.length >= 2) {
+        const note = inner
+          .map((l) => l.trim())
+          .filter((l) => l && !l.includes("|"))
+          .join(" ");
+        blocks.push(
+          <Compare
+            key={key++}
+            title={title || undefined}
+            left={{ label: rows[0][0], value: rows[0][1] ?? "", note: rows[0][2] }}
+            right={{ label: rows[1][0], value: rows[1][1] ?? "", note: rows[1][2] }}
+            note={note || undefined}
+          />,
+        );
+        continue;
+      }
+      // Unknown fence: show the contents rather than swallowing them.
+      blocks.push(
+        <pre
+          key={key++}
+          className="my-3 overflow-x-auto rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 p-3 text-xs text-pulse-text-dim"
+        >
+          {inner.join("\n")}
+        </pre>,
+      );
+      continue;
+    }
 
     // ---- table ----
     if (line.startsWith("|") && isDivider(lines[i + 1] ?? "")) {
