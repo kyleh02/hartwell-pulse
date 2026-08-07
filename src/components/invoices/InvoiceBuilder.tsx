@@ -26,6 +26,10 @@ import {
   deleteInvoice,
 } from "@/app/admin/invoices/actions";
 import { InvoiceDocument } from "@/components/invoices/InvoiceDocument";
+import {
+  RecipientPicker,
+  type InvoicePerson,
+} from "@/components/invoices/RecipientPicker";
 import { PrintButton } from "@/components/invoices/PrintButton";
 import { Button } from "@/components/ui/Button";
 import { celebrate } from "@/lib/celebrate";
@@ -46,10 +50,12 @@ export function InvoiceBuilder({
   bundle,
   pricingItems,
   business,
+  people = [],
 }: {
   bundle: InvoiceBundle;
   pricingItems: PricingItem[];
   business: BusinessSettings | null;
+  people?: InvoicePerson[];
 }) {
   const { invoice } = bundle;
   const [lines, setLines] = useState<LineDraft[]>(() =>
@@ -73,6 +79,9 @@ export function InvoiceBuilder({
       invoice.email_message ??
       business?.invoice_email_message ??
       DEFAULT_INVOICE_EMAIL,
+  );
+  const [recipients, setRecipients] = useState<string[]>(
+    () => invoice.recipient_user_ids ?? [],
   );
   const [recurringActive, setRecurringActive] = useState(
     invoice.recurring_active ?? false,
@@ -140,6 +149,7 @@ export function InvoiceBuilder({
       deposit_amount: Number(deposit) || 0,
       deposit_label: depositLabel,
       gst_mode: gstMode,
+      recipient_user_ids: recipients,
       notes,
       email_message: emailMessage,
       recurring_active: recurringActive,
@@ -190,7 +200,21 @@ export function InvoiceBuilder({
       )
         return;
     }
-    if (!window.confirm("Send this invoice to the client now? They'll get an email and a notification.")) return;
+    // Name them. A confirm that says "the client" is how an invoice reaches
+    // someone it was never meant for.
+    const going =
+      recipients.length === 0
+        ? people
+        : people.filter((p) => recipients.includes(p.clerk_user_id));
+    const who = going
+      .map((p) => `${p.full_name ?? "Unnamed"}${p.email ? ` (${p.email})` : ""}`)
+      .join("\n");
+    if (
+      !window.confirm(
+        `Send invoice ${invoice.invoice_number} for ${formatMoney(totals.total)} now?\n\nIt goes to:\n${who || "nobody — check Send to"}\n\nThey get an email and a notification.`,
+      )
+    )
+      return;
     setError(null);
     startTransition(async () => {
       try {
@@ -631,6 +655,19 @@ export function InvoiceBuilder({
               className={fieldCls}
             />
           </label>
+
+          <div className="flex flex-col gap-2">
+            <span className="mono-label">Send to</span>
+            <RecipientPicker
+              people={people}
+              selected={recipients}
+              onChange={(ids) => {
+                setRecipients(ids);
+                touch();
+              }}
+              disabled={!editable}
+            />
+          </div>
 
           <label className="flex flex-col gap-1">
             <span className="mono-label">Email message to client</span>

@@ -471,6 +471,11 @@ export interface Invoice {
   client_id: string;
   invoice_number: string;
   brand: InvoiceBrand;
+  /**
+   * Clerk user ids this invoice and its reminders go to. EMPTY MEANS EVERYONE
+   * on the client account — see migration 0031. Never treat empty as "nobody".
+   */
+  recipient_user_ids: string[];
   deposit_amount: number; // already received, credited against the total
   deposit_label: string | null;
   status: InvoiceStatus;

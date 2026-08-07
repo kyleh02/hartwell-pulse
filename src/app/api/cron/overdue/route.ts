@@ -3,6 +3,7 @@ import { createAdminSupabase } from "@/lib/supabase/admin";
 import { cronAuthorized } from "@/lib/cron-auth";
 import { sendEmail, emailLayout } from "@/lib/email";
 import { formatMoney } from "@/lib/invoices-shared";
+import { invoiceRecipients } from "@/lib/invoices-send";
 import type { Invoice } from "@/lib/types/database";
 
 export const dynamic = "force-dynamic";
@@ -71,15 +72,14 @@ export async function GET(req: NextRequest) {
     const soon = (soonData as Invoice[] | null) ?? [];
 
     for (const inv of soon) {
-      const { data: users } = await supabase
-        .from("client_users")
-        .select("clerk_user_id, email")
-        .eq("client_id", inv.client_id)
-        .eq("role", "client");
+      // Same recipients the invoice itself went to. A reminder landing with
+      // someone who never received the invoice is worse than no reminder.
+      const users = await invoiceRecipients(supabase, inv);
+      if (users.length === 0) continue;
       const title = `Invoice ${inv.invoice_number} is due ${prettyDate(inv.due_date)}`;
       const now = new Date().toISOString();
 
-      for (const u of (users as { clerk_user_id: string; email: string | null }[] | null) ?? []) {
+      for (const u of users) {
         await supabase.from("notifications").insert({
           recipient_user_id: u.clerk_user_id,
           client_id: inv.client_id,
@@ -119,17 +119,14 @@ export async function GET(req: NextRequest) {
   for (const inv of overdue) {
     if (inv.reminder_sent_at && new Date(inv.reminder_sent_at) > weekAgo) continue;
 
-    const { data: users } = await supabase
-      .from("client_users")
-      .select("clerk_user_id, email")
-      .eq("client_id", inv.client_id)
-      .eq("role", "client");
+    const users = await invoiceRecipients(supabase, inv);
+    if (users.length === 0) continue;
 
     const title = `Reminder: invoice ${inv.invoice_number} is overdue`;
     const body = `${formatMoney(inv.total)} was due ${prettyDate(inv.due_date)}.`;
     const now = new Date().toISOString();
 
-    for (const u of (users as { clerk_user_id: string; email: string | null }[] | null) ?? []) {
+    for (const u of users) {
       await supabase.from("notifications").insert({
         recipient_user_id: u.clerk_user_id,
         client_id: inv.client_id,

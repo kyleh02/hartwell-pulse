@@ -24,7 +24,7 @@ Live at https://portal.hartwelldigital.com
 - Write them idempotent: `add column if not exists`, `drop policy if exists`
   before `create policy` (Postgres has no CREATE POLICY IF NOT EXISTS),
   `drop trigger if exists`, guarded `do $$` blocks.
-- 0001–0030 are applied in production as of 2026-08-07. The CRM prospect data
+- 0001–0031 are applied in production as of 2026-08-07. The CRM prospect data
   is NOT a migration: it imports in-app from Pipeline, because 30 KB of string
   literals proved unreliable to paste into the Supabase SQL editor.
 
@@ -50,6 +50,17 @@ Live at https://portal.hartwelldigital.com
 - **Test to me** on any draft sends the real email to the admin, reading the
   SAVED row rather than form state, so a proof shows what is stored. Records
   nothing.
+- **`invoices.recipient_user_ids` empty means EVERYONE on the account**, not
+  nobody. Every invoice predating migration 0031 carries an empty array, and a
+  one-contact client should never have to configure anything. Resolve it only
+  through `invoiceRecipients()` in `src/lib/invoices-send.ts` — the send, the
+  due-soon heads-up and the overdue chase all use it, and a fourth caller doing
+  its own `client_users` query is how they drift apart. A chosen id that has
+  left the account drops out and the send THROWS rather than falling back to
+  everyone: falling back would email the person who was deselected.
+- A new invoice inherits the last non-void invoice's recipients for that
+  client, and the recurring cron copies the template's. Billing a two-person
+  account usually means billing the same one of them each month.
 - Kyle is NOT GST-registered → invoices default "No GST". AUD, en-AU formats.
 - Sent invoices are never hard-deleted — VOID only (keeps number + audit trail;
   ATO 5-year record keeping). Drafts may be deleted. Paid is fully locked.

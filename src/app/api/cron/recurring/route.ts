@@ -149,6 +149,10 @@ export async function GET(req: NextRequest) {
           notes: fill(t.notes, period_vars),
           email_message: fill(t.email_message, period_vars),
           created_by: t.created_by,
+          // Who the template bills carries onto every invoice it generates.
+          // Without this an automated monthly invoice would quietly go wider
+          // than the one it was modelled on.
+          recipient_user_ids: t.recipient_user_ids ?? [],
           recurring_source_id: t.id,
           recurring_period: period,
         })

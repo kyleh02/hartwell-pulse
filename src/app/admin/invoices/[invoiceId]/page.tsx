@@ -24,7 +24,25 @@ export default async function EditInvoicePage({
   ]);
   if (!bundle) notFound();
 
+  // Everyone on the client's account, so the invoice can be pointed at one of
+  // them. Ordered by name so the list does not reshuffle between visits.
+  const { data: peopleRows } = await supabase
+    .from("client_users")
+    .select("clerk_user_id, full_name, email")
+    .eq("client_id", bundle.invoice.client_id)
+    .eq("role", "client")
+    .order("full_name");
+  const people =
+    (peopleRows as
+      | { clerk_user_id: string; full_name: string | null; email: string | null }[]
+      | null) ?? [];
+
   return (
-    <InvoiceBuilder bundle={bundle} business={business} pricingItems={pricing} />
+    <InvoiceBuilder
+      bundle={bundle}
+      business={business}
+      pricingItems={pricing}
+      people={people}
+    />
   );
 }

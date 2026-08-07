@@ -38,6 +38,24 @@ export async function createInvoice(clientId: string) {
   const due = new Date(issue);
   due.setDate(due.getDate() + terms);
 
+  // Start from whoever the last invoice for this client actually went to.
+  // Billing a two-person account usually means billing the same one of them
+  // every month, and having to remember that each time is how the wrong person
+  // gets an invoice. It is only a starting point: the picker on the invoice
+  // shows everyone on the account, so a new contact is visibly unticked rather
+  // than silently left out.
+  const { data: lastRow } = await supabase
+    .from("invoices")
+    .select("recipient_user_ids")
+    .eq("client_id", clientId)
+    .neq("status", "void")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const inherited =
+    (lastRow as { recipient_user_ids: string[] | null } | null)
+      ?.recipient_user_ids ?? [];
+
   const { data, error } = await supabase
     .from("invoices")
     .insert({
@@ -47,6 +65,7 @@ export async function createInvoice(clientId: string) {
       issue_date: fmtDate(issue),
       due_date: fmtDate(due),
       gst_mode: gstMode,
+      recipient_user_ids: inherited,
       created_by: session.clerkUserId,
     })
     .select("id")
@@ -63,6 +82,7 @@ export interface SaveInvoiceInput {
   deposit_amount: number;
   deposit_label: string;
   gst_mode: GstMode;
+  recipient_user_ids: string[];
   notes: string;
   email_message: string;
   recurring_active: boolean;
@@ -100,6 +120,7 @@ export async function saveInvoice(invoiceId: string, input: SaveInvoiceInput) {
       deposit_amount: input.deposit_amount,
       deposit_label: input.deposit_label || null,
       gst_mode: input.gst_mode,
+      recipient_user_ids: input.recipient_user_ids,
       notes: input.notes || null,
       email_message: input.email_message || null,
       recurring_active: input.recurring_active,
