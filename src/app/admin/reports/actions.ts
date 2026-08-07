@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { getPulseSession } from "@/lib/auth/session";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getReportMetricData } from "@/lib/reports";
+import type { Brand } from "@/lib/types/database";
 import type { ReportBlock, SaveReportInput } from "@/lib/reports-shared";
 import { metaFor, monthLabel } from "@/lib/metrics";
 
@@ -146,7 +147,7 @@ export async function saveReport(reportId: string, input: SaveReportInput) {
       kind: s.kind,
       title: s.title,
       body: s.body || null,
-      content: { blocks: s.blocks ?? [] },
+      content: { blocks: s.blocks ?? [], pageBreak: s.pageBreak === true },
       position: i,
     }));
     const { error } = await supabase.from("report_sections").insert(rows);
@@ -154,6 +155,34 @@ export async function saveReport(reportId: string, input: SaveReportInput) {
   }
 
   revalidatePath(`/admin/reports/${reportId}`);
+}
+
+/**
+ * Switch which letterhead a report is dressed in.
+ *
+ * The write is checked. Brand lives on a column added in migration 0030, and
+ * an unchecked write is exactly how a client once received an invoice for
+ * $0.00: the code shipped before the migration was run, PostgREST rejected the
+ * update, and nothing said so. Fail loudly instead.
+ */
+export async function setReportBrand(
+  reportId: string,
+  brand: Brand,
+): Promise<ImportResult> {
+  const { supabase } = await adminSupabase();
+  const { error } = await supabase
+    .from("reports")
+    .update({ brand })
+    .eq("id", reportId);
+  if (error) {
+    return {
+      ok: false,
+      message: `Could not change the brand: ${error.message}. If this mentions the brand column, migration 0030 has not been run yet.`,
+    };
+  }
+  revalidatePath(`/admin/reports/${reportId}`);
+  revalidatePath("/admin/reports");
+  return { ok: true, id: reportId };
 }
 
 export async function setReportStatus(
@@ -245,6 +274,7 @@ export async function importReportMarkdown(
   clientId: string,
   periodMonth: string,
   markdown: string,
+  brand: Brand = "hartwell",
 ): Promise<ImportResult> {
   const { supabase, session } = await adminSupabase();
 
@@ -304,6 +334,7 @@ export async function importReportMarkdown(
       period_month: periodMonth,
       title,
       status: "draft",
+      brand,
       summary: tidy(preamble) || null,
       created_by: session.clerkUserId,
     })

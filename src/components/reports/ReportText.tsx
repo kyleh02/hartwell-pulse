@@ -80,7 +80,7 @@ export function ReportText({ body }: { body: string | null }) {
     if (bullets.length === 0) return;
     const k = key++;
     blocks.push(
-      <ul key={k} className="my-2 list-disc space-y-1 pl-5 text-pulse-text-dim">
+      <ul key={k} className="my-3 list-disc space-y-1.5 pl-5 leading-relaxed text-pulse-text-dim">
         {bullets.map((b, i) => (
           <li key={i}>{inline(b, `u${k}-${i}`)}</li>
         ))}
@@ -175,7 +175,7 @@ export function ReportText({ body }: { body: string | null }) {
       blocks.push(
         // Scrolls in its own box so a wide table never drags the page sideways
         // on a phone.
-        <div key={k} className="my-3 overflow-x-auto">
+        <div key={k} className="my-4 overflow-x-auto">
           <table className="w-full min-w-[18rem] text-sm">
             {hasHeader && (
               <thead>
@@ -221,7 +221,7 @@ export function ReportText({ body }: { body: string | null }) {
       blocks.push(
         <h4
           key={key++}
-          className="report-heading mb-1 mt-5 text-sm font-medium text-pulse-text"
+          className="report-heading mb-1.5 mt-6 text-sm font-medium text-pulse-text"
         >
           {line.slice(4)}
         </h4>,
@@ -232,7 +232,7 @@ export function ReportText({ body }: { body: string | null }) {
     // ---- rule, used as a divider in drafts ----
     if (/^-{3,}$/.test(line)) {
       flushBullets();
-      blocks.push(<hr key={key++} className="my-4 border-pulse-border" />);
+      blocks.push(<hr key={key++} className="my-6 border-pulse-border" />);
       continue;
     }
 
@@ -245,7 +245,7 @@ export function ReportText({ body }: { body: string | null }) {
     if (line.length > 0) {
       const k = key++;
       blocks.push(
-        <p key={k} className="my-2 leading-relaxed text-pulse-text-dim">
+        <p key={k} className="my-3 leading-relaxed text-pulse-text-dim">
           {inline(line, `p${k}`)}
         </p>,
       );
@@ -253,5 +253,5 @@ export function ReportText({ body }: { body: string | null }) {
   }
   flushBullets();
 
-  return <div className="text-sm">{blocks}</div>;
+  return <div className="report-prose text-sm">{blocks}</div>;
 }

@@ -24,7 +24,7 @@ Live at https://portal.hartwelldigital.com
 - Write them idempotent: `add column if not exists`, `drop policy if exists`
   before `create policy` (Postgres has no CREATE POLICY IF NOT EXISTS),
   `drop trigger if exists`, guarded `do $$` blocks.
-- 0001–0029 are applied in production as of 2026-08-06. The CRM prospect data
+- 0001–0030 are applied in production as of 2026-08-07. The CRM prospect data
   is NOT a migration: it imports in-app from Pipeline, because 30 KB of string
   literals proved unreliable to paste into the Supabase SQL editor.
 
@@ -58,6 +58,26 @@ Live at https://portal.hartwelldigital.com
 - Recurring billing: template invoices with `recurring_active`; the daily cron
   materialises + auto-sends one invoice per template per month (unique index
   dedup), evaluated in Australia/Brisbane time.
+
+## Documents (invoices and reports)
+- Both carry a `brand` column, `hartwell` or `ironpeak`, and both dress in
+  `doc-light brand-ironpeak` for Ironpeak. Shared identity lives in
+  `src/lib/brand.ts`; never re-declare the Ironpeak details in a component.
+- **A document must never hardcode a colour.** Chart strokes, bars and fills all
+  read `--pulse-gold`, which `doc-light` swaps for steel. That is what lets one
+  component serve both brands without a prop threaded down to it.
+- The letterhead renders on screen AND in print, deliberately. A print-only
+  letterhead means the first time anyone sees the branded document is after it
+  has been sent.
+- The tab title on a report viewer is the suggested PDF filename, so it is
+  `{client} - {title}`, and the admin preview uses the same one as the client
+  page. A file called "Report preview.pdf" reaching a client is a mistake.
+- Print pagination lives in the `@media print` block in globals.css. Headings
+  keep with their text, table headers repeat per page, rows and cards never
+  split, paragraphs use orphans/widows rather than `break-inside: avoid` so a
+  long one can still flow. `report-page-break` on a section starts a new page,
+  toggled per section in the editor and stored in the section's JSON `content`
+  (which is why it needed no migration).
 
 ## CRM (admin only, two brands)
 - One CRM, two pipelines, toggled by `?brand=` on /admin/crm: **ironpeak** and

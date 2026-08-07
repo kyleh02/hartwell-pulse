@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FileUp, X } from "lucide-react";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import { importReportMarkdown } from "@/app/admin/reports/actions";
+import type { Brand } from "@/lib/types/database";
 
 const field =
   "w-full rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 px-3 py-2 text-sm text-pulse-text focus:border-pulse-border-strong focus:outline-none";
@@ -23,6 +24,7 @@ export function ImportReport({
   const [clientId, setClientId] = useState(clients[0]?.id ?? "");
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [markdown, setMarkdown] = useState("");
+  const [brand, setBrand] = useState<Brand>("hartwell");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -34,7 +36,12 @@ export function ImportReport({
     }
     startTransition(async () => {
       try {
-        const r = await importReportMarkdown(clientId, `${month}-01`, markdown);
+        const r = await importReportMarkdown(
+          clientId,
+          `${month}-01`,
+          markdown,
+          brand,
+        );
         if (!r.ok) {
           setError(r.message);
           return;
@@ -105,6 +112,18 @@ export function ImportReport({
                   />
                 </label>
               </div>
+
+              <label className="flex flex-col gap-1">
+                <span className="mono-label">Letterhead</span>
+                <select
+                  value={brand}
+                  onChange={(e) => setBrand(e.target.value as Brand)}
+                  className={field}
+                >
+                  <option value="hartwell">Hartwell Digital</option>
+                  <option value="ironpeak">Ironpeak Consulting</option>
+                </select>
+              </label>
 
               <label className="flex flex-col gap-1">
                 <span className="mono-label">The draft</span>

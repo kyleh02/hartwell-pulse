@@ -21,6 +21,16 @@ export type ReportBlock =
 
 export interface ReportSectionContent {
   blocks: ReportBlock[];
+  /**
+   * Force this section to start at the top of a fresh page in print / PDF.
+   *
+   * CSS can stop a heading being orphaned or a table row being sliced in half,
+   * but it cannot know that a section is a new chapter. This is the one
+   * judgement only the writer can make, so it is a switch rather than a
+   * heuristic. It lives in the section's JSON content, which is why it needed
+   * no migration.
+   */
+  pageBreak?: boolean;
 }
 
 // What the editor sends back to the saveReport action.
@@ -29,6 +39,7 @@ export interface SectionInput {
   title: string;
   body: string;
   blocks: ReportBlock[];
+  pageBreak: boolean;
 }
 
 export interface SaveReportInput {
@@ -70,4 +81,9 @@ export function metricKeyOf(serviceKey: string, metricKey: string): string {
 export function sectionBlocks(section: ReportSection): ReportBlock[] {
   const content = section.content as ReportSectionContent | null;
   return content?.blocks ?? [];
+}
+
+export function sectionPageBreak(section: ReportSection): boolean {
+  const content = section.content as ReportSectionContent | null;
+  return content?.pageBreak === true;
 }

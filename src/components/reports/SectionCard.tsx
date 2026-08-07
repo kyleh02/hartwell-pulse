@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { Trash2, X, LineChart } from "lucide-react";
+import { Trash2, X, LineChart, SeparatorHorizontal } from "lucide-react";
 import type { InsightSnippet, ReportSectionKind } from "@/lib/types/database";
 import type {
   AvailableMetric,
@@ -19,6 +19,8 @@ export interface EditSection {
   title: string;
   body: string;
   blocks: ReportBlock[];
+  /** Start this section on a fresh page in the PDF. */
+  pageBreak: boolean;
 }
 
 function newId() {
@@ -103,6 +105,26 @@ export function SectionCard({
           className="flex-1 rounded-[var(--radius-input)] bg-transparent px-2 py-1 text-sm font-medium text-pulse-text focus:bg-pulse-surface-2 focus:outline-none"
           placeholder="Section title"
         />
+        {/* Print control. CSS keeps a heading with its text and a table row in
+            one piece, but only the writer knows a section is a new chapter. */}
+        <button
+          type="button"
+          onClick={() => onUpdate({ pageBreak: !section.pageBreak })}
+          aria-pressed={section.pageBreak}
+          title={
+            section.pageBreak
+              ? "Starts on a new page in the PDF"
+              : "Start this section on a new page in the PDF"
+          }
+          className={cn(
+            "flex h-8 w-8 items-center justify-center rounded-[var(--radius-input)] hover:bg-pulse-surface-2",
+            section.pageBreak
+              ? "text-pulse-gold"
+              : "text-pulse-text-mute hover:text-pulse-text",
+          )}
+        >
+          <SeparatorHorizontal size={15} />
+        </button>
         <button
           type="button"
           onClick={onRemove}
@@ -112,6 +134,12 @@ export function SectionCard({
           <Trash2 size={15} />
         </button>
       </div>
+
+      {section.pageBreak && (
+        <p className="border-b border-pulse-border px-3 py-1.5 text-[11px] text-pulse-text-mute">
+          Starts on a new page in the PDF.
+        </p>
+      )}
 
       <div className="space-y-4 p-4">
         {!isMetrics && (

@@ -50,9 +50,17 @@ export function MetricChart({
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 8, right: 6, bottom: 0, left: 0 }}>
           <defs>
+            {/* Tokens, not hex. On a Hartwell surface --pulse-gold is gold; on
+                an Ironpeak document doc-light swaps it for steel, so the same
+                chart arrives in the right brand without a prop being threaded
+                down to it. */}
             <linearGradient id="pulse-area-gold" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#b5a675" stopOpacity={0.35} />
-              <stop offset="100%" stopColor="#b5a675" stopOpacity={0} />
+              <stop
+                offset="0%"
+                stopColor="var(--pulse-gold)"
+                stopOpacity={0.35}
+              />
+              <stop offset="100%" stopColor="var(--pulse-gold)" stopOpacity={0} />
             </linearGradient>
           </defs>
           <XAxis
@@ -69,16 +77,16 @@ export function MetricChart({
           <YAxis hide domain={["dataMin", "dataMax"]} />
           <Tooltip
             content={<ChartTooltip unit={unit} />}
-            cursor={{ stroke: "rgba(181,166,117,0.3)", strokeWidth: 1 }}
+            cursor={{ stroke: "var(--pulse-border-strong)", strokeWidth: 1 }}
           />
           <Area
             type="monotone"
             dataKey="value"
-            stroke="#b5a675"
+            stroke="var(--pulse-gold)"
             strokeWidth={2}
             fill="url(#pulse-area-gold)"
             dot={false}
-            activeDot={{ r: 3, fill: "#cbbe97", stroke: "none" }}
+            activeDot={{ r: 3, fill: "var(--pulse-gold-light)", stroke: "none" }}
           />
         </AreaChart>
       </ResponsiveContainer>

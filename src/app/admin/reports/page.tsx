@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { buttonClasses } from "@/components/ui/Button";
 import { ImportReport } from "@/components/reports/ImportReport";
+import { IronpeakMark } from "@/components/brand/IronpeakMark";
 
 export const metadata = { title: "Reports" };
 
@@ -62,9 +63,19 @@ export default async function AdminReportsPage() {
                     {monthLabel(r.period_month)} · {r.title}
                   </p>
                 </div>
-                <Badge tone={r.status === "published" ? "success" : "neutral"}>
-                  {r.status}
-                </Badge>
+                <div className="flex shrink-0 items-center gap-2">
+                  {/* Only worth showing when it is NOT the house brand. A badge
+                      on every row would just be noise. */}
+                  {r.brand === "ironpeak" && (
+                    <span className="hidden items-center gap-1.5 rounded-full border border-pulse-border px-2.5 py-1 text-[11px] text-pulse-text-dim sm:inline-flex">
+                      <IronpeakMark size={11} />
+                      Ironpeak
+                    </span>
+                  )}
+                  <Badge tone={r.status === "published" ? "success" : "neutral"}>
+                    {r.status}
+                  </Badge>
+                </div>
               </Card>
             </Link>
           ))}

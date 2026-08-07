@@ -1,9 +1,10 @@
 import type { ReportBundle, ReportBlock } from "@/lib/reports-shared";
-import { sectionBlocks, metricKeyOf } from "@/lib/reports-shared";
+import { sectionBlocks, sectionPageBreak, metricKeyOf } from "@/lib/reports-shared";
 import { ReportMetricBlock } from "@/components/reports/ReportMetricBlock";
 import { ZoomableImage } from "@/components/ui/ZoomableImage";
 import { ReportText } from "@/components/reports/ReportText";
 import { SectionLabel } from "@/components/ui/SectionLabel";
+import { cn } from "@/lib/utils/cn";
 
 type MetricBlock = Extract<ReportBlock, { type: "metric" }>;
 type ImageBlock = Extract<ReportBlock, { type: "image" }>;
@@ -23,7 +24,7 @@ export function ReportDocument({
 }) {
   const hidden = new Set(hiddenIndices);
   return (
-    <article className="space-y-10">
+    <article className="space-y-12">
       {bundle.sections.map((section, i) => {
         const blocks = sectionBlocks(section);
         const metricBlocks = blocks.filter(
@@ -37,29 +38,40 @@ export function ReportDocument({
           <section
             key={section.id}
             id={sectionAnchorId(i)}
-            className={hidden.has(i) ? "hidden" : "report-section scroll-mt-24"}
+            className={cn(
+              hidden.has(i) && "hidden",
+              !hidden.has(i) && "report-section scroll-mt-24",
+              // Only meaningful in print. A section marked as a new chapter
+              // starts at the top of a fresh page rather than halfway down one.
+              !hidden.has(i) && sectionPageBreak(section) && "report-page-break",
+            )}
           >
-            <SectionLabel parts={[section.kind, section.title]} className="mb-3" />
-            <h2 className="report-heading mb-4 text-xl font-semibold tracking-tight text-pulse-text">
-              {section.title}
-            </h2>
+            {/* The heading and its rule are one unit, so a page never breaks
+                between a section title and the first line under it. */}
+            <div className="report-section-head mb-5 border-b border-pulse-border pb-3">
+              <SectionLabel parts={[section.kind, section.title]} />
+              <h2 className="report-heading mt-2 text-xl font-semibold tracking-tight text-pulse-text">
+                {section.title}
+              </h2>
+            </div>
 
             <ReportText body={section.body} />
 
             {metricBlocks.length > 0 && (
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 {metricBlocks.map((b) => (
-                  <ReportMetricBlock
-                    key={b.id}
-                    metric={bundle.metrics[metricKeyOf(b.serviceKey, b.metricKey)]}
-                    chart={b.chart}
-                  />
+                  <div key={b.id} className="report-block">
+                    <ReportMetricBlock
+                      metric={bundle.metrics[metricKeyOf(b.serviceKey, b.metricKey)]}
+                      chart={b.chart}
+                    />
+                  </div>
                 ))}
               </div>
             )}
 
             {imageBlocks.map((b) => (
-              <figure key={b.id} className="report-figure mt-4">
+              <figure key={b.id} className="report-figure mt-5">
                 {imageUrls[b.path] && (
                   <ZoomableImage
                     src={imageUrls[b.path]}

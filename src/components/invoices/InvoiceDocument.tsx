@@ -3,14 +3,8 @@ import type { InvoiceBundle } from "@/lib/invoices-shared";
 import { formatMoney, gstLabel } from "@/lib/invoices-shared";
 import { Wordmark } from "@/components/brand/Wordmark";
 import { IronpeakWordmark } from "@/components/brand/IronpeakMark";
+import { IRONPEAK, IRONPEAK_DOC_CLASS } from "@/lib/brand";
 import { cn } from "@/lib/utils/cn";
-
-/** Ironpeak's own details. Same legal entity and ABN as Hartwell Digital. */
-const IRONPEAK = {
-  name: "Ironpeak Consulting",
-  email: "kyle@ironpeakconsulting.com.au",
-  location: "Melbourne, working with defence suppliers across Australia",
-};
 
 function pretty(iso: string): string {
   return new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString("en-AU", {
@@ -45,7 +39,7 @@ export function InvoiceDocument({
         // brand-ironpeak brings its real typography: Clash Display for the
         // wordmark and headings, Hanken Grotesk for body, Geist Mono for every
         // figure.
-        ironpeak && "doc-light brand-ironpeak",
+        ironpeak && IRONPEAK_DOC_CLASS,
       )}
     >
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-pulse-border pb-6">

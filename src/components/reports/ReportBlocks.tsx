@@ -21,7 +21,7 @@ export function StatRow({ items }: { items: StatItem[] }) {
   return (
     <div
       className={cn(
-        "report-block my-4 grid gap-2",
+        "report-block my-5 grid gap-2.5",
         items.length <= 2
           ? "grid-cols-2"
           : items.length === 3
@@ -32,7 +32,7 @@ export function StatRow({ items }: { items: StatItem[] }) {
       {items.map((s, i) => (
         <div
           key={i}
-          className="rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface-2/50 px-3 py-2.5"
+          className="rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface-2/50 px-3.5 py-3"
         >
           <p className="mono-label leading-tight">{s.label}</p>
           <p className="data-mono mt-1 text-lg leading-none text-pulse-text">
@@ -75,7 +75,7 @@ export function BarChart({
   );
 
   return (
-    <div className="report-block my-4">
+    <div className="report-block my-5">
       {title && <p className="mono-label mb-2">{title}</p>}
       {legend && (
         <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1">
@@ -142,7 +142,7 @@ export function Compare({
   note?: string;
 }) {
   return (
-    <div className="report-block my-4 rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface-2/50 p-4">
+    <div className="report-block my-5 rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface-2/50 p-4">
       {title && <p className="mono-label mb-3">{title}</p>}
       <div className="grid grid-cols-2 gap-4">
         {[left, right].map((s, i) => (

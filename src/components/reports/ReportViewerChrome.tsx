@@ -2,24 +2,32 @@
 
 import { useMemo, useState } from "react";
 import { Search, Download } from "lucide-react";
+import type { BusinessSettings } from "@/lib/types/database";
 import type { ReportBundle } from "@/lib/reports-shared";
 import { sectionBlocks, metricKeyOf } from "@/lib/reports-shared";
 import {
   ReportDocument,
   sectionAnchorId,
 } from "@/components/reports/ReportDocument";
-import { Wordmark } from "@/components/brand/Wordmark";
-import { monthLabel } from "@/lib/metrics";
+import {
+  ReportLetterhead,
+  ReportColophon,
+} from "@/components/reports/ReportLetterhead";
+import { IRONPEAK_DOC_CLASS, isIronpeak } from "@/lib/brand";
 import { cn } from "@/lib/utils/cn";
 
 export function ReportViewerChrome({
   bundle,
   imageUrls,
+  business = null,
 }: {
   bundle: ReportBundle;
   imageUrls: Record<string, string>;
+  business?: BusinessSettings | null;
 }) {
   const [query, setQuery] = useState("");
+  const brand = bundle.report.brand ?? "hartwell";
+  const ironpeak = isIronpeak(brand);
 
   const haystacks = useMemo(
     () =>
@@ -60,19 +68,7 @@ export function ReportViewerChrome({
         </ul>
       </nav>
 
-      <div>
-        <div className="print-only mb-8 border-b border-pulse-border pb-6">
-          <Wordmark size="md" />
-          <p className="mono-label mt-4">Performance report</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-pulse-text">
-            {bundle.report.title}
-          </h1>
-          <p className="data-mono mt-1 text-sm text-pulse-text-dim">
-            {bundle.client.business_name} ·{" "}
-            {monthLabel(bundle.report.period_month)}
-          </p>
-        </div>
-
+      <div className="min-w-0">
         <div className="no-print mb-6 flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <Search
@@ -96,17 +92,38 @@ export function ReportViewerChrome({
           </button>
         </div>
 
-        {q && matching.length === 0 ? (
-          <p className="text-sm text-pulse-text-dim">
-            Nothing in this report matches that search.
-          </p>
-        ) : (
-          <ReportDocument
-            bundle={bundle}
-            imageUrls={imageUrls}
-            hiddenIndices={hidden}
+        {/* The sheet. An Ironpeak report is a white document with its own
+            typography even on screen, the same way its invoices are, so what
+            is previewed is what prints. A Hartwell report keeps the dark house
+            look on screen and flips to light only in print. */}
+        <div
+          className={cn(
+            "report-sheet",
+            ironpeak &&
+              `${IRONPEAK_DOC_CLASS} rounded-[var(--radius-card)] border border-pulse-border p-6 sm:p-10`,
+          )}
+        >
+          <ReportLetterhead
+            brand={brand}
+            business={business}
+            client={bundle.client}
+            report={bundle.report}
           />
-        )}
+
+          {q && matching.length === 0 ? (
+            <p className="text-sm text-pulse-text-dim">
+              Nothing in this report matches that search.
+            </p>
+          ) : (
+            <ReportDocument
+              bundle={bundle}
+              imageUrls={imageUrls}
+              hiddenIndices={hidden}
+            />
+          )}
+
+          <ReportColophon brand={brand} business={business} />
+        </div>
       </div>
     </div>
   );

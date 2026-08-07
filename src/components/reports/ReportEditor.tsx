@@ -19,18 +19,20 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Plus, Trash2 } from "lucide-react";
-import type { InsightSnippet, ReportSectionKind } from "@/lib/types/database";
+import type { Brand, InsightSnippet, ReportSectionKind } from "@/lib/types/database";
 import type { ReportBundle } from "@/lib/reports-shared";
-import { sectionBlocks } from "@/lib/reports-shared";
+import { sectionBlocks, sectionPageBreak } from "@/lib/reports-shared";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SectionCard, type EditSection } from "@/components/reports/SectionCard";
+import { BrandSwitch } from "@/components/reports/BrandSwitch";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { monthLabel } from "@/lib/metrics";
 import {
   saveReport,
   setReportStatus,
+  setReportBrand,
   deleteReport,
   uploadReportImage,
   createSnippet,
@@ -109,11 +111,14 @@ export function ReportEditor({
       title: s.title,
       body: s.body ?? "",
       blocks: sectionBlocks(s),
+      pageBreak: sectionPageBreak(s),
     })),
   );
   const [imageUrls, setImageUrls] = useState(initialImageUrls);
   const [snippets, setSnippets] = useState(initialSnippets);
   const [saved, setSaved] = useState(true);
+  const [brand, setBrand] = useState<Brand>(bundle.report.brand ?? "hartwell");
+  const [brandError, setBrandError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -143,7 +148,14 @@ export function ReportEditor({
     };
     setSections((prev) => [
       ...prev,
-      { key: newId(), kind, title: labelMap[kind], body: "", blocks: [] },
+      {
+        key: newId(),
+        kind,
+        title: labelMap[kind],
+        body: "",
+        blocks: [],
+        pageBreak: false,
+      },
     ]);
     touch();
   }
@@ -182,8 +194,28 @@ export function ReportEditor({
         title: s.title,
         body: s.body,
         blocks: s.blocks,
+        pageBreak: s.pageBreak,
       })),
     };
+  }
+
+  /**
+   * Brand is saved on its own the moment it is switched, not folded into Save.
+   * The preview opens in another tab and reads what is stored, so a brand that
+   * only lived in this page's state would preview as the wrong one.
+   */
+  function switchBrand(next: Brand) {
+    if (next === brand) return;
+    const previous = brand;
+    setBrand(next);
+    setBrandError(null);
+    startTransition(async () => {
+      const res = await setReportBrand(bundle.report.id, next);
+      if (!res.ok) {
+        setBrand(previous);
+        setBrandError(res.message);
+      }
+    });
   }
 
   function save() {
@@ -242,8 +274,9 @@ The report and every section in it are permanently removed, along with any image
             }}
             className="mt-1 w-full rounded-[var(--radius-input)] bg-transparent text-lg font-semibold text-pulse-text focus:bg-pulse-surface-2 focus:px-2 focus:outline-none"
           />
+          <BrandSwitch value={brand} onChange={switchBrand} disabled={pending} />
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <Badge tone={status === "published" ? "success" : "neutral"}>
             {status}
           </Badge>
@@ -279,9 +312,9 @@ The report and every section in it are permanently removed, along with any image
         </div>
       </div>
 
-      {deleteError && (
+      {(brandError || deleteError) && (
         <p className="mb-6 rounded-[var(--radius-card)] border border-pulse-danger/40 bg-pulse-danger/10 px-4 py-3 text-sm text-pulse-danger">
-          {deleteError}
+          {brandError ?? deleteError}
         </p>
       )}
 

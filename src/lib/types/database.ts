@@ -107,6 +107,8 @@ export interface Report {
   period_month: string;
   title: string;
   status: ReportStatus;
+  /** Which letterhead the report is dressed in. See src/lib/brand.ts. */
+  brand: Brand;
   template_key: string | null;
   summary: string | null;
   published_at: string | null;
@@ -457,8 +459,12 @@ export interface PricingItem {
   created_at: string;
 }
 
-/** Which trading brand an invoice is issued under. Same entity and ABN. */
-export type InvoiceBrand = "hartwell" | "ironpeak";
+/**
+ * Which trading brand a document is issued under. Same legal entity and ABN
+ * either way; only the letterhead changes. Invoices and reports share it.
+ */
+export type Brand = "hartwell" | "ironpeak";
+export type InvoiceBrand = Brand;
 
 export interface Invoice {
   id: string;

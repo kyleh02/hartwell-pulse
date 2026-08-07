@@ -202,6 +202,18 @@
     font-family: var(--font-ip-mono);
   }
 
+  /* Report body copy. Every block inside carries its own vertical margin so
+     that paragraphs, tables and charts space themselves evenly no matter what
+     order they come in. Collapsing the first and last of those keeps the gap
+     under a section heading exactly the gap the heading asked for, rather than
+     the heading's margin plus whatever happened to land first. */
+  .report-prose > *:first-child {
+    margin-top: 0;
+  }
+  .report-prose > *:last-child {
+    margin-bottom: 0;
+  }
+
   /* A card that responds to being pointed at. Border and a 1px rise only:
      anything more and a page of them starts to feel like a trampoline. */
   .lift {
@@ -274,7 +286,9 @@
    prints / saves to PDF as a clean white document rather than the dark UI. */
 @media print {
   @page {
-    margin: 16mm;
+    /* A little more at the head and foot than at the sides, which is how a
+       document reads on paper. */
+    margin: 18mm 16mm;
   }
   .no-print {
     display: none !important;
@@ -301,16 +315,105 @@
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  /* keep cards, figures and headings from splitting awkwardly across pages */
+  /* ---- pagination ----------------------------------------------------
+     Left alone, a browser breaks a page wherever it happens to run out of
+     room. That drops a section heading onto the bottom line of one page with
+     its text on the next, slices a table row through the middle, and cuts a
+     stat tile in half. These rules push the break to fall between blocks
+     instead, so the PDF reads as a set of pages rather than a long scroll cut
+     into pieces. */
+
+  /* A card, chart or figure is one idea. Never split one. */
   .report-block,
-  .report-figure {
+  .report-figure,
+  .report-section-head,
+  figure,
+  li,
+  figcaption {
     break-inside: avoid;
   }
-  .report-heading {
-    break-after: avoid;
+
+  /* A tall screenshot gets letterboxed into what is left of the page instead
+     of running off the bottom edge. object-fit keeps it from being squashed. */
+  .report-figure img {
+    max-height: 230mm;
+    object-fit: contain;
   }
+
+  /* A heading that lands at the foot of a page is a heading in the wrong
+     place. Keep it with whatever follows it. */
+  .report-heading,
+  h1,
+  h2,
+  h3,
+  h4 {
+    break-after: avoid;
+    break-inside: avoid;
+  }
+
+  /* Never leave one or two stranded lines of a paragraph on their own. Note
+     this is orphans/widows rather than break-inside: avoid, because a long
+     paragraph SHOULD be allowed to flow across a page. */
+  p,
+  td {
+    orphans: 3;
+    widows: 3;
+  }
+
+  /* A long table SHOULD flow across pages, but never mid-row, and the header
+     row repeats at the top of each page so the columns stay readable. */
+  table {
+    break-inside: auto;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  thead {
+    display: table-header-group;
+  }
+  tr {
+    break-inside: avoid;
+  }
+
+  /* On a phone a wide table scrolls inside its own box. On paper there is no
+     scrolling, so the box has to let its contents through or the last columns
+     simply vanish. */
+  .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  /* Sections carry their own air, and one marked as a new chapter in the
+     editor starts at the top of a fresh page. */
   .report-section {
-    margin-bottom: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .report-page-break {
+    break-before: page;
+  }
+  /* ...except the first section, which would otherwise leave page one holding
+     nothing but the letterhead. */
+  .report-sheet article > .report-page-break:first-child {
+    break-before: auto;
+  }
+
+  /* The sheet is the page. Its screen border and padding would print as a box
+     drawn inside the paper margin. */
+  .report-sheet {
+    border: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    background: #ffffff !important;
+  }
+
+  /* Links keep their words, not their colour and underline: a printed report
+     is read, not clicked. */
+  a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+
+  img {
+    max-width: 100% !important;
+    break-inside: avoid;
   }
 }
 
