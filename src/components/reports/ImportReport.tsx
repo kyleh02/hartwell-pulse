@@ -34,9 +34,13 @@ export function ImportReport({
     }
     startTransition(async () => {
       try {
-        const id = await importReportMarkdown(clientId, `${month}-01`, markdown);
+        const r = await importReportMarkdown(clientId, `${month}-01`, markdown);
+        if (!r.ok) {
+          setError(r.message);
+          return;
+        }
         setOpen(false);
-        router.push(`/admin/reports/${id}`);
+        router.push(`/admin/reports/${r.id}`);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Could not import that.");
       }

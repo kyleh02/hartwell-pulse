@@ -237,11 +237,15 @@ export async function uploadReportImage(
  * Tables, bold and subheadings survive: ReportText renders that subset, so what
  * was drafted is what the client reads.
  */
+export type ImportResult =
+  | { ok: true; id: string }
+  | { ok: false; message: string };
+
 export async function importReportMarkdown(
   clientId: string,
   periodMonth: string,
   markdown: string,
-): Promise<string> {
+): Promise<ImportResult> {
   const { supabase, session } = await adminSupabase();
 
   const text = markdown.replace(/\r\n/g, "\n").trim();
@@ -286,9 +290,11 @@ export async function importReportMarkdown(
     .eq("period_month", periodMonth)
     .maybeSingle();
   if (existing) {
-    throw new Error(
-      "A report already exists for that month. Open it and paste into a section, or pick another month.",
-    );
+    return {
+      ok: false,
+      message:
+        "A report already exists for that client and month. Delete it, or pick another month.",
+    };
   }
 
   const { data: created, error } = await supabase
@@ -303,7 +309,9 @@ export async function importReportMarkdown(
     })
     .select("id")
     .single();
-  if (error || !created) throw new Error(error?.message ?? "Could not create the report.");
+  if (error || !created) {
+    return { ok: false, message: error?.message ?? "Could not create the report." };
+  }
   const reportId = (created as { id: string }).id;
 
   const rows = sections
@@ -324,10 +332,10 @@ export async function importReportMarkdown(
       // A report with no sections is confusing to find later. Clean up and let
       // Kyle retry rather than leaving a shell behind.
       await supabase.from("reports").delete().eq("id", reportId);
-      throw new Error(sErr.message);
+      return { ok: false, message: `Sections: ${sErr.message}` };
     }
   }
 
   revalidatePath("/admin/reports");
-  return reportId;
+  return { ok: true, id: reportId };
 }
