@@ -439,6 +439,20 @@ export interface Notification {
   created_at: string;
 }
 
+/** One row per time an invoice was emailed, snapshotting what it said then. */
+export interface InvoiceSend {
+  id: string;
+  invoice_id: string;
+  client_id: string;
+  revision: number;
+  total: number;
+  due_date: string | null;
+  sent_to: string[];
+  kind: "send" | "resend";
+  sent_at: string;
+  sent_by: string | null;
+}
+
 export interface BusinessSettings {
   id: number;
   business_name: string;
@@ -484,6 +498,10 @@ export interface Invoice {
    * on the client account — see migration 0031. Never treat empty as "nobody".
    */
   recipient_user_ids: string[];
+  /** 0 as first issued; bumped each time an already-sent invoice is corrected. */
+  revision: number;
+  /** Last time it was emailed. `sent_at` stays the first send. */
+  last_sent_at: string | null;
   deposit_amount: number; // already received, credited against the total
   deposit_label: string | null;
   status: InvoiceStatus;

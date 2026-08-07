@@ -6,6 +6,7 @@ import {
   listPricingItems,
 } from "@/lib/invoices";
 import { InvoiceBuilder } from "@/components/invoices/InvoiceBuilder";
+import type { InvoiceSend } from "@/lib/types/database";
 
 export const metadata = { title: "Invoice" };
 
@@ -37,12 +38,21 @@ export default async function EditInvoicePage({
       | { clerk_user_id: string; full_name: string | null; email: string | null }[]
       | null) ?? [];
 
+  // What actually went out, and to whom, each time. Newest first.
+  const { data: sendRows } = await supabase
+    .from("invoice_sends")
+    .select("*")
+    .eq("invoice_id", invoiceId)
+    .order("sent_at", { ascending: false });
+  const sends = (sendRows as InvoiceSend[] | null) ?? [];
+
   return (
     <InvoiceBuilder
       bundle={bundle}
       business={business}
       pricingItems={pricing}
       people={people}
+      sends={sends}
     />
   );
 }

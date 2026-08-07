@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getPulseSession } from "@/lib/auth/session";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { computeTotals, lineAmount } from "@/lib/invoices-shared";
-import { sendInvoiceWith } from "@/lib/invoices-send";
+import { sendInvoiceWith, invoiceRecipients } from "@/lib/invoices-send";
 import type { GstMode, InvoiceStatus } from "@/lib/types/database";
 
 async function adminSupabase() {
@@ -100,11 +100,35 @@ export async function saveInvoice(invoiceId: string, input: SaveInvoiceInput) {
   const { supabase } = await adminSupabase();
   const { data: inv } = await supabase
     .from("invoices")
-    .select("client_id")
+    .select("client_id, status, revision")
     .eq("id", invoiceId)
     .maybeSingle();
   if (!inv) throw new Error("Invoice not found");
-  const clientId = (inv as { client_id: string }).client_id;
+  const current = inv as {
+    client_id: string;
+    status: InvoiceStatus;
+    revision: number | null;
+  };
+  const clientId = current.client_id;
+
+  // A sent invoice may be corrected and reissued under the same number, which
+  // is the ordinary thing to do for one that has not been paid. Paid and void
+  // are closed records: a paid invoice is what the money was against, and a
+  // void one exists precisely to preserve what was cancelled. Guarded here as
+  // well as in the UI, because a rule that lives only in a disabled button is
+  // not a rule.
+  if (current.status === "paid" || current.status === "void") {
+    throw new Error(
+      `A ${current.status} invoice cannot be edited. Reopen it first if it is not actually ${current.status}.`,
+    );
+  }
+
+  // Revision 0 is the invoice as first issued. Every correction after it has
+  // gone out bumps it, so the send log can say which version landed where.
+  const revision =
+    current.status === "sent"
+      ? (current.revision ?? 0) + 1
+      : (current.revision ?? 0);
 
   const totals = computeTotals(input.lines, input.gst_mode);
   // This update MUST be checked. It was not, and a rejected write here is
@@ -121,6 +145,7 @@ export async function saveInvoice(invoiceId: string, input: SaveInvoiceInput) {
       deposit_label: input.deposit_label || null,
       gst_mode: input.gst_mode,
       recipient_user_ids: input.recipient_user_ids,
+      revision,
       notes: input.notes || null,
       email_message: input.email_message || null,
       recurring_active: input.recurring_active,
@@ -165,6 +190,71 @@ export async function sendInvoice(invoiceId: string) {
   await sendInvoiceWith(supabase, invoiceId);
   revalidatePath("/admin/invoices");
   revalidatePath(`/admin/invoices/${invoiceId}`);
+}
+
+/**
+ * Email an already-sent invoice again, to whoever is currently chosen on it.
+ *
+ * The same number, corrected. That is the normal fix for an unpaid invoice
+ * that was wrong, and it beats voiding it and raising a new number, which
+ * leaves the client holding two documents for one job.
+ *
+ * A paid invoice is not resent from here: if the numbers changed on something
+ * already paid, that is a credit or a fresh invoice, not a quiet reissue.
+ */
+export async function resendInvoice(
+  invoiceId: string,
+): Promise<{ ok: true; sentTo: string[] } | { ok: false; message: string }> {
+  const { supabase } = await adminSupabase();
+
+  const { data: row } = await supabase
+    .from("invoices")
+    .select("status, recipient_user_ids, client_id")
+    .eq("id", invoiceId)
+    .maybeSingle();
+  const inv = row as {
+    status: InvoiceStatus;
+    recipient_user_ids: string[] | null;
+    client_id: string;
+  } | null;
+  if (!inv) return { ok: false, message: "Invoice not found." };
+  if (inv.status !== "sent") {
+    return {
+      ok: false,
+      message:
+        inv.status === "draft"
+          ? "This invoice has not been sent yet. Use Send."
+          : `A ${inv.status} invoice is not resent. Raise a new one instead.`,
+    };
+  }
+
+  const people = await invoiceRecipients(supabase, {
+    client_id: inv.client_id,
+    recipient_user_ids: inv.recipient_user_ids ?? [],
+  });
+  if (people.length === 0) {
+    return {
+      ok: false,
+      message:
+        "No one on this account is set to receive this invoice. Choose a recipient under Send to, then try again.",
+    };
+  }
+
+  try {
+    await sendInvoiceWith(supabase, invoiceId, { resend: true });
+  } catch (e) {
+    return {
+      ok: false,
+      message: e instanceof Error ? e.message : "Could not resend.",
+    };
+  }
+
+  revalidatePath("/admin/invoices");
+  revalidatePath(`/admin/invoices/${invoiceId}`);
+  return {
+    ok: true,
+    sentTo: people.map((p) => p.email).filter((e): e is string => Boolean(e)),
+  };
 }
 
 export async function setInvoiceStatus(invoiceId: string, status: InvoiceStatus) {

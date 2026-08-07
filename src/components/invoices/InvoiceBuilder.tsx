@@ -2,12 +2,20 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { ArrowLeft, Plus, Trash2, Send, MailCheck } from "lucide-react";
+import {
+  ArrowLeft,
+  Plus,
+  Trash2,
+  Send,
+  MailCheck,
+  RotateCcw,
+} from "lucide-react";
 import type {
   BusinessSettings,
   GstMode,
   InvoiceBrand,
   InvoiceLineItem,
+  InvoiceSend,
   InvoiceStatus,
   PricingItem,
 } from "@/lib/types/database";
@@ -21,6 +29,7 @@ import {
 import {
   saveInvoice,
   sendInvoice,
+  resendInvoice,
   sendTestInvoice,
   setInvoiceStatus,
   deleteInvoice,
@@ -31,6 +40,7 @@ import {
   type InvoicePerson,
 } from "@/components/invoices/RecipientPicker";
 import { PrintButton } from "@/components/invoices/PrintButton";
+import { SendHistory } from "@/components/invoices/SendHistory";
 import { Button } from "@/components/ui/Button";
 import { celebrate } from "@/lib/celebrate";
 import { Badge } from "@/components/ui/Badge";
@@ -51,11 +61,13 @@ export function InvoiceBuilder({
   pricingItems,
   business,
   people = [],
+  sends = [],
 }: {
   bundle: InvoiceBundle;
   pricingItems: PricingItem[];
   business: BusinessSettings | null;
   people?: InvoicePerson[];
+  sends?: InvoiceSend[];
 }) {
   const { invoice } = bundle;
   const [lines, setLines] = useState<LineDraft[]>(() =>
@@ -96,7 +108,12 @@ export function InvoiceBuilder({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const editable = status === "draft";
+  // A sent invoice stays editable so a wrong one can be corrected and reissued
+  // under the same number. Paid and void are closed records: a paid invoice is
+  // what the money was against, and a void one exists to preserve what was
+  // cancelled. The server enforces the same thing.
+  const editable = status === "draft" || status === "sent";
+  const isDraft = status === "draft";
   const totals = computeTotals(lines, gstMode);
 
   function touch() {
@@ -227,6 +244,48 @@ export function InvoiceBuilder({
       }
     });
   }
+  /**
+   * Save the corrections, then email the same invoice number again.
+   *
+   * Saving first is the whole point: a resend that went out before the fix
+   * landed would send the client the wrong version a second time.
+   */
+  function resend() {
+    const going =
+      recipients.length === 0
+        ? people
+        : people.filter((p) => recipients.includes(p.clerk_user_id));
+    const who = going
+      .map((p) => `${p.full_name ?? "Unnamed"}${p.email ? ` (${p.email})` : ""}`)
+      .join("\n");
+    if (
+      !window.confirm(
+        `Resend invoice ${invoice.invoice_number} for ${formatMoney(totals.total)}?\n\nIt goes to:\n${who || "nobody, check Send to"}\n\nSame invoice number, with whatever you have changed. Anyone not listed above gets nothing.`,
+      )
+    )
+      return;
+    setError(null);
+    setTestNote(null);
+    startTransition(async () => {
+      try {
+        await saveInvoice(invoice.id, buildInput());
+        setSaved(true);
+        const res = await resendInvoice(invoice.id);
+        if (!res.ok) {
+          setError(res.message);
+          return;
+        }
+        setTestNote(
+          res.sentTo.length
+            ? `Resent to ${res.sentTo.join(", ")}.`
+            : "Resent, though nobody on the account has an email address on file.",
+        );
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not resend.");
+      }
+    });
+  }
+
   function mark(s: InvoiceStatus) {
     startTransition(async () => {
       await setInvoiceStatus(invoice.id, s);
@@ -307,13 +366,16 @@ export function InvoiceBuilder({
             {formatMoney(totals.total)} total
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge tone={STATUS_TONE[status]}>{status}</Badge>
-          {editable ? (
+          {editable && (
             <>
-              <Button variant="danger" size="sm" onClick={del} disabled={pending}>
-                <Trash2 size={14} /> Delete
-              </Button>
+              {/* Drafts only. Anything sent is a financial record. */}
+              {isDraft && (
+                <Button variant="danger" size="sm" onClick={del} disabled={pending}>
+                  <Trash2 size={14} /> Delete
+                </Button>
+              )}
               <span className="data-mono text-[11px] text-pulse-text-mute">
                 {saved ? "saved" : "unsaved"}
               </span>
@@ -329,32 +391,56 @@ export function InvoiceBuilder({
               >
                 <MailCheck size={14} /> Test to me
               </Button>
-              {recurringActive ? (
-                <span className="data-mono text-[11px] text-pulse-gold">
-                  auto-sends monthly
-                </span>
+              {isDraft ? (
+                recurringActive ? (
+                  <span className="data-mono text-[11px] text-pulse-gold">
+                    auto-sends monthly
+                  </span>
+                ) : (
+                  <Button size="sm" onClick={send} disabled={pending || lines.length === 0}>
+                    <Send size={14} /> Send
+                  </Button>
+                )
               ) : (
-                <Button size="sm" onClick={send} disabled={pending || lines.length === 0}>
-                  <Send size={14} /> Send
+                <Button size="sm" onClick={resend} disabled={pending}>
+                  <RotateCcw size={14} /> Resend
                 </Button>
               )}
             </>
-          ) : status === "sent" ? (
+          )}
+          {status === "sent" && (
             <>
-              <Button size="sm" onClick={() => mark("paid")} disabled={pending}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => mark("paid")}
+                disabled={pending}
+              >
                 Mark paid
               </Button>
               <Button variant="ghost" size="sm" onClick={() => mark("void")} disabled={pending}>
                 Void
               </Button>
             </>
-          ) : status === "paid" ? (
+          )}
+          {status === "paid" && (
             <Button variant="ghost" size="sm" onClick={() => mark("sent")} disabled={pending}>
               Reopen
             </Button>
-          ) : null}
+          )}
         </div>
       </div>
+
+      {/* This invoice is already in somebody's inbox. Say so before anything
+          gets changed, not after. */}
+      {status === "sent" && (
+        <p className="no-print -mt-3 mb-6 rounded-[var(--radius-card)] border border-pulse-gold/30 bg-pulse-gold/10 px-4 py-3 text-sm text-pulse-gold">
+          Already sent{invoice.last_sent_at ? " and in their inbox" : ""}. You
+          can correct it and Resend under the same number, which is the right
+          fix for one that has not been paid. Change who it goes to under Send
+          to first if that is the part that was wrong.
+        </p>
+      )}
 
       {(error || testNote) && (
         <div className="no-print -mt-3 mb-6">
@@ -695,6 +781,12 @@ export function InvoiceBuilder({
             <PrintButton />
           </div>
           <InvoiceDocument bundle={previewBundle} business={business} />
+
+          {sends.length > 0 && (
+            <div className="mt-4">
+              <SendHistory sends={sends} />
+            </div>
+          )}
         </div>
       </div>
     </div>

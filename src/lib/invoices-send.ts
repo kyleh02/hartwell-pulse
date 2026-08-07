@@ -47,7 +47,7 @@ export async function invoiceRecipients(
 export async function sendInvoiceWith(
   supabase: SupabaseClient,
   invoiceId: string,
-  opts: { adminNotice?: boolean; testTo?: string } = {},
+  opts: { adminNotice?: boolean; testTo?: string; resend?: boolean } = {},
 ): Promise<void> {
   const { data: inv } = await supabase
     .from("invoices")
@@ -85,16 +85,23 @@ export async function sendInvoiceWith(
     "due date": prettyDate(invoice.due_date),
   });
 
+  // An invoice that has been corrected and reissued is not a new invoice, and
+  // calling it one leaves the client wondering whether they now owe twice.
+  // Revision is the honest test: it only moves when the invoice was actually
+  // changed after it went out. A plain resend of an unchanged invoice still
+  // reads as the original, which is what it is.
+  const amended = (invoice.revision ?? 0) > 0;
+  const noun = amended ? "Updated invoice" : "New invoice";
   const subject = opts.testTo
-    ? `[Test] New invoice ${invoice.invoice_number}`
-    : `New invoice ${invoice.invoice_number}`;
-  const notifTitle = `New invoice ${invoice.invoice_number} for ${formatMoney(invoice.total)}`;
+    ? `[Test] ${noun} ${invoice.invoice_number}`
+    : `${noun} ${invoice.invoice_number}`;
+  const notifTitle = `${noun} ${invoice.invoice_number} for ${formatMoney(invoice.total)}`;
   const notifBody = `Due ${prettyDate(invoice.due_date)}.`;
   const now = new Date().toISOString();
 
   if (opts.testTo) {
     const html = emailLayout(
-      `New invoice — ${invoice.invoice_number}`,
+      `${noun}: ${invoice.invoice_number}`,
       messageHtml,
       "View invoice",
       `/invoices/${invoiceId}`,
@@ -112,6 +119,8 @@ export async function sendInvoiceWith(
     );
   }
 
+  const delivered: string[] = [];
+
   for (const u of users) {
     await supabase.from("notifications").insert({
       recipient_user_id: u.clerk_user_id,
@@ -125,14 +134,29 @@ export async function sendInvoiceWith(
     });
     if (u.email) {
       const html = emailLayout(
-        `New invoice — ${invoice.invoice_number}`,
+        `${noun}: ${invoice.invoice_number}`,
         messageHtml,
         "View invoice",
         `/invoices/${invoiceId}`,
       );
       await sendEmail({ to: u.email, subject, html });
+      delivered.push(u.email);
     }
   }
+
+  // What went out, as it stood, to whom. Written before the status flip so a
+  // send that half-succeeds still leaves evidence of what reached an inbox.
+  // Snapshotted rather than joined: a later correction is exactly the thing
+  // that would otherwise rewrite this history.
+  await supabase.from("invoice_sends").insert({
+    invoice_id: invoiceId,
+    client_id: invoice.client_id,
+    revision: invoice.revision ?? 0,
+    total: invoice.total,
+    due_date: invoice.due_date,
+    sent_to: delivered,
+    kind: opts.resend ? "resend" : "send",
+  });
 
   if (opts.adminNotice) {
     const { data: admins } = await supabase
@@ -155,8 +179,16 @@ export async function sendInvoiceWith(
   // Flip to "sent" only after the email + notifications have been dispatched, so
   // a hard failure mid-send leaves the invoice as a draft. The recurring cron
   // re-attempts the send for an existing un-sent invoice rather than skipping it.
+  //
+  // sent_at is set once and never moved. It is when the invoice was issued, and
+  // a correction reissued three days later does not change that. last_sent_at
+  // carries the resends.
   await supabase
     .from("invoices")
-    .update({ status: "sent", sent_at: new Date().toISOString() })
+    .update({
+      status: "sent",
+      sent_at: invoice.sent_at ?? now,
+      last_sent_at: now,
+    })
     .eq("id", invoiceId);
 }
