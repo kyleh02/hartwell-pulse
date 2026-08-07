@@ -24,7 +24,7 @@ Live at https://portal.hartwelldigital.com
 - Write them idempotent: `add column if not exists`, `drop policy if exists`
   before `create policy` (Postgres has no CREATE POLICY IF NOT EXISTS),
   `drop trigger if exists`, guarded `do $$` blocks.
-- 0001–0027 are applied in production as of 2026-08-01. The CRM prospect data
+- 0001–0029 are applied in production as of 2026-08-06. The CRM prospect data
   is NOT a migration: it imports in-app from Pipeline, because 30 KB of string
   literals proved unreliable to paste into the Supabase SQL editor.
 
@@ -41,6 +41,15 @@ Live at https://portal.hartwelldigital.com
   URLs. Never expose a raw signed URL in HTML or email.
 
 ## Money rules
+- **Always check the error on a write.** `saveInvoice` did not, and when a
+  migration added a column that was not yet applied, the whole update was
+  rejected silently: the invoice kept its defaults and a client was emailed an
+  invoice for $0.00 on the wrong terms. An unchecked write on the money path is
+  a fault waiting for an excuse. Adding a column to an existing write is
+  exactly the moment this bites, since code ships before the migration is run.
+- **Test to me** on any draft sends the real email to the admin, reading the
+  SAVED row rather than form state, so a proof shows what is stored. Records
+  nothing.
 - Kyle is NOT GST-registered → invoices default "No GST". AUD, en-AU formats.
 - Sent invoices are never hard-deleted — VOID only (keeps number + audit trail;
   ATO 5-year record keeping). Drafts may be deleted. Paid is fully locked.
