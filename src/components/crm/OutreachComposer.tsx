@@ -172,11 +172,29 @@ export function OutreachComposer({
         />
       </label>
 
-      <p className="mt-1.5 flex items-start gap-1.5 text-[11px] text-pulse-text-mute">
-        <Mail size={12} className="mt-0.5 shrink-0" />
-        Sent as plain text from your Outlook, so it arrives as an ordinary
-        email. Your name, Ironpeak, the ABN and a working opt-out link are
-        appended automatically.
+      {/* Shown, not just described. The signature is appended at send time so
+          it cannot be wrong on one email out of thirty, but that also made it
+          invisible here and it read as missing. */}
+      <details className="mt-2 rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2/40 px-3 py-2">
+        <summary className="flex cursor-pointer items-center gap-1.5 text-[11px] text-pulse-text-mute">
+          <Mail size={12} className="shrink-0" />
+          Added below your text automatically
+        </summary>
+        <pre className="mt-2 whitespace-pre-wrap border-t border-pulse-border pt-2 text-[11px] leading-relaxed text-pulse-text-dim">
+{`Kind regards,
+
+Kyle Hartwell
+Ironpeak Consulting
+kyle@ironpeakconsulting.com.au
+ironpeakconsulting.com.au
+linkedin.com/company/ironpeak-consulting
+
+Not interested in hearing from me? <opt-out link> and I will not write again.`}
+        </pre>
+      </details>
+      <p className="mt-1.5 text-[11px] text-pulse-text-mute">
+        Plain text from your Outlook, so it arrives as an ordinary email. No
+        images, no attachments, no tracking pixel, no phone number.
       </p>
 
       {!approved && (

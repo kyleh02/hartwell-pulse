@@ -40,6 +40,10 @@ export interface PlanRow {
   hook: string | null;
   hook_verified_at: string | null;
   hard_warning: string | null;
+  send_approved_at: string | null;
+  send_attempted_at: string | null;
+  send_error: string | null;
+  email_body: string | null;
   crm_contacts: Contact | Contact[] | null;
   contact?: Contact | null;
 }
@@ -98,7 +102,14 @@ export function SendPlan({ rows }: { rows: PlanRow[] }) {
     });
   }
 
-  // ---- the three groups, in the order the day actually runs ----
+  // ---- the day this is all organised around ----
+  const todayKey = new Date().toLocaleDateString("en-AU", {
+    timeZone: TZ,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+
   const followUps = rows
     .filter((r) => r.stage === "contacted" && r.followup_due)
     .sort((a, b) => (a.followup_due! < b.followup_due! ? -1 : 1));
@@ -111,20 +122,90 @@ export function SendPlan({ rows }: { rows: PlanRow[] }) {
     (r) => r.stage === "blocked" || r.stage === "linkedin_only",
   );
 
-  // Group the sends by the day they go out.
+  // Anything already out the door. Kept visible rather than filed away: seeing
+  // what has gone is half of knowing what to do next.
+  const sent = rows
+    .filter((r) => r.send_attempted_at && !r.send_error)
+    .sort((a, b) => (a.send_attempted_at! > b.send_attempted_at! ? -1 : 1));
+
+  const failed = rows.filter((r) => r.send_error);
+
   const byDay = new Map<string, PlanRow[]>();
   for (const r of toSend) {
     const k = dayKey(r.scheduled_send_at!);
     byDay.set(k, [...(byDay.get(k) ?? []), r]);
   }
 
+  // Today's work is everything due today plus anything overdue, in one list,
+  // because "what do I do now" is one question and should not be assembled
+  // from three sections.
+  const dueToday = [
+    ...followUps.filter((r) => daysUntil(r.followup_due!) <= 0),
+    ...(byDay.get(todayKey) ?? []),
+  ];
+  const laterDays = [...byDay.entries()].filter(([k]) => k !== todayKey);
+  const laterFollowUps = followUps.filter((r) => daysUntil(r.followup_due!) > 0);
+
   return (
     <div className="space-y-8">
-      {followUps.length > 0 && (
-        <section>
-          <h2 className="mono-label mb-3">Follow-ups</h2>
+      <section>
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-lg font-semibold text-pulse-text">Today</h2>
+          <span className="data-mono text-[11px] text-pulse-text-mute">
+            {todayKey}
+          </span>
+        </div>
+        {dueToday.length === 0 ? (
+          <p className="rounded-[var(--radius-card)] border border-dashed border-pulse-border px-4 py-6 text-center text-sm text-pulse-text-mute">
+            Nothing due today. The next one is below.
+          </p>
+        ) : (
           <div className="space-y-2">
-            {followUps.map((r) => {
+            {dueToday.map((r) => {
+              const overdue = r.followup_due && daysUntil(r.followup_due) < 0;
+              return (
+                <Row
+                  key={r.id}
+                  row={r}
+                  tone={overdue ? "danger" : "warn"}
+                  when={
+                    r.followup_due
+                      ? overdue
+                        ? `follow-up ${Math.abs(daysUntil(r.followup_due))} day${Math.abs(daysUntil(r.followup_due)) === 1 ? "" : "s"} overdue`
+                        : "follow-up due today"
+                      : timeOf(r.scheduled_send_at!)
+                  }
+                  onSchedule={() => toggleScheduled(r)}
+                  busy={pending && busy === r.id}
+                />
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {failed.length > 0 && (
+        <section>
+          <h2 className="mono-label mb-3 text-pulse-danger">Did not send</h2>
+          <div className="space-y-2">
+            {failed.map((r) => (
+              <Row
+                key={r.id}
+                row={r}
+                tone="danger"
+                when={r.send_error ?? "failed"}
+                busy={false}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {laterFollowUps.length > 0 && (
+        <section>
+          <h2 className="mono-label mb-3">Follow-ups coming up</h2>
+          <div className="space-y-2">
+            {laterFollowUps.map((r) => {
               const due = daysUntil(r.followup_due!);
               // Day 11 means the window is missed. Surface it rather than
               // silently sending late.
@@ -151,7 +232,7 @@ export function SendPlan({ rows }: { rows: PlanRow[] }) {
         </section>
       )}
 
-      {[...byDay.entries()].map(([day, list]) => (
+      {laterDays.map(([day, list]) => (
         <section key={day}>
           <h2 className="mono-label mb-3">{day}</h2>
           <div className="space-y-2">
@@ -168,6 +249,23 @@ export function SendPlan({ rows }: { rows: PlanRow[] }) {
           </div>
         </section>
       ))}
+
+      {sent.length > 0 && (
+        <section>
+          <h2 className="mono-label mb-3 text-pulse-success">Sent</h2>
+          <div className="space-y-2">
+            {sent.map((r) => (
+              <Row
+                key={r.id}
+                row={r}
+                tone="quiet"
+                when={`sent ${new Date(r.send_attempted_at!).toLocaleString("en-AU", { timeZone: TZ, day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}`}
+                busy={false}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {held.length > 0 && (
         <section>

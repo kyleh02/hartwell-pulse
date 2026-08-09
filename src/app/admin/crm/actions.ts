@@ -963,6 +963,23 @@ export async function replacePipeline(): Promise<{
     "proposal", "won", "delivered",
     "declined", "bounced", "stopped", "do_not_contact",
   ]);
+
+  /**
+   * True only when the PORTAL knows more than the file does.
+   *
+   * The first version of this asked "is the stored stage ahead?", which was too
+   * blunt and blanked Coastal Aviation's outbox. Coastal is `contacted` in the
+   * file too, because its first email went on 5 August, and the email the file
+   * carries is the FOLLOW-UP. The file and the portal agree there, so there is
+   * nothing to protect against.
+   *
+   * The case worth guarding is disagreement: the file still says `queued` while
+   * the portal says `contacted`, which means the send happened since the file
+   * was written and the email it carries is the one already in their inbox.
+   * That is the one that must not be reloaded and approved a second time.
+   */
+  const portalAhead = (stored: string | undefined, fromFile: string) =>
+    Boolean(stored) && AHEAD.has(stored!) && !AHEAD.has(fromFile);
   const byName = new Map(existing.map((o) => [o.legal_name.toLowerCase(), o]));
 
   const keepNames = new Set(PIPELINE_V2.map((r) => r.company.toLowerCase()));
@@ -982,15 +999,14 @@ export async function replacePipeline(): Promise<{
       rank: row.rank,
       priority_tier: row.tier,
       channel: row.channel,
-      stage: org && AHEAD.has(org.stage) ? org.stage : row.stage,
+      stage: portalAhead(org?.stage, row.stage) ? org!.stage : row.stage,
       // sendImmediately means "on receipt, override the window", which is a
       // time already past rather than a special case for the sender to know
       // about. Coastal Aviation's compromised site is the only one.
-      scheduled_send_at:
-        org && AHEAD.has(org.stage)
-          ? null
-          : (row.scheduledSendAt ??
-            (row.sendImmediately ? new Date().toISOString() : null)),
+      scheduled_send_at: portalAhead(org?.stage, row.stage)
+        ? null
+        : (row.scheduledSendAt ??
+          (row.sendImmediately ? new Date().toISOString() : null)),
       followup_due: row.followupDue ?? null,
       hook: row.hook,
       hook_verified_at: row.hookVerified,
@@ -1001,12 +1017,11 @@ export async function replacePipeline(): Promise<{
       // Only a "ready" email is loaded into the outbox. "held" and
       // "not-written" records carry their blocker instead, so there is nothing
       // sitting there that could be approved by accident.
-      email_body:
-        org && AHEAD.has(org.stage)
-          ? null
-          : row.emailStatus === "ready"
-            ? row.emailBody
-            : null,
+      email_body: portalAhead(org?.stage, row.stage)
+        ? null
+        : row.emailStatus === "ready"
+          ? row.emailBody
+          : null,
       // Replacing the data always clears approval. An email that changed is
       // not the email that was read and approved.
       send_approved_at: null,

@@ -31,13 +31,6 @@ export async function GET(req: NextRequest) {
   const supabase = createAdminSupabase();
   const now = new Date().toISOString();
 
-  const { data: settings } = await supabase
-    .from("business_settings")
-    .select("abn")
-    .eq("id", 1)
-    .maybeSingle();
-  const abn = (settings as { abn: string | null } | null)?.abn ?? null;
-
   const { data, error } = await supabase
     .from("crm_organisations")
     .select(
@@ -71,7 +64,6 @@ export async function GET(req: NextRequest) {
       org,
       contact,
       org.send_approved_checks ?? {},
-      abn,
     );
 
     if (outcome.ok) {

@@ -21,7 +21,7 @@ export default async function SendPlanPage() {
   const { data } = await supabase
     .from("crm_organisations")
     .select(
-      "id, legal_name, trading_name, state, domain, rank, priority_tier, channel, stage, scheduled_send_at, scheduled_at, followup_due, hook, hook_verified_at, hard_warning, crm_contacts(first_name, surname, role_title, email_as_published, name_verified, fallback_greeting)",
+      "id, legal_name, trading_name, state, domain, rank, priority_tier, channel, stage, scheduled_send_at, scheduled_at, followup_due, hook, hook_verified_at, hard_warning, send_approved_at, send_attempted_at, send_error, email_body, crm_contacts(first_name, surname, role_title, email_as_published, name_verified, fallback_greeting)",
     )
     .eq("brand", "ironpeak")
     .order("rank");
@@ -46,7 +46,7 @@ export default async function SendPlanPage() {
       <PageHeader
         label={["Ironpeak", "Send plan"]}
         title="Send plan"
-        description="The pipeline in the order it gets worked. Mark each one drafted when it is sitting in Outlook, then logged when it has actually gone."
+        description="What to do today, then the days after it. Approved emails go on their own at the time shown."
       />
 
       <SendPlan rows={rows} />

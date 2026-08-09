@@ -1,21 +1,34 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { graphSendMail } from "@/lib/graph";
-import { IRONPEAK } from "@/lib/brand";
 
 /**
  * Composing and sending one outreach email.
  *
  * Everything that must appear on a commercial electronic message is appended
- * here rather than typed into each body, because a footer that is retyped 30
- * times is a footer that is wrong on at least one of them. The Spam Act needs
- * accurate sender identification and a functional opt-out; both are added
- * below and neither can be edited away in the composer.
+ * here rather than typed into each body, because a footer retyped 30 times is
+ * a footer that is wrong on at least one of them. The Spam Act needs accurate
+ * sender identification and a functional opt-out; both are below and neither
+ * can be edited away in the composer.
  *
- * No phone number, on the Ironpeak brief's own rule. No mention of Hartwell
- * Digital either: the ABN is the only permitted expression of the parent on
- * anything a prospect sees.
+ * No phone number, on the brief's own rule. No mention of Hartwell Digital
+ * either: a prospect must never see the parent brand.
+ *
+ * The opt-out line is written like a person wrote it. Kyle has explicitly
+ * rejected formal unsubscribe blocks that read as automated, and on a genuine
+ * 1:1 email one is also a tell that it is not one.
  */
+
+/** Verbatim from the handoff. Text only, no images, no phone number, ever. */
+export const SIGNATURE = [
+  "Kind regards,",
+  "",
+  "Kyle Hartwell",
+  "Ironpeak Consulting",
+  "kyle@ironpeakconsulting.com.au",
+  "ironpeakconsulting.com.au",
+  "linkedin.com/company/ironpeak-consulting",
+].join("\n");
 
 export interface OutreachTarget {
   id: string;
@@ -36,29 +49,14 @@ export interface OutreachContact {
   opt_out_at: string | null;
 }
 
-export function buildOutreachText(
-  body: string,
-  optOutToken: string,
-  abn: string | null,
-): string {
+export function buildOutreachText(body: string, optOutToken: string): string {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
-  const optOutUrl = `${appUrl}/unsubscribe/${optOutToken}`;
-  const identity = [
-    "Kyle Hartwell",
-    IRONPEAK.name,
-    abn ? `ABN ${abn}` : null,
-    IRONPEAK.email,
-  ]
-    .filter(Boolean)
-    .join("\n");
-
   return [
     body.trim(),
     "",
-    "--",
-    identity,
+    SIGNATURE,
     "",
-    `If you would rather not hear from me again, use this link and I will not contact you: ${optOutUrl}`,
+    `Not interested in hearing from me? ${appUrl}/unsubscribe/${optOutToken} and I will not write again.`,
   ].join("\n");
 }
 
@@ -84,7 +82,6 @@ export async function sendOutreach(
   org: OutreachTarget,
   contact: OutreachContact,
   checks: Record<string, unknown>,
-  abn: string | null,
 ): Promise<SendOutcome> {
   if (!org.email_body || !org.email_subject) {
     return { ok: false, message: "No email written for this record.", permanent: true };
@@ -103,7 +100,7 @@ export async function sendOutreach(
     };
   }
 
-  const text = buildOutreachText(org.email_body, contact.opt_out_token, abn);
+  const text = buildOutreachText(org.email_body, contact.opt_out_token);
 
   // Dry run through the guard BEFORE anything leaves. The trigger is what
   // enforces the two-email cap, the opt-out block and the nine checks, and
