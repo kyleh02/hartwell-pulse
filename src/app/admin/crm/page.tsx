@@ -12,7 +12,6 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { CrmHealth } from "@/components/crm/CrmHealth";
 import { PipelineView } from "@/components/crm/PipelineView";
 import { ImportProspects } from "@/components/crm/ImportProspects";
-import { SyncMaster } from "@/components/crm/SyncMaster";
 import { ReplacePipeline } from "@/components/crm/ReplacePipeline";
 import { CalendarClock } from "lucide-react";
 import { buttonClasses } from "@/components/ui/Button";
@@ -73,12 +72,13 @@ export default async function AdminCrmPage({
               >
                 <CalendarClock size={14} /> Send plan
               </Link>
+              {/* "Sync master list" is gone. It applied crm-pipeline-master.ts,
+                  the superseded 59-record dataset, which would resurrect the 51
+                  companies that were triaged out. Load 7 Aug pipeline does both
+                  jobs now: it applies the live list and clears what is not on
+                  it. A button that undoes the current state is not worth
+                  keeping for the one time it might be wanted. */}
               <ReplacePipeline />
-              {rows.length > 0 && (
-                <SyncMaster
-                  ruledOutCount={rows.filter((r) => r.stage === "lost").length}
-                />
-              )}
             </div>
           ) : undefined
         }

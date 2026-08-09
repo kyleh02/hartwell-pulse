@@ -948,11 +948,21 @@ export async function replacePipeline(): Promise<{
 
   const { data: orgData, error: oErr } = await supabase
     .from("crm_organisations")
-    .select("id, legal_name")
+    .select("id, legal_name, stage")
     .eq("brand", "ironpeak");
   if (oErr) throw new Error(oErr.message);
   const existing =
-    (orgData as { id: string; legal_name: string }[] | null) ?? [];
+    (orgData as { id: string; legal_name: string; stage: string }[] | null) ?? [];
+
+  // Stages that mean contact has actually happened. The file is a plan and the
+  // portal is the record of what was done, so the portal wins on these. Without
+  // this, re-syncing after a send would reset that company to "queued" with its
+  // email body restored, and the same email could go to the same person twice.
+  const AHEAD = new Set([
+    "contacted", "connected", "followed_up", "replied", "conversation",
+    "proposal", "won", "delivered",
+    "declined", "bounced", "stopped", "do_not_contact",
+  ]);
   const byName = new Map(existing.map((o) => [o.legal_name.toLowerCase(), o]));
 
   const keepNames = new Set(PIPELINE_V2.map((r) => r.company.toLowerCase()));
@@ -972,12 +982,15 @@ export async function replacePipeline(): Promise<{
       rank: row.rank,
       priority_tier: row.tier,
       channel: row.channel,
-      stage: row.stage,
+      stage: org && AHEAD.has(org.stage) ? org.stage : row.stage,
       // sendImmediately means "on receipt, override the window", which is a
       // time already past rather than a special case for the sender to know
       // about. Coastal Aviation's compromised site is the only one.
       scheduled_send_at:
-        row.scheduledSendAt ?? (row.sendImmediately ? new Date().toISOString() : null),
+        org && AHEAD.has(org.stage)
+          ? null
+          : (row.scheduledSendAt ??
+            (row.sendImmediately ? new Date().toISOString() : null)),
       followup_due: row.followupDue ?? null,
       hook: row.hook,
       hook_verified_at: row.hookVerified,
@@ -988,7 +1001,12 @@ export async function replacePipeline(): Promise<{
       // Only a "ready" email is loaded into the outbox. "held" and
       // "not-written" records carry their blocker instead, so there is nothing
       // sitting there that could be approved by accident.
-      email_body: row.emailStatus === "ready" ? row.emailBody : null,
+      email_body:
+        org && AHEAD.has(org.stage)
+          ? null
+          : row.emailStatus === "ready"
+            ? row.emailBody
+            : null,
       // Replacing the data always clears approval. An email that changed is
       // not the email that was read and approved.
       send_approved_at: null,
