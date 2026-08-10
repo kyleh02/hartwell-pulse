@@ -1264,7 +1264,16 @@ export async function unapproveSending(organisationId: string): Promise<void> {
   revalidatePath("/admin/crm/plan");
 }
 
-/** Move a send to a different minute. Never on the hour or the half hour. */
+/**
+ * Move a send to a different time.
+ *
+ * Approval is deliberately NOT cleared. The nine checks are about the content
+ * of the email, whether the name is real and the address is published and the
+ * fault is current; none of them becomes untrue because it goes at three
+ * instead of nine. Making a reschedule cost nine re-ticks would train the habit
+ * of ticking them without reading, which is the one thing they cannot survive.
+ * Editing the BODY still clears approval, because that is a different question.
+ */
 export async function setScheduledSendAt(
   organisationId: string,
   iso: string | null,
@@ -1272,7 +1281,7 @@ export async function setScheduledSendAt(
   const { supabase } = await adminSupabase();
   const { error } = await supabase
     .from("crm_organisations")
-    .update({ scheduled_send_at: iso, send_approved_at: null })
+    .update({ scheduled_send_at: iso })
     .eq("id", organisationId);
   if (error) throw new Error(error.message);
   revalidatePath("/admin/crm/plan");

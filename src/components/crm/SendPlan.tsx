@@ -13,6 +13,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { setScheduled } from "@/app/admin/crm/actions";
+import { Reschedule } from "@/components/crm/Reschedule";
 import { cn } from "@/lib/utils/cn";
 
 interface Contact {
@@ -410,7 +411,22 @@ function Row({
             {when}
           </span>
 
-          {onSchedule && !blocked && (
+          {/* Only while it can still move. Once it has gone, when it was due is
+              history rather than a setting. */}
+          {row.scheduled_send_at && !row.send_attempted_at && !blocked && (
+            <Reschedule
+              organisationId={row.id}
+              current={row.scheduled_send_at}
+            />
+          )}
+
+          {row.send_approved_at && !row.send_attempted_at && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-pulse-success">
+              <Check size={11} /> approved
+            </span>
+          )}
+
+          {onSchedule && !blocked && !row.send_approved_at && (
             <button
               type="button"
               onClick={onSchedule}
