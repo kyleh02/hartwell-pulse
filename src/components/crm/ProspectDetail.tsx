@@ -25,22 +25,13 @@ import { ContactActions } from "@/components/crm/ContactActions";
 import { celebrate } from "@/lib/celebrate";
 import type { ProspectDetail as Detail } from "@/lib/crm";
 import { cn } from "@/lib/utils/cn";
+import { PRESEND_CHECKS } from "@/lib/crm-presend";
 
 const field =
   "w-full rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 px-3 py-2 text-sm text-pulse-text focus:border-pulse-border-strong focus:outline-none";
 
 /** The nine checks, run per send rather than ticked once and reused. */
-const PRESEND = [
-  ["c1", "The name is a real one from the page you screenshotted, not a bracket"],
-  ["c2", "Every dollar figure, stream and project description copied verbatim"],
-  ["c3", "Every 'not findable' line actually searched today"],
-  ["c4", "At least one finding specific to their technical domain, not their marketing"],
-  ["c5", "At least one positive finding, with the reason it is good"],
-  ["c6", "Opt-out line present, worded exactly as in the template"],
-  ["c7", "Address is the one published verbatim on their page, not constructed"],
-  ["c8", "Screenshot of their contact page saved and dated"],
-  ["c9", "One sentence here could not have been sent to any other company"],
-] as const;
+const PRESEND = PRESEND_CHECKS;
 
 export function ProspectDetail({
   detail,

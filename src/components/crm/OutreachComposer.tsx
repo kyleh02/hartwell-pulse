@@ -10,6 +10,7 @@ import {
 } from "@/app/admin/crm/actions";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils/cn";
+import { PRESEND_CHECKS } from "@/lib/crm-presend";
 
 /**
  * The nine checks, ticked at approval rather than at send.
@@ -18,17 +19,7 @@ import { cn } from "@/lib/utils/cn";
  * same nine questions. If they ever diverge, the automated path becomes the
  * easy way to skip a check, which is the opposite of the point.
  */
-const PRESEND: readonly (readonly [string, string])[] = [
-  ["c1", "The name is a real one from the page you screenshotted, not a bracket"],
-  ["c2", "Every dollar figure, stream and project description copied verbatim"],
-  ["c3", "Every 'not findable' line actually searched today"],
-  ["c4", "At least one finding specific to their technical domain, not their marketing"],
-  ["c5", "At least one positive finding, with the reason it is good"],
-  ["c6", "Opt-out line present, worded exactly as in the template"],
-  ["c7", "Address is the one published verbatim on their page, not constructed"],
-  ["c8", "Screenshot of their contact page saved and dated"],
-  ["c9", "One sentence here could not have been sent to any other company"],
-];
+const PRESEND = PRESEND_CHECKS;
 
 export function OutreachComposer({
   organisationId,
