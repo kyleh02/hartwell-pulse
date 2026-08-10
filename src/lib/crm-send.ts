@@ -14,9 +14,21 @@ import { graphSendMail } from "@/lib/graph";
  * No phone number, on the brief's own rule. No mention of Hartwell Digital
  * either: a prospect must never see the parent brand.
  *
- * The opt-out line is written like a person wrote it. Kyle has explicitly
- * rejected formal unsubscribe blocks that read as automated, and on a genuine
- * 1:1 email one is also a tell that it is not one.
+ * THE OPT-OUT IS A REPLY, NOT A LINK, and that was a correction rather than a
+ * preference. The link pointed at portal.hartwelldigital.com and was wrong on
+ * three counts, each sufficient on its own: the domain did not match the
+ * sending domain, which is a strong spam signal on cold mail; the token made
+ * it per-recipient tracking, which the settled rules forbid on first contact;
+ * and it published the tie between Ironpeak and Hartwell Digital to every
+ * prospect, breaching the standing brand constraint. Careful work went into
+ * keeping the Hartwell wordmark off the opt-out PAGE while the Hartwell domain
+ * sat in the link above it.
+ *
+ * A reply satisfies the Spam Act. What the Act requires is a functional,
+ * low-cost way to opt out that is honoured; on genuine person-to-person mail a
+ * reply is exactly that, and it is what a real person would write. Honouring
+ * it is the operator's job, and the guard blocks every channel the moment
+ * opt_out_at is set.
  */
 
 /** Verbatim from the handoff. Text only, no images, no phone number, ever. */
@@ -29,6 +41,14 @@ export const SIGNATURE = [
   "ironpeakconsulting.com.au",
   "linkedin.com/company/ironpeak-consulting",
 ].join("\n");
+
+/**
+ * Plain, human, and no link. Kyle has explicitly rejected formal unsubscribe
+ * blocks that read as automated, and on an email meant to pass as 1:1 one of
+ * those is also a tell that it is not.
+ */
+export const OPT_OUT =
+  "If you would rather not hear from me again, just reply and say so. I will not write again.";
 
 export interface OutreachTarget {
   id: string;
@@ -49,15 +69,8 @@ export interface OutreachContact {
   opt_out_at: string | null;
 }
 
-export function buildOutreachText(body: string, optOutToken: string): string {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
-  return [
-    body.trim(),
-    "",
-    SIGNATURE,
-    "",
-    `Not interested in hearing from me? ${appUrl}/unsubscribe/${optOutToken} and I will not write again.`,
-  ].join("\n");
+export function buildOutreachText(body: string): string {
+  return [body.trim(), "", SIGNATURE, "", OPT_OUT].join("\n");
 }
 
 export type SendOutcome =
@@ -101,7 +114,7 @@ export async function sendOutreach(
     };
   }
 
-  const text = buildOutreachText(org.email_body, contact.opt_out_token);
+  const text = buildOutreachText(org.email_body);
 
   // Dry run through the guard BEFORE anything leaves. The trigger is what
   // enforces the two-email cap, the opt-out block and the nine checks, and

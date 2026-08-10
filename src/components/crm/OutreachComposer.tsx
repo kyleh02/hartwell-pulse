@@ -180,7 +180,7 @@ kyle@ironpeakconsulting.com.au
 ironpeakconsulting.com.au
 linkedin.com/company/ironpeak-consulting
 
-Not interested in hearing from me? <opt-out link> and I will not write again.`}
+If you would rather not hear from me again, just reply and say so. I will not write again.`}
         </pre>
       </details>
       <p className="mt-1.5 text-[11px] text-pulse-text-mute">

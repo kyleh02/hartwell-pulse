@@ -92,11 +92,65 @@ def iso(send_at, state):
     return f"{d}T{t}:00+10:00"
 
 
+# ---- Part H overrides the CSV on send times ----
+#
+# Change 6 rewrote Part H and did not touch the Part E CSV, so the two now
+# disagree: the CSV still holds Monday's slots, Part H holds the shifted
+# Tuesday-to-Monday week. Part H is the later authority and says so, and a
+# generator that silently preferred the stale column would put emails out at
+# times nobody chose.
+#
+# Any Part H row that cannot be matched to a company is reported rather than
+# dropped, because a send quietly missing from the schedule is the failure
+# mode this whole file exists to prevent.
+MONTHS = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
+          "Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
+
+def part_h_schedule(md, companies):
+    if "# PART H" not in md:
+        return {}, []
+    block = md[md.index("# PART H"):]
+    block = block[: block.index("## 2.")] if "## 2." in block else block
+    out, unmatched, day = {}, [], None
+    for line in block.split("\n"):
+        if not line.strip().startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) < 3:
+            continue
+        # "**Tue 11 Aug**" in the first cell, or blank to mean "same day".
+        dm = re.search(r"(\d{1,2})\s+([A-Z][a-z]{2})", cells[0].replace("*", ""))
+        if dm:
+            day = (int(dm.group(1)), MONTHS.get(dm.group(2)))
+        tm = re.match(r"^(\d{1,2}):(\d{2})$", cells[1].replace("*", "").strip())
+        if not tm or not day or day[1] is None:
+            continue
+        name = cells[2].replace("*", "").replace("~", "").strip()
+        match = None
+        for full in companies:
+            a = re.sub(r"[^a-z0-9]", "", name.lower())
+            b = re.sub(r"[^a-z0-9]", "", full.lower())
+            if a and (b.startswith(a) or a in b):
+                match = full
+                break
+        if not match:
+            unmatched.append(name)
+            continue
+        out[match] = f"2026-{day[1]:02d}-{day[0]:02d}T{int(tm.group(1)):02d}:{tm.group(2)}:00+10:00"
+    return out, unmatched
+
+H_SCHEDULE, H_UNMATCHED = part_h_schedule(md, [r["company"] for r in rows])
+print(f"Part H schedule rows: {len(H_SCHEDULE)}")
+if H_UNMATCHED:
+    print("  UNMATCHED (check these):", H_UNMATCHED)
+
+
 HARD_WARNINGS = {
     14: "NEVER reference the founder or company history in any communication with this company, ever. Their founder died in November 2021.",
     26: "NO LinkedIn presence. Email only. Do not attempt a connect request.",
     3: "BLOCKED on the Spam Act consent basis. The address was collected while their site was up; the site is gone, so the publication that created inferred consent no longer exists. Clear it by finding the address published live somewhere public today, screenshotting it onto this record, then moving to queued.",
     30: "LinkedIn only, by Kyle's instruction. No further email to this company.",
+    1: "EMAIL IS CLOSED. Their server refused the connection with 550 5.7.708, an IP-reputation rejection at their end, and Ironpeak's own sending was verified healthy the same day. Do not retry by email, it will fail the same way. Reach Robert by LinkedIn or telephone. This is an infrastructure failure, NOT a decline: he has never seen the message.",
 }
 
 # Every address in the handoff was confirmed published on the company's own
@@ -134,7 +188,11 @@ for r in rows:
         "fallbackGreeting": (r.get("fallback_greeting") or "").strip() or None,
         "sentDate": (r.get("sent_date") or "").strip() or None,
         "followupDue": (r.get("followup_due") or "").strip() or None,
-        "scheduledSendAt": iso(r.get("send_at"), r["state"]),
+        "scheduledSendAt": (
+            H_SCHEDULE.get(r["company"])
+            if H_SCHEDULE
+            else iso(r.get("send_at"), r["state"])
+        ),
         "sendImmediately": (r.get("send_at") or "").strip().upper() == "IMMEDIATE",
         "hook": "",  # filled below from the record
         "hookVerified": (r.get("hook_verified") or "").strip() or None,
