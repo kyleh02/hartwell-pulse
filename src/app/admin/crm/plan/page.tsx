@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SendPlan, type PlanRow } from "@/components/crm/SendPlan";
+import { ScheduleTable } from "@/components/crm/ScheduleTable";
 
 export const metadata = { title: "Send plan" };
 
@@ -48,6 +49,14 @@ export default async function SendPlanPage() {
         title="Send plan"
         description="What to do today, then the days after it. Approved emails go on their own at the time shown."
       />
+
+      {/* The whole schedule first, then today's work. "When is everything
+          going out" and "what do I do now" are different questions and the
+          day-grouped view only answered the second one. */}
+      <div className="mb-8">
+        <h2 className="mono-label mb-3">Everything scheduled</h2>
+        <ScheduleTable rows={rows} />
+      </div>
 
       <SendPlan rows={rows} />
     </div>
