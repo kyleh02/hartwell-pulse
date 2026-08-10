@@ -110,13 +110,19 @@ export function SendPlan({ rows }: { rows: PlanRow[] }) {
     month: "long",
   });
 
-  const followUps = rows
-    .filter((r) => r.stage === "contacted" && r.followup_due)
-    .sort((a, b) => (a.followup_due! < b.followup_due! ? -1 : 1));
-
+  // A scheduled follow-up belongs with the day it goes out, not in the list of
+  // windows still waiting on an email. Three of the eighteen sends this week
+  // are follow-ups and they were showing in the wrong place.
   const toSend = rows
-    .filter((r) => r.stage === "queued" && r.scheduled_send_at)
+    .filter((r) => r.scheduled_send_at && !r.send_attempted_at)
     .sort((a, b) => (a.scheduled_send_at! < b.scheduled_send_at! ? -1 : 1));
+  const scheduled = new Set(toSend.map((r) => r.id));
+
+  const followUps = rows
+    .filter(
+      (r) => r.stage === "contacted" && r.followup_due && !scheduled.has(r.id),
+    )
+    .sort((a, b) => (a.followup_due! < b.followup_due! ? -1 : 1));
 
   const held = rows.filter(
     (r) => r.stage === "blocked" || r.stage === "linkedin_only",

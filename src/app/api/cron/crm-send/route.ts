@@ -37,7 +37,12 @@ export async function GET(req: NextRequest) {
       "id, legal_name, trading_name, email_subject, email_body, stage, hard_warning, send_approved_checks, crm_contacts(id, first_name, surname, email_as_published, opt_out_token, opt_out_at)",
     )
     .eq("brand", "ironpeak")
-    .eq("stage", "queued")
+    // BOTH stages. Three of the eighteen scheduled sends are follow-ups to
+    // companies already contacted, and filtering to "queued" left them
+    // approved and silently unsendable. blocked, linkedin_only and the
+    // terminal stages are excluded by not being in this list; the guard
+    // refuses them again anyway.
+    .in("stage", ["queued", "contacted"])
     .not("send_approved_at", "is", null)
     .not("scheduled_send_at", "is", null)
     .lte("scheduled_send_at", now)
@@ -64,24 +69,40 @@ export async function GET(req: NextRequest) {
       org,
       contact,
       org.send_approved_checks ?? {},
+      // A follow-up is the second email, not the first. email_1 carries the
+      // extra gate about technical and positive findings, which is a rule
+      // about opening a conversation, not continuing one.
+      org.stage === "queued" ? "email_1" : "email_2",
     );
 
     if (outcome.ok) {
-      // Stage advances here rather than in sendOutreach, so the send stays one
-      // thing and the pipeline's opinion about it stays another.
+      const wasFirst = org.stage === "queued";
       const followup = new Date();
       followup.setDate(followup.getDate() + 8);
+      // Stage advances here rather than in sendOutreach, so the send stays one
+      // thing and the pipeline's opinion about it stays another.
       await supabase
         .from("crm_organisations")
         .update({
-          stage: "contacted",
+          stage: wasFirst ? "contacted" : "followed_up",
           send_attempted_at: new Date().toISOString(),
           send_error: null,
-          followup_due: followup.toISOString().slice(0, 10),
-          next_action: "LinkedIn connect in about two hours, then follow up day 8 to 10",
+          // CLEARING THIS IS WHAT STOPS A SECOND SEND. The query now includes
+          // "contacted", so without it a first contact would be picked up
+          // again five minutes later and emailed the same thing forever.
+          send_approved_at: null,
+          // Two emails per company, ever. After the follow-up there is no
+          // third, so nothing further is booked.
+          followup_due: wasFirst ? followup.toISOString().slice(0, 10) : null,
+          next_action: wasFirst
+            ? "LinkedIn connect in about two hours, then follow up day 8 to 10"
+            : "Sequence complete. Nothing further unless they reply.",
         })
         .eq("id", org.id);
-      results.push({ company: org.legal_name, status: "sent" });
+      results.push({
+        company: org.legal_name,
+        status: wasFirst ? "sent" : "followed-up",
+      });
       continue;
     }
 

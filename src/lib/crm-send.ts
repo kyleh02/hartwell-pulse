@@ -82,6 +82,7 @@ export async function sendOutreach(
   org: OutreachTarget,
   contact: OutreachContact,
   checks: Record<string, unknown>,
+  step: "email_1" | "email_2" = "email_1",
 ): Promise<SendOutcome> {
   if (!org.email_body || !org.email_subject) {
     return { ok: false, message: "No email written for this record.", permanent: true };
@@ -108,6 +109,7 @@ export async function sendOutreach(
   const { error: dryErr } = await supabase.rpc("crm_dry_run_touch", {
     p_contact_id: contact.id,
     p_checks: checks,
+    p_step: step,
   });
   if (dryErr) {
     return { ok: false, message: dryErr.message, permanent: true };
@@ -131,7 +133,7 @@ export async function sendOutreach(
     contact_id: contact.id,
     organisation_id: org.id,
     channel: "email",
-    sequence_step: "email_1",
+    sequence_step: step,
     direction: "out",
     subject: org.email_subject,
     // What was ACTUALLY sent, footer and all. If a complaint arrives, this is

@@ -62,8 +62,8 @@ export const PIPELINE_V2: PipelineRecord[] = [
     "fallbackGreeting": "Good morning,",
     "sentDate": "2026-08-05",
     "followupDue": "2026-08-13",
-    "scheduledSendAt": null,
-    "sendImmediately": true,
+    "scheduledSendAt": "2026-08-10T08:12:00+10:00",
+    "sendImmediately": false,
     "hook": "their homepage is compromised and carries hidden pharmacy spam.",
     "hookVerified": "2026-08-07",
     "emailStatus": "ready",
@@ -72,7 +72,7 @@ export const PIPELINE_V2: PipelineRecord[] = [
     "emailBlocker": null,
     "emailSourceNote": "published on the company's own website, checked 7 August 2026",
     "hardWarning": null,
-    "notes": "Hook (verified 2026-08-07, re-verified and corrected 2026-08-07 pm): their homepage is compromised and carries hidden pharmacy spam. WordPress 4.8.25 (generator tag). A 659-character block with 7 outbound links to four domains — euro2000.org, mifarmacia24.com, farmaciaespana247.com, sportzfuel.com — is injected into the homepage immediately after the CASR Part 145 paragraph. CRITICAL CORRECTION — the first draft of this email was wrong and would have failed. The spam is not visible to visitors. It sits inside: html <div style=\"position:absolute;left:-2000px;width:2000px\"> which parks it two thousand pixels off the left edge of the viewport. Invisible to humans, fully readable by search engines. That concealment is the purpose of this class of hack: it hides from the site owner while crediting the domain's search authority to the attacker's sites. Also verified: no user-agent cloaking — Chrome and Googlebot receive byte-identical responses (30,656 bytes each), so the CSS alone does the hiding. Homepage only: /capabilities/, /about/ and /contact/ are clean. Why rank 1. The only true painkiller in the pipeline. Telling them is a favour regardless of whether it produces work."
+    "notes": "first email out this week Hook (verified 2026-08-07, re-verified and corrected 2026-08-07 pm): their homepage is compromised and carries hidden pharmacy spam. WordPress 4.8.25 (generator tag). A 659-character block with 7 outbound links to four domains — euro2000.org, mifarmacia24.com, farmaciaespana247.com, sportzfuel.com — is injected into the homepage immediately after the CASR Part 145 paragraph. CRITICAL CORRECTION — the first draft of this email was wrong and would have failed. The spam is not visible to visitors. It sits inside: html <div style=\"position:absolute;left:-2000px;width:2000px\"> which parks it two thousand pixels off the left edge of the viewport. Invisible to humans, fully readable by search engines. That concealment is the purpose of this class of hack: it hides from the site owner while crediting the domain's search authority to the attacker's sites. Also verified: no user-agent cloaking — Chrome and Googlebot receive byte-identical responses (30,656 bytes each), so the CSS alone does the hiding. Homepage only: /capabilities/, /about/ and /contact/ are clean. Why rank 1.** The only true painkiller in the pipeline. Telling them is a favour regardless of whether it produces work."
   },
   {
     "rank": 2,
@@ -254,7 +254,7 @@ export const PIPELINE_V2: PipelineRecord[] = [
     "emailBlocker": null,
     "emailSourceNote": "published on the company's own website, checked 7 August 2026",
     "hardWarning": null,
-    "notes": "Hook (verified 2026-08-07): the \"Our Work\" item in their main navigation opens a page with no work on it. The nav label points to /case-studies/, which returns 611 visible characters against 3,211 for /services/. It contains the headings Stages, Design, Manufacturing and Finishing, and nothing beneath any of them. No copyright year anywhere. Elementor 4.2.2. Defence x0. Correction on file. An agent reported this page as a 404. It is not — all ten internal pages return 200. It renders empty, which is a worse fault and a more accurate claim. Addressee change from the old pipeline. It had Brett Kennewell at quotes@kennewell.com. Emilien is better: named on their own site, has a title, publishes a direct address. One contact per company, so Emilien is the record and Brett is never contacted."
+    "notes": "Hook (verified 2026-08-07): the \"Our Work\" item in their main navigation opens a page with no work on it. The nav label points to /case-studies/, which returns 611 visible characters against 3,211 for /services/. No copyright year anywhere. Elementor 4.2.2. Defence x0. Re-verified in a rendering browser (rule 23). The page paints OUR WORK, STAGES, then DESIGN, MANUFACTURING, FINISHING, followed by eight blank content slots, then GET A QUOTE and the footer. The empty slots literally render. The email's wording — \"and then nothing underneath any of them\" — is accurate. Held back, do not put in the email: their footer credit reads \"Build by Anomaly\", a typo by their own agency. The empty Our Work page is the point; adding this reads as nitpicking rather than helping. Correction on file. An agent reported this page as a 404. It is not — all ten internal pages return 200. It renders empty, which is a worse fault and a more accurate claim. Addressee change from the old pipeline. It had Brett Kennewell at quotes@kennewell.com. Emilien is better: named on their own site, has a title, publishes a direct address. One contact per company, so Emilien is the record and Brett is never contacted."
   },
   {
     "rank": 9,
@@ -306,7 +306,7 @@ export const PIPELINE_V2: PipelineRecord[] = [
     "emailBlocker": null,
     "emailSourceNote": "published on the company's own website, checked 7 August 2026",
     "hardWarning": null,
-    "notes": "Hook (verified 2026-08-07): two items in their main menu open empty pages. /results/ returns 638 visible characters — navigation and footer only. /our-team/ returns 832 and names nobody. Compare the homepage at 7,994. Both sit in the navigation on every page. Footer reads \"Copyright © Micron Manufacturing PTY LTD\" with no year. WordPress 7.0.3, current. Defence x0. Newest content 4 July 2016. Address note, easy to get backwards: the site is micronmanufacturing.com.au and micron.com.au redirects to it, but the address published on the site is info@micron.com.au."
+    "notes": "Hook (verified 2026-08-07): two items in their main menu open empty pages. /results/ returns 638 visible characters — navigation and footer only. /our-team/ returns 832 and names nobody. Compare the homepage at 7,994. Both sit in the navigation on every page. Footer reads \"Copyright © Micron Manufacturing PTY LTD\" with no year. WordPress 7.0.3, current. Defence x0. Newest content 4 July 2016. Re-verified in a rendering browser (rule 23). /results/ paints the page title, a Home > Results breadcrumb, then straight into the footer. Nothing between. Claim stands. Address note, easy to get backwards: the site is micronmanufacturing.com.au and micron.com.au redirects to it, but the address published on the site is info@micron.com.au."
   },
   {
     "rank": 11,

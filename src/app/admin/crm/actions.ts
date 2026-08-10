@@ -1228,9 +1228,12 @@ export async function approveForSending(
   if (!contactId) return { ok: false, message: "No contact on this record." };
 
   // Ask the guard now, while there is somebody here to read the answer.
+  // The same step the sender will use, so approval cannot pass a test the
+  // send then fails. A contacted company is being followed up, not opened.
   const { error: dryErr } = await supabase.rpc("crm_dry_run_touch", {
     p_contact_id: contactId,
     p_checks: checks,
+    p_step: org.stage === "queued" ? "email_1" : "email_2",
   });
   if (dryErr) return { ok: false, message: dryErr.message };
 
