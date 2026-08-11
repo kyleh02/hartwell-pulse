@@ -36,7 +36,11 @@ export async function GET(req: NextRequest) {
       "id, legal_name, trading_name, email_subject, email_body, stage, hard_warning, send_approved_checks, crm_contacts(id, first_name, surname, email_as_published, opt_out_token, opt_out_at)",
     )
     .eq("brand", "ironpeak")
-    .in("stage", ["queued", "contacted"])
+    // bounced belongs here too. Three of this week's sends are re-sends of
+    // messages that never arrived, and leaving that stage out would have left
+    // them approved and silently undraftable, which is the third time this
+    // exact filter has been too narrow.
+    .in("stage", ["queued", "contacted", "bounced"])
     .not("send_approved_at", "is", null)
     .not("scheduled_send_at", "is", null)
     .lte("scheduled_send_at", now)
@@ -65,7 +69,8 @@ export async function GET(req: NextRequest) {
       org,
       contact,
       org.send_approved_checks ?? {},
-      org.stage === "queued" ? "email_1" : "email_2",
+      // A re-send of a message nobody received is still the first email.
+      org.stage === "contacted" ? "email_2" : "email_1",
     );
 
     if (res.ok) {

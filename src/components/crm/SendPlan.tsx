@@ -152,7 +152,11 @@ Only do this once the email has actually left Outlook. This writes the complianc
   // windows still waiting on an email. Three of the eighteen sends this week
   // are follow-ups and they were showing in the wrong place.
   const toSend = rows
-    .filter((r) => r.scheduled_send_at && !r.send_attempted_at)
+    .filter(
+      (r) =>
+        r.scheduled_send_at &&
+        (!r.send_attempted_at || r.stage === "bounced"),
+    )
     .sort((a, b) => (a.scheduled_send_at! < b.scheduled_send_at! ? -1 : 1));
   const scheduled = new Set(toSend.map((r) => r.id));
 
@@ -170,8 +174,10 @@ Only do this once the email has actually left Outlook. This writes the complianc
 
   // Anything already out the door. Kept visible rather than filed away: seeing
   // what has gone is half of knowing what to do next.
+  // A bounced record is not "sent". It was attempted and rejected, and it is
+  // going out again.
   const sent = rows
-    .filter((r) => r.send_attempted_at && !r.send_error)
+    .filter((r) => r.send_attempted_at && !r.send_error && r.stage !== "bounced")
     .sort((a, b) => (a.send_attempted_at! > b.send_attempted_at! ? -1 : 1));
 
   const failed = rows.filter((r) => r.send_error);

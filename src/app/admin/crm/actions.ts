@@ -979,8 +979,17 @@ export async function replacePipeline(): Promise<{
    * was written and the email it carries is the one already in their inbox.
    * That is the one that must not be reloaded and approved a second time.
    */
+  // When the FILE says bounced or email_closed it is reporting something the
+  // portal cannot know: that a message was rejected, or that a mail server
+  // refuses this sender. The file wins outright on those, or a record the
+  // portal still thinks is "contacted" would keep that stage and have its
+  // rewritten email cleared.
+  const FILE_WINS = new Set(["bounced", "email_closed"]);
   const portalAhead = (stored: string | undefined, fromFile: string) =>
-    Boolean(stored) && AHEAD.has(stored!) && !AHEAD.has(fromFile);
+    Boolean(stored) &&
+    !FILE_WINS.has(fromFile) &&
+    AHEAD.has(stored!) &&
+    !AHEAD.has(fromFile);
   const byName = new Map(existing.map((o) => [o.legal_name.toLowerCase(), o]));
 
   const keepNames = new Set(PIPELINE_V2.map((r) => r.company.toLowerCase()));
