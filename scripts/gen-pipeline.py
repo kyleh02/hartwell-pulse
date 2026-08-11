@@ -80,6 +80,11 @@ STAGE = {
     "queued": "queued",
     "blocked": "blocked",
     "linkedin-only": "linkedin_only",
+    # Change 8: a bounce means the recipient never saw it and refused nothing,
+    # so it is no longer terminal. email-closed is Coastal: email is not
+    # viable, LinkedIn and phone stay open.
+    "bounced": "bounced",
+    "email-closed": "email_closed",
 }
 
 def iso(send_at, state):
@@ -109,8 +114,11 @@ MONTHS = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
 def part_h_schedule(md, companies):
     if "# PART H" not in md:
         return {}, []
+    # The WHOLE of Part H, not a slice of it. An earlier version cut at
+    # "## 2.", which was fine when the schedule was section 1 and silently
+    # returned nothing the moment the schedule moved to section 2. The strict
+    # HH:MM test below is what keeps other tables out, not the boundary.
     block = md[md.index("# PART H"):]
-    block = block[: block.index("## 2.")] if "## 2." in block else block
     out, unmatched, day = {}, [], None
     for line in block.split("\n"):
         if not line.strip().startswith("|"):
@@ -188,11 +196,8 @@ for r in rows:
         "fallbackGreeting": (r.get("fallback_greeting") or "").strip() or None,
         "sentDate": (r.get("sent_date") or "").strip() or None,
         "followupDue": (r.get("followup_due") or "").strip() or None,
-        "scheduledSendAt": (
-            H_SCHEDULE.get(r["company"])
-            if H_SCHEDULE
-            else iso(r.get("send_at"), r["state"])
-        ),
+        # Part E no longer carries send_at at all. Part H is the clock.
+        "scheduledSendAt": H_SCHEDULE.get(r["company"]),
         "sendImmediately": (r.get("send_at") or "").strip().upper() == "IMMEDIATE",
         "hook": "",  # filled below from the record
         "hookVerified": (r.get("hook_verified") or "").strip() or None,
@@ -231,7 +236,15 @@ header = '''/**
  * which 51 were triaged out; those are gone deliberately.
  */
 
-export type PipelineStage = "contacted" | "queued" | "blocked" | "linkedin_only";
+export type PipelineStage =
+  | "contacted"
+  | "queued"
+  | "blocked"
+  | "linkedin_only"
+  /** Bounced, and NOT terminal: nobody saw it, so nobody refused it. */
+  | "bounced"
+  /** Their server refuses this sender. LinkedIn and phone stay open. */
+  | "email_closed";
 export type EmailStatus = "ready" | "held" | "not-written";
 
 export interface PipelineRecord {

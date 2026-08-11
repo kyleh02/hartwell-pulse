@@ -120,8 +120,14 @@ export async function draftOutreach(
   if (contact.opt_out_at) {
     return { ok: false, message: "This contact has opted out." };
   }
-  if (org.stage === "blocked" || org.stage === "linkedin_only") {
-    return { ok: false, message: `Stage is ${org.stage}, which cannot send.` };
+  if (["blocked", "linkedin_only", "email_closed"].includes(org.stage)) {
+    return {
+      ok: false,
+      message:
+        org.stage === "email_closed"
+          ? "Email to this company is closed: their server refuses it. Use LinkedIn or the phone."
+          : `Stage is ${org.stage}, which cannot send.`,
+    };
   }
 
   const { error: dryErr } = await supabase.rpc("crm_dry_run_touch", {

@@ -162,8 +162,10 @@ Only do this once the email has actually left Outlook. This writes the complianc
     )
     .sort((a, b) => (a.followup_due! < b.followup_due! ? -1 : 1));
 
-  const held = rows.filter(
-    (r) => r.stage === "blocked" || r.stage === "linkedin_only",
+  // Not sending by email. bounced is NOT here: a bounce means it never
+  // arrived, so those go back in the queue as re-sends.
+  const held = rows.filter((r) =>
+    ["blocked", "linkedin_only", "email_closed"].includes(r.stage),
   );
 
   // Anything already out the door. Kept visible rather than filed away: seeing
@@ -329,7 +331,13 @@ Only do this once the email has actually left Outlook. This writes the complianc
                 key={r.id}
                 row={r}
                 tone="quiet"
-                when={r.stage === "blocked" ? "blocked" : "LinkedIn only"}
+                when={
+                  r.stage === "blocked"
+                    ? "blocked"
+                    : r.stage === "email_closed"
+                      ? "email closed"
+                      : "LinkedIn only"
+                }
                 busy={false}
               />
             ))}
@@ -360,7 +368,9 @@ function Row({
   const c = row.contact ?? null;
   const name = [c?.first_name, c?.surname].filter(Boolean).join(" ");
   const stale = hookIsStale(row.hook_verified_at);
-  const blocked = row.stage === "blocked" || row.stage === "linkedin_only";
+  const blocked = ["blocked", "linkedin_only", "email_closed"].includes(
+    row.stage,
+  );
 
   return (
     <div
