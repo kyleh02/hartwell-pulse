@@ -123,3 +123,52 @@ export async function graphSendMail(args: {
     throw new Error(`Graph sendMail ${res.status}: ${detail.slice(0, 400)}`);
   }
 }
+
+/**
+ * Put a finished draft in the mailbox rather than sending it.
+ *
+ * This is the whole point of the change. Sending through Graph put four
+ * messages into the high-risk delivery pool and none of them arrived; the same
+ * words typed in Outlook go out fine. A draft leaves the sending to Outlook,
+ * on the interactive path that works, and keeps everything else the portal
+ * does for it.
+ *
+ * Returns the id and the deep link, so the portal can hand Kyle straight to
+ * the draft rather than telling him to go and find it.
+ */
+export async function graphCreateDraft(args: {
+  to: string;
+  subject: string;
+  text: string;
+}): Promise<{ id: string; webLink: string }> {
+  if (!graphConfigured()) {
+    throw new Error(
+      "Outlook is not configured. Set MS_GRAPH_TENANT_ID, MS_GRAPH_CLIENT_ID, MS_GRAPH_CLIENT_SECRET and IRONPEAK_SEND_FROM.",
+    );
+  }
+  const from = process.env.IRONPEAK_SEND_FROM!;
+  const token = await accessToken();
+
+  const res = await fetch(`${GRAPH}/users/${encodeURIComponent(from)}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      subject: args.subject,
+      // Plain text, same as before. A cold 1:1 email that arrives as a styled
+      // HTML document reads as marketing however good the words are.
+      body: { contentType: "Text", content: args.text },
+      toRecipients: [{ emailAddress: { address: args.to } }],
+    }),
+  });
+
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`Graph createDraft ${res.status}: ${detail.slice(0, 400)}`);
+  }
+  const json = (await res.json()) as { id?: string; webLink?: string };
+  if (!json.id) throw new Error("Graph created no draft id");
+  return { id: json.id, webLink: json.webLink ?? "" };
+}

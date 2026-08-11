@@ -11,8 +11,10 @@ import {
   Clock,
   Linkedin,
   ShieldAlert,
+  FileEdit,
+  ExternalLink,
 } from "lucide-react";
-import { setScheduled } from "@/app/admin/crm/actions";
+import { setScheduled, draftNow, markSent } from "@/app/admin/crm/actions";
 import { Reschedule } from "@/components/crm/Reschedule";
 import { cn } from "@/lib/utils/cn";
 
@@ -45,6 +47,8 @@ export interface PlanRow {
   send_attempted_at: string | null;
   send_error: string | null;
   email_body: string | null;
+  draft_created_at: string | null;
+  graph_web_link: string | null;
   crm_contacts: Contact | Contact[] | null;
   contact?: Contact | null;
 }
@@ -93,6 +97,39 @@ export function SendPlan({ rows }: { rows: PlanRow[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState<string | null>(null);
+
+  const [note, setNote] = useState<string | null>(null);
+
+  function makeDraft(row: PlanRow) {
+    setBusy(row.id);
+    setNote(null);
+    startTransition(async () => {
+      const res = await draftNow(row.id);
+      setBusy(null);
+      if (!res.ok) setNote(res.message);
+      else setNote(`Draft is in Outlook for ${row.legal_name}. Send it there, then mark it sent.`);
+      router.refresh();
+    });
+  }
+
+  function confirm(row: PlanRow) {
+    if (
+      !window.confirm(
+        `Mark ${row.legal_name} as sent?
+
+Only do this once the email has actually left Outlook. This writes the compliance record and starts the day 8 to 10 follow-up clock.`,
+      )
+    )
+      return;
+    setBusy(row.id);
+    setNote(null);
+    startTransition(async () => {
+      const res = await markSent(row.id);
+      setBusy(null);
+      if (!res.ok) setNote(res.message);
+      router.refresh();
+    });
+  }
 
   function toggleScheduled(row: PlanRow) {
     setBusy(row.id);
@@ -155,6 +192,11 @@ export function SendPlan({ rows }: { rows: PlanRow[] }) {
 
   return (
     <div className="space-y-8">
+      {note && (
+        <p className="rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface-2 px-4 py-3 text-sm text-pulse-text-dim">
+          {note}
+        </p>
+      )}
       <section>
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-lg font-semibold text-pulse-text">Today</h2>
@@ -183,6 +225,8 @@ export function SendPlan({ rows }: { rows: PlanRow[] }) {
                       : timeOf(r.scheduled_send_at!)
                   }
                   onSchedule={() => toggleScheduled(r)}
+                  onDraft={() => makeDraft(r)}
+                  onSent={() => confirm(r)}
                   busy={pending && busy === r.id}
                 />
               );
@@ -231,6 +275,8 @@ export function SendPlan({ rows }: { rows: PlanRow[] }) {
                         : `due in ${due} day${due === 1 ? "" : "s"}`
                   }
                   onSchedule={() => toggleScheduled(r)}
+                  onDraft={() => makeDraft(r)}
+                  onSent={() => confirm(r)}
                   busy={pending && busy === r.id}
                 />
               );
@@ -299,12 +345,16 @@ function Row({
   tone,
   when,
   onSchedule,
+  onDraft,
+  onSent,
   busy,
 }: {
   row: PlanRow;
   tone: "quiet" | "warn" | "danger";
   when: string;
   onSchedule?: () => void;
+  onDraft?: () => void;
+  onSent?: () => void;
   busy: boolean;
 }) {
   const c = row.contact ?? null;
@@ -443,13 +493,51 @@ function Row({
             </button>
           )}
 
-          {!blocked && (
-            <Link
-              href={`/admin/crm/${row.id}`}
-              className="inline-flex items-center gap-1.5 rounded-[var(--radius-input)] bg-pulse-gold px-2.5 py-1.5 text-xs font-medium text-pulse-bg transition-colors hover:bg-pulse-gold-light"
-            >
-              Log the send
-            </Link>
+          {/* The three states of a send, in order. Draft it, send it in
+              Outlook, then say so here. Only the last one writes a record,
+              because only the last one is true. */}
+          {!blocked && !row.send_attempted_at && (
+            <>
+              {!row.draft_created_at && onDraft && (
+                <button
+                  type="button"
+                  onClick={onDraft}
+                  disabled={busy || !row.email_body}
+                  title={
+                    row.email_body
+                      ? "Put a finished draft in your Outlook"
+                      : "No email written for this record yet"
+                  }
+                  className="inline-flex items-center gap-1.5 rounded-[var(--radius-input)] bg-pulse-gold px-2.5 py-1.5 text-xs font-medium text-pulse-bg transition-colors hover:bg-pulse-gold-light disabled:opacity-50"
+                >
+                  <FileEdit size={12} /> {busy ? "…" : "Draft in Outlook"}
+                </button>
+              )}
+              {row.draft_created_at && (
+                <>
+                  {row.graph_web_link && (
+                    <a
+                      href={row.graph_web_link}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-[var(--radius-input)] border border-pulse-border px-2.5 py-1.5 text-xs text-pulse-text-dim hover:border-pulse-border-strong hover:text-pulse-text"
+                    >
+                      <ExternalLink size={12} /> Open draft
+                    </a>
+                  )}
+                  {onSent && (
+                    <button
+                      type="button"
+                      onClick={onSent}
+                      disabled={busy}
+                      className="inline-flex items-center gap-1.5 rounded-[var(--radius-input)] bg-pulse-gold px-2.5 py-1.5 text-xs font-medium text-pulse-bg transition-colors hover:bg-pulse-gold-light disabled:opacity-50"
+                    >
+                      <Check size={12} /> {busy ? "…" : "I sent it"}
+                    </button>
+                  )}
+                </>
+              )}
+            </>
           )}
 
           {blocked && (

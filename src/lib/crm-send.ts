@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { graphSendMail } from "@/lib/graph";
+import { graphCreateDraft } from "@/lib/graph";
 
 /**
  * Composing and sending one outreach email.
@@ -90,7 +90,70 @@ export type SendOutcome =
  * moved to blocked, if the checks are incomplete, the trigger refuses. That is
  * deliberate: the guard is the last word, not this function.
  */
-export async function sendOutreach(
+/**
+ * Put one approved email into the Outlook drafts folder.
+ *
+ * Deliberately does NOT log a touch. A draft is not a send, and the touch log
+ * is the Spam Act record; writing one here would record messages that never
+ * left, which is precisely the failure that caused this rewrite. The touch is
+ * written by confirmSent, after the email has actually gone.
+ *
+ * The guard is still asked first, and asked in full. A record that could not
+ * lawfully be emailed must not get a ready-to-send draft sitting in a folder
+ * waiting for a tired thumb.
+ */
+export async function draftOutreach(
+  supabase: SupabaseClient,
+  org: OutreachTarget,
+  contact: OutreachContact,
+  checks: Record<string, unknown>,
+  step: "email_1" | "email_2" = "email_1",
+): Promise<
+  { ok: true; id: string; webLink: string } | { ok: false; message: string }
+> {
+  if (!org.email_body || !org.email_subject) {
+    return { ok: false, message: "No email written for this record." };
+  }
+  if (!contact.email_as_published) {
+    return { ok: false, message: "No published address on the contact." };
+  }
+  if (contact.opt_out_at) {
+    return { ok: false, message: "This contact has opted out." };
+  }
+  if (org.stage === "blocked" || org.stage === "linkedin_only") {
+    return { ok: false, message: `Stage is ${org.stage}, which cannot send.` };
+  }
+
+  const { error: dryErr } = await supabase.rpc("crm_dry_run_touch", {
+    p_contact_id: contact.id,
+    p_checks: checks,
+    p_step: step,
+  });
+  if (dryErr) return { ok: false, message: dryErr.message };
+
+  try {
+    const draft = await graphCreateDraft({
+      to: contact.email_as_published,
+      subject: org.email_subject,
+      text: buildOutreachText(org.email_body),
+    });
+    return { ok: true, ...draft };
+  } catch (e) {
+    return {
+      ok: false,
+      message: e instanceof Error ? e.message : "Could not create the draft.",
+    };
+  }
+}
+
+/**
+ * Record that a drafted email was actually sent.
+ *
+ * This is where the touch is written, and it is written with the exact text
+ * that was drafted. Kyle presses send in Outlook, then confirms here; the gap
+ * between those two is the price of using a delivery path that works.
+ */
+export async function confirmSent(
   supabase: SupabaseClient,
   org: OutreachTarget,
   contact: OutreachContact,
@@ -98,48 +161,7 @@ export async function sendOutreach(
   step: "email_1" | "email_2" = "email_1",
 ): Promise<SendOutcome> {
   if (!org.email_body || !org.email_subject) {
-    return { ok: false, message: "No email written for this record.", permanent: true };
-  }
-  if (!contact.email_as_published) {
-    return { ok: false, message: "No published address on the contact.", permanent: true };
-  }
-  if (contact.opt_out_at) {
-    return { ok: false, message: "This contact has opted out.", permanent: true };
-  }
-  if (org.stage === "blocked" || org.stage === "linkedin_only") {
-    return {
-      ok: false,
-      message: `Stage is ${org.stage}, which cannot send.`,
-      permanent: true,
-    };
-  }
-
-  const text = buildOutreachText(org.email_body);
-
-  // Dry run through the guard BEFORE anything leaves. The trigger is what
-  // enforces the two-email cap, the opt-out block and the nine checks, and
-  // finding out it refuses after the email has gone is finding out too late.
-  const { error: dryErr } = await supabase.rpc("crm_dry_run_touch", {
-    p_contact_id: contact.id,
-    p_checks: checks,
-    p_step: step,
-  });
-  if (dryErr) {
-    return { ok: false, message: dryErr.message, permanent: true };
-  }
-
-  try {
-    await graphSendMail({
-      to: contact.email_as_published,
-      subject: org.email_subject,
-      text,
-    });
-  } catch (e) {
-    // A transport failure is worth retrying on the next pass; a refusal from
-    // Graph about permissions or a bad address is not.
-    const message = e instanceof Error ? e.message : "Send failed";
-    const permanent = /40[0-4]|InvalidRecipients|ErrorInvalidUser/i.test(message);
-    return { ok: false, message, permanent };
+    return { ok: false, message: "No email on this record.", permanent: true };
   }
 
   const { error } = await supabase.from("crm_touches").insert({
@@ -149,20 +171,9 @@ export async function sendOutreach(
     sequence_step: step,
     direction: "out",
     subject: org.email_subject,
-    // What was ACTUALLY sent, footer and all. If a complaint arrives, this is
-    // the defence, and it has to be the real thing rather than the template.
-    body_snapshot: text,
+    body_snapshot: buildOutreachText(org.email_body),
     presend_checks: checks,
   });
-  if (error) {
-    // The email is already gone. Say so loudly rather than pretending it did
-    // not happen: an unlogged send is a compliance gap, not a retry.
-    return {
-      ok: false,
-      message: `SENT but not logged, fix by hand: ${error.message}`,
-      permanent: true,
-    };
-  }
-
+  if (error) return { ok: false, message: error.message, permanent: true };
   return { ok: true };
 }

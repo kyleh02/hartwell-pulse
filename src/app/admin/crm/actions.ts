@@ -7,6 +7,7 @@ import { FOLLOW_UP_DAYS } from "@/lib/crm-shared";
 import { SEED_ORGS, SEED_GRANTS } from "@/lib/crm-seed-data";
 import { PIPELINE_MASTER } from "@/lib/crm-pipeline-master";
 import { PIPELINE_V2 } from "@/lib/crm-pipeline-v2";
+import { draftOutreach, confirmSent } from "@/lib/crm-send";
 
 /**
  * CRM actions. The crm_* tables carry an admin-only RLS policy, so these use
@@ -1285,4 +1286,111 @@ export async function setScheduledSendAt(
     .eq("id", organisationId);
   if (error) throw new Error(error.message);
   revalidatePath("/admin/crm/plan");
+}
+
+/** Put the draft in Outlook now, rather than waiting for its slot. */
+export async function draftNow(
+  organisationId: string,
+): Promise<{ ok: true; webLink: string } | { ok: false; message: string }> {
+  const { supabase } = await adminSupabase();
+  const { data } = await supabase
+    .from("crm_organisations")
+    .select(
+      "id, legal_name, trading_name, email_subject, email_body, stage, hard_warning, send_approved_checks, crm_contacts(id, first_name, surname, email_as_published, opt_out_token, opt_out_at)",
+    )
+    .eq("id", organisationId)
+    .maybeSingle();
+  const org = data as
+    | (Parameters<typeof draftOutreach>[1] & {
+        send_approved_checks: Record<string, boolean>;
+        crm_contacts: Parameters<typeof draftOutreach>[2][] | null;
+      })
+    | null;
+  if (!org) return { ok: false, message: "That record no longer exists." };
+  const contact = org.crm_contacts?.[0];
+  if (!contact) return { ok: false, message: "No contact on this record." };
+
+  const res = await draftOutreach(
+    supabase,
+    org,
+    contact,
+    org.send_approved_checks ?? {},
+    org.stage === "queued" ? "email_1" : "email_2",
+  );
+  if (!res.ok) return res;
+
+  await supabase
+    .from("crm_organisations")
+    .update({
+      draft_created_at: new Date().toISOString(),
+      graph_message_id: res.id,
+      graph_web_link: res.webLink,
+      send_error: null,
+      next_action: "Draft is in Outlook. Send it, then mark it sent here.",
+    })
+    .eq("id", organisationId);
+
+  revalidatePath("/admin/crm/plan");
+  revalidatePath(`/admin/crm/${organisationId}`);
+  return { ok: true, webLink: res.webLink };
+}
+
+/**
+ * Kyle pressed send in Outlook. Write the touch and move the pipeline on.
+ *
+ * This is the only place an outbound email touch is created now. The gap
+ * between pressing send in Outlook and pressing this is the price of using a
+ * delivery path that works, and it is a better price than a log full of
+ * messages that never arrived.
+ */
+export async function markSent(
+  organisationId: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const { supabase } = await adminSupabase();
+  const { data } = await supabase
+    .from("crm_organisations")
+    .select(
+      "id, legal_name, trading_name, email_subject, email_body, stage, hard_warning, send_approved_checks, crm_contacts(id, first_name, surname, email_as_published, opt_out_token, opt_out_at)",
+    )
+    .eq("id", organisationId)
+    .maybeSingle();
+  const org = data as
+    | (Parameters<typeof confirmSent>[1] & {
+        send_approved_checks: Record<string, boolean>;
+        crm_contacts: Parameters<typeof confirmSent>[2][] | null;
+      })
+    | null;
+  if (!org) return { ok: false, message: "That record no longer exists." };
+  const contact = org.crm_contacts?.[0];
+  if (!contact) return { ok: false, message: "No contact on this record." };
+
+  const wasFirst = org.stage === "queued";
+  const res = await confirmSent(
+    supabase,
+    org,
+    contact,
+    org.send_approved_checks ?? {},
+    wasFirst ? "email_1" : "email_2",
+  );
+  if (!res.ok) return { ok: false, message: res.message };
+
+  const followup = new Date();
+  followup.setDate(followup.getDate() + 8);
+  await supabase
+    .from("crm_organisations")
+    .update({
+      stage: wasFirst ? "contacted" : "followed_up",
+      send_attempted_at: new Date().toISOString(),
+      send_approved_at: null,
+      send_error: null,
+      followup_due: wasFirst ? followup.toISOString().slice(0, 10) : null,
+      next_action: wasFirst
+        ? "LinkedIn connect in about two hours, then follow up day 8 to 10"
+        : "Sequence complete. Nothing further unless they reply.",
+    })
+    .eq("id", organisationId);
+
+  revalidatePath("/admin/crm/plan");
+  revalidatePath(`/admin/crm/${organisationId}`);
+  return { ok: true };
 }

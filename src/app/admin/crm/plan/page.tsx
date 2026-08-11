@@ -22,7 +22,7 @@ export default async function SendPlanPage() {
   const { data } = await supabase
     .from("crm_organisations")
     .select(
-      "id, legal_name, trading_name, state, domain, rank, priority_tier, channel, stage, scheduled_send_at, scheduled_at, followup_due, hook, hook_verified_at, hard_warning, send_approved_at, send_attempted_at, send_error, email_body, crm_contacts(first_name, surname, role_title, email_as_published, name_verified, fallback_greeting)",
+      "id, legal_name, trading_name, state, domain, rank, priority_tier, channel, stage, scheduled_send_at, scheduled_at, followup_due, hook, hook_verified_at, hard_warning, send_approved_at, send_attempted_at, send_error, email_body, draft_created_at, graph_web_link, crm_contacts(first_name, surname, role_title, email_as_published, name_verified, fallback_greeting)",
     )
     .eq("brand", "ironpeak")
     .order("rank");
