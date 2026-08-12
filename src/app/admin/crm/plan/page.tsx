@@ -4,6 +4,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SendPlan, type PlanRow } from "@/components/crm/SendPlan";
 import { ScheduleTable } from "@/components/crm/ScheduleTable";
+import { AutoSchedule } from "@/components/crm/AutoSchedule";
 
 export const metadata = { title: "Send plan" };
 
@@ -54,7 +55,10 @@ export default async function SendPlanPage() {
           going out" and "what do I do now" are different questions and the
           day-grouped view only answered the second one. */}
       <div className="mb-8">
-        <h2 className="mono-label mb-3">Everything scheduled</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="mono-label">Everything scheduled</h2>
+          <AutoSchedule />
+        </div>
         <ScheduleTable rows={rows} />
       </div>
 

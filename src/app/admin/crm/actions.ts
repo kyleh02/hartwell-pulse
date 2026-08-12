@@ -1403,3 +1403,138 @@ export async function markSent(
   revalidatePath(`/admin/crm/${organisationId}`);
   return { ok: true };
 }
+
+/**
+ * Lay the whole queue out across the coming weekdays, so the schedule stops
+ * being something written by hand in a document and re-typed here.
+ *
+ * The rules it keeps, all of them Kyle's:
+ *
+ *  - Four a day, weekdays only.
+ *  - Never on the hour or the half hour. Mail that lands at 9:00 reads as
+ *    machinery; 8:47 reads as a person who happened to be at their desk. The
+ *    slot times are the ones already proven in the handoff rather than random
+ *    numbers, so the pattern stays plausible across a week.
+ *  - WA companies go at 11:00 AEST or later, so they land mid-morning Perth
+ *    rather than before anyone has sat down.
+ *  - A follow-up lands inside its day 8 to 10 window, never before it opens.
+ *    That constraint wins over the four-a-day shape: a follow-up sent early is
+ *    worse than a day with five on it.
+ *  - blocked, linkedin_only and email_closed get no slot at all.
+ *
+ * It only ever moves records that have not been drafted, so anything already
+ * in the Outlook folder keeps the time it went out on.
+ */
+const DAY_SLOTS: readonly (readonly [number, number])[][] = [
+  [[8, 47], [10, 26], [11, 24], [14, 23]],
+  [[8, 52], [10, 34], [11, 47], [15, 7]],
+  [[8, 39], [9, 26], [11, 38], [15, 22]],
+  [[9, 18], [11, 41], [13, 16], [15, 41]],
+];
+
+export async function autoSchedule(
+  fromISODate?: string,
+): Promise<{ scheduled: number; firstDay: string | null }> {
+  const { supabase } = await adminSupabase();
+
+  const { data } = await supabase
+    .from("crm_organisations")
+    .select("id, legal_name, state, rank, stage, followup_due")
+    .eq("brand", "ironpeak")
+    .in("stage", ["queued", "contacted", "bounced"])
+    .is("draft_created_at", null)
+    .not("email_body", "is", null)
+    .order("rank");
+  const rows =
+    (data as {
+      id: string;
+      legal_name: string;
+      state: string | null;
+      rank: number | null;
+      stage: string;
+      followup_due: string | null;
+    }[] | null) ?? [];
+  if (rows.length === 0) return { scheduled: 0, firstDay: null };
+
+  // Start tomorrow unless told otherwise, so today's part-finished day is not
+  // reshuffled underneath whatever is already in progress.
+  const start = fromISODate ? new Date(`${fromISODate}T00:00:00+10:00`) : new Date();
+  if (!fromISODate) start.setDate(start.getDate() + 1);
+  start.setHours(0, 0, 0, 0);
+
+  const followUps = rows.filter((r) => r.stage === "contacted" && r.followup_due);
+  const firstContacts = rows.filter((r) => !followUps.includes(r));
+  const waFirst = firstContacts.filter((r) => r.state === "WA");
+  const other = firstContacts.filter((r) => r.state !== "WA");
+
+  const updates: { id: string; at: Date }[] = [];
+  const used = new Map<string, number>(); // day key -> slots taken
+
+  const dayKey = (d: Date) => d.toISOString().slice(0, 10);
+  const isWeekend = (d: Date) => d.getDay() === 0 || d.getDay() === 6;
+
+  // Follow-ups first, pinned to the day their window opens.
+  for (const f of followUps) {
+    const d = new Date(`${f.followup_due}T00:00:00+10:00`);
+    while (isWeekend(d)) d.setDate(d.getDate() + 1);
+    const k = dayKey(d);
+    const i = used.get(k) ?? 0;
+    const [h, m] = DAY_SLOTS[d.getDate() % DAY_SLOTS.length][Math.min(i, 3)];
+    const at = new Date(d);
+    at.setHours(h, m, 0, 0);
+    updates.push({ id: f.id, at });
+    used.set(k, i + 1);
+  }
+
+  // Then everything else, four a day, WA only into slots at 11:00 or later.
+  const day = new Date(start);
+  while (waFirst.length + other.length > 0) {
+    if (isWeekend(day)) {
+      day.setDate(day.getDate() + 1);
+      continue;
+    }
+    const k = dayKey(day);
+    const slots = DAY_SLOTS[day.getDate() % DAY_SLOTS.length];
+    for (let i = used.get(k) ?? 0; i < 4; i++) {
+      const [h, m] = slots[i];
+      const lateEnough = h >= 11;
+      const pick =
+        lateEnough && waFirst.length > 0 ? waFirst.shift() : other.shift();
+      // Only a late slot can take a WA company, so if the general queue is
+      // empty and this slot is early, leave it empty rather than land at 6am
+      // Perth.
+      if (!pick) {
+        if (!lateEnough || waFirst.length === 0) break;
+        const wa = waFirst.shift();
+        if (!wa) break;
+        const at = new Date(day);
+        at.setHours(h, m, 0, 0);
+        updates.push({ id: wa.id, at });
+        used.set(k, i + 1);
+        continue;
+      }
+      const at = new Date(day);
+      at.setHours(h, m, 0, 0);
+      updates.push({ id: pick.id, at });
+      used.set(k, i + 1);
+    }
+    day.setDate(day.getDate() + 1);
+  }
+
+  for (const u of updates) {
+    const { error } = await supabase
+      .from("crm_organisations")
+      .update({ scheduled_send_at: u.at.toISOString() })
+      .eq("id", u.id);
+    if (error) throw new Error(error.message);
+  }
+
+  revalidatePath("/admin/crm/plan");
+  return {
+    scheduled: updates.length,
+    firstDay: updates.length
+      ? updates.map((u) => u.at).sort((a, b) => a.getTime() - b.getTime())[0]
+          .toISOString()
+      : null,
+  };
+}
