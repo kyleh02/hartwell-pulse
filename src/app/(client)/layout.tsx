@@ -41,6 +41,12 @@ export default async function ClientLayout({
     );
   }
 
+  // RLS keeps this to their own visible previews, so the tab appears exactly
+  // when there is something behind it.
+  const { count: previewCount } = await supabase
+    .from("client_previews")
+    .select("id", { count: "exact", head: true });
+
   const name =
     session.profile?.full_name ?? session.profile?.email ?? "Client";
 
@@ -50,6 +56,7 @@ export default async function ClientLayout({
       user={{ name, email: session.profile?.email ?? null }}
       clientName={client?.business_name ?? null}
       clientLogoUrl={client?.logo_url ?? null}
+      hasPreview={(previewCount ?? 0) > 0}
     >
       {children}
     </Shell>

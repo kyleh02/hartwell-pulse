@@ -1,4 +1,5 @@
 import {
+  Globe,
   LayoutDashboard,
   FileText,
   FolderOpen,
@@ -25,6 +26,7 @@ export const clientNav: NavItem[] = [
   { label: "Reports", href: "/reports", icon: FileText },
   { label: "Assets", href: "/assets", icon: FolderOpen },
   { label: "Copy", href: "/copy", icon: PenLine },
+  { label: "Website", href: "/website", icon: Globe },
   { label: "Messages", href: "/messages", icon: MessageSquare, badge: "messages" },
   { label: "Invoices", href: "/invoices", icon: Receipt },
 ];

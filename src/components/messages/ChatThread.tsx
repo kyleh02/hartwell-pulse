@@ -55,6 +55,46 @@ function attachmentsOf(m: Message): Attachment[] {
  * on the ORIGINAL string via regex, so indexes can't drift (toLowerCase changes
  * string length for some Unicode characters).
  */
+/**
+ * Turn bare URLs in a message into links.
+ *
+ * They were rendering as plain text, so a preview link pasted into a chat had
+ * to be selected and copied by hand. Parsed into elements rather than injected
+ * as HTML, so nothing in a message body can inject markup.
+ *
+ * Only http and https. A message is written by a person on the other side of
+ * an account boundary, and javascript: or data: in something that renders as a
+ * clickable link is not a thing to be permissive about.
+ */
+const URL_RE = /https?:\/\/[^\s<>"')\]]+/gi;
+
+function renderLinks(text: string, keyBase: string): React.ReactNode[] {
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  let i = 0;
+  let m: RegExpExecArray | null;
+  URL_RE.lastIndex = 0;
+  while ((m = URL_RE.exec(text)) !== null) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    // Trailing punctuation is almost always the sentence, not the address.
+    const raw = m[0].replace(/[.,;:!?]+$/, "");
+    out.push(
+      <a
+        key={`${keyBase}-l${i++}`}
+        href={raw}
+        target="_blank"
+        rel="noreferrer noopener"
+        className="underline decoration-pulse-gold/50 underline-offset-2 hover:decoration-pulse-gold"
+      >
+        {raw}
+      </a>,
+    );
+    last = m.index + raw.length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
 function renderHighlighted(text: string, q: string): React.ReactNode {
   if (!q) return text;
   const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
@@ -825,7 +865,9 @@ export function ChatThread({
                     ) : (
                       m.body && (
                         <p className="whitespace-pre-wrap break-words">
-                          {q.length >= 2 ? renderHighlighted(m.body, q) : m.body}
+                          {q.length >= 2
+                            ? renderHighlighted(m.body, q)
+                            : renderLinks(m.body, m.id)}
                         </p>
                       )
                     )}

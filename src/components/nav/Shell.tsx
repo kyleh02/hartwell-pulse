@@ -28,6 +28,8 @@ interface ShellProps {
   user: ShellUser;
   clientName?: string | null;
   clientLogoUrl?: string | null;
+  /** Hide the Website tab when this client has nothing to preview. */
+  hasPreview?: boolean;
   children: React.ReactNode;
 }
 
@@ -113,10 +115,15 @@ export function Shell({
   user,
   clientName,
   clientLogoUrl,
+  hasPreview = false,
   children,
 }: ShellProps) {
   const pathname = usePathname();
-  const items = variant === "admin" ? adminNav : clientNav;
+  // A tab that is always empty is noise, and on a six-item nav it is a
+  // sizeable fraction of the noise.
+  const items = (variant === "admin" ? adminNav : clientNav).filter(
+    (i) => i.href !== "/website" || hasPreview,
+  );
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Close the mobile drawer whenever the route changes.
@@ -253,7 +260,7 @@ export function Shell({
       {/* ---------- client bottom tab bar (mobile only) ---------- */}
       {variant === "client" && (
         <nav className="no-print fixed inset-x-0 bottom-0 z-30 flex border-t border-pulse-border bg-pulse-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
-          {clientNav.map((item) => {
+          {items.map((item) => {
             const active = isNavActive(pathname, item.href);
             const Icon = item.icon;
             return (

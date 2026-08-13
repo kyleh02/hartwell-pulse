@@ -422,3 +422,61 @@ export async function updateClient(
   revalidatePath("/admin/clients");
   revalidatePath("/admin");
 }
+
+export interface PreviewInput {
+  title: string;
+  url: string;
+  note: string;
+  visible: boolean;
+}
+
+/** Add or update one preview link for a client. */
+export async function savePreview(
+  clientId: string,
+  input: PreviewInput,
+  previewId?: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const session = await getPulseSession();
+  if (session?.role !== "admin") throw new Error("Not authorised");
+
+  const url = input.url.trim();
+  // A preview is an iframe src and a link the client will click. Anything but
+  // http(s) there is either a mistake or an attempt at something, and both are
+  // worth refusing rather than rendering.
+  if (!/^https?:\/\/\S+$/i.test(url)) {
+    return { ok: false, message: "That needs to be a full http or https address." };
+  }
+  if (!input.title.trim()) {
+    return { ok: false, message: "Give it a name, like Home or Services." };
+  }
+
+  const supabase = createAdminSupabase();
+  const fields = {
+    client_id: clientId,
+    title: input.title.trim(),
+    url,
+    note: input.note.trim() || null,
+    visible: input.visible,
+    created_by: session.clerkUserId,
+  };
+
+  const { error } = previewId
+    ? await supabase.from("client_previews").update(fields).eq("id", previewId)
+    : await supabase.from("client_previews").insert(fields);
+  if (error) return { ok: false, message: error.message };
+
+  revalidatePath("/admin/clients");
+  revalidatePath("/website");
+  return { ok: true };
+}
+
+export async function deletePreview(previewId: string): Promise<void> {
+  const session = await getPulseSession();
+  if (session?.role !== "admin") throw new Error("Not authorised");
+  const { error } = await createAdminSupabase()
+    .from("client_previews")
+    .delete()
+    .eq("id", previewId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/admin/clients");
+}
