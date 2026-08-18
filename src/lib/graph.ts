@@ -73,56 +73,15 @@ async function accessToken(): Promise<string> {
 }
 
 /**
- * Send one plain-text email and save it to Sent Items.
+ * There is no send function here any more, and that is deliberate.
  *
- * Plain text, not HTML, and that is the whole point. A cold 1:1 email that
- * arrives as a styled HTML document reads as marketing no matter how good the
- * words are. This is the same shape as something typed in Outlook, because
- * that is what it is meant to be.
+ * `graphSendMail` put four messages into the high-risk delivery pool and none
+ * arrived. Version 4 of the handoff then found the likelier cause: the tenant
+ * itself is blocked for outbound reputation, so programmatic submission was
+ * throttled first and the whole tenant escalated a week later. Sending from
+ * here is not a thing to restore until that is resolved and the sending
+ * arrangement has changed.
  */
-export async function graphSendMail(args: {
-  to: string;
-  subject: string;
-  text: string;
-  replyTo?: string;
-}): Promise<void> {
-  if (!graphConfigured()) {
-    throw new Error(
-      "Outlook sending is not configured. Set MS_GRAPH_TENANT_ID, MS_GRAPH_CLIENT_ID, MS_GRAPH_CLIENT_SECRET and IRONPEAK_SEND_FROM.",
-    );
-  }
-  const from = process.env.IRONPEAK_SEND_FROM!;
-  const token = await accessToken();
-
-  const res = await fetch(
-    `${GRAPH}/users/${encodeURIComponent(from)}/sendMail`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        message: {
-          subject: args.subject,
-          body: { contentType: "Text", content: args.text },
-          toRecipients: [{ emailAddress: { address: args.to } }],
-          ...(args.replyTo
-            ? { replyTo: [{ emailAddress: { address: args.replyTo } }] }
-            : {}),
-        },
-        // It has to be in Sent Items. Kyle needs to see what went out from his
-        // own mailbox, and a reply threads against the original.
-        saveToSentItems: true,
-      }),
-    },
-  );
-
-  if (!res.ok) {
-    const detail = await res.text();
-    throw new Error(`Graph sendMail ${res.status}: ${detail.slice(0, 400)}`);
-  }
-}
 
 /**
  * Put a finished draft in the mailbox rather than sending it.

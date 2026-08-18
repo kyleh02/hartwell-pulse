@@ -222,7 +222,7 @@ print(f"with a body: {sum(1 for r in out if r['emailBody'])}")
 print(f"no body:     {sum(1 for r in out if not r['emailBody'])}")
 
 header = '''/**
- * The Ironpeak pipeline as handed over on 7 August 2026, emails included.
+ * The Ironpeak pipeline, version 4 of the handoff, 18 August 2026.
  *
  * GENERATED from portal-handoff-pipeline.md by scripts/gen-pipeline.py. Do not
  * hand-edit: change the markdown and regenerate.
@@ -231,6 +231,13 @@ header = '''/**
  * by hand is nineteen chances to change a word Kyle chose, and the shape of
  * these emails is deliberate down to the phrasing he has explicitly rejected.
  * Parsing keeps them byte for byte.
+ *
+ * Version 4 rewrote 16 of the 19 bodies to the shape fault, second
+ * observation, scope block, link, costless close, at 150 to 175 words. Two
+ * exceptions are deliberate and must not be normalised: Kennewell runs 198
+ * words and carries no link, because its offer is a caption pass rather than a
+ * rebuild, and Universal Motion Simulation opens "Good morning Dr Meikle"
+ * because the man publishes a doctorate.
  *
  * This REPLACES every earlier dataset. The previous files held 76 records of
  * which 51 were triaged out; those are gone deliberately.

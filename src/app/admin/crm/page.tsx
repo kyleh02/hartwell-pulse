@@ -11,7 +11,6 @@ import {
 import { PageHeader } from "@/components/ui/PageHeader";
 import { CrmHealth } from "@/components/crm/CrmHealth";
 import { PipelineView } from "@/components/crm/PipelineView";
-import { ImportProspects } from "@/components/crm/ImportProspects";
 import { ReplacePipeline } from "@/components/crm/ReplacePipeline";
 import { CalendarClock } from "lucide-react";
 import { buttonClasses } from "@/components/ui/Button";
@@ -72,12 +71,13 @@ export default async function AdminCrmPage({
               >
                 <CalendarClock size={14} /> Send plan
               </Link>
-              {/* "Sync master list" is gone. It applied crm-pipeline-master.ts,
-                  the superseded 59-record dataset, which would resurrect the 51
-                  companies that were triaged out. Load 7 Aug pipeline does both
-                  jobs now: it applies the live list and clears what is not on
-                  it. A button that undoes the current state is not worth
-                  keeping for the one time it might be wanted. */}
+              {/* One load button, on purpose. "Sync master list" and the seed
+                  importers applied the superseded 59 and 76 record datasets and
+                  would have resurrected the companies that were triaged out;
+                  they are gone, along with the data files behind them. Load
+                  does both jobs: it applies the live list and clears what is
+                  not on it, and it creates what it cannot find, so it works
+                  from an empty pipeline too. */}
               <ReplacePipeline />
             </div>
           ) : undefined
@@ -111,14 +111,6 @@ export default async function AdminCrmPage({
         activity={activity}
       />
       <PipelineView brand={brand} lists={lists} rows={rows} />
-
-      {/* The grant recipients are an Ironpeak list, so the one-press import
-          only belongs on that side. */}
-      {brand === "ironpeak" && rows.length === 0 && (
-        <div className="flex justify-center">
-          <ImportProspects />
-        </div>
-      )}
     </div>
   );
 }
