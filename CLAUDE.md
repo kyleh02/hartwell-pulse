@@ -413,9 +413,17 @@ Live at https://portal.hartwelldigital.com
   Micron's about 63, both loaded by JavaScript. Crawl every page, count images
   and gallery markers rather than text, and prefer presence claims: "I found
   this on your site" is provable, "there is no X" is not.
-- Prospects belong to a **source list** (`crm_lists`). Provenance is what makes
-  a first email specific, and it stops reply rates from different sources being
-  averaged into one meaningless number. New batches get their own list.
+- Prospects belong to a **source list** (`crm_lists`), so a reply rate from a
+  grant list and one from a cold trade show never average into a single
+  meaningless number. New batches get their own list.
+- **Ironpeak runs on exactly one list, and `replacePipeline` maintains it.** It
+  creates `ironpeak-pipeline` if missing, puts all 30 records on it, then
+  deletes any other Ironpeak list left empty. The per-company provenance that
+  matters is on the record already: `channel` is DIDG or AIC. Before this, 12
+  companies sat on the old grant-recipient list and 18 carried no list at all,
+  and since `PipelineView` auto-selects the single list it finds and filters to
+  it, those 18 never appeared on the board. A list nobody chose, quietly hiding
+  rows, is worse than no list.
 - `email_as_published` and `direct_email` are **different fields on purpose**.
   The published one is the consent evidence and must never be overwritten by a
   personal address given later.

@@ -512,6 +512,46 @@ export async function replacePipeline(): Promise<{
     !FILE_WINS.has(fromFile) &&
     AHEAD.has(stored!) &&
     !AHEAD.has(fromFile);
+  // ---- one source list, and the load keeps it that way ----
+  //
+  // Lists exist so a reply rate from a grant list and one from a cold trade
+  // show never average into a single meaningless number. That reasoning does
+  // not apply here: this is one dataset from one document, and the split that
+  // does matter is already on every record as `channel`, DIDG or AIC.
+  //
+  // What the old arrangement actually did was hide most of the pipeline. Twelve
+  // companies still sat on the grant-recipient list from the capability
+  // statement era and the other eighteen carried no list at all, and the board
+  // auto-selects the single list it finds and filters to it, so those eighteen
+  // did not appear on it. A list nobody chose, quietly hiding rows, is worse
+  // than no list.
+  const LIST_SLUG = "ironpeak-pipeline";
+  const { data: foundList } = await supabase
+    .from("crm_lists")
+    .select("id")
+    .eq("slug", LIST_SLUG)
+    .maybeSingle();
+  let listId = (foundList as { id: string } | null)?.id ?? null;
+  if (!listId) {
+    const { data: madeList, error: listErr } = await supabase
+      .from("crm_lists")
+      .insert({
+        brand: "ironpeak",
+        slug: LIST_SLUG,
+        name: "Ironpeak pipeline",
+        source_note:
+          "The handoff document, portal-handoff-pipeline.md. Provenance per company is on the record itself: channel is DIDG or AIC.",
+      })
+      .select("id")
+      .single();
+    if (listErr || !madeList) {
+      throw new Error(
+        `Could not create the pipeline list: ${listErr?.message ?? "insert failed"}`,
+      );
+    }
+    listId = (madeList as { id: string }).id;
+  }
+
   const byName = new Map(existing.map((o) => [o.legal_name.toLowerCase(), o]));
 
   const keepNames = new Set(PIPELINE_V2.map((r) => r.company.toLowerCase()));
@@ -530,6 +570,7 @@ export async function replacePipeline(): Promise<{
         row.domain === "NO WEBSITE" ? null : `https://${row.domain}`,
       rank: row.rank,
       priority_tier: row.tier,
+      list_id: listId,
       channel: row.channel,
       stage: portalAhead(org?.stage, row.stage) ? org!.stage : row.stage,
       // sendImmediately means "on receipt, override the window", which is a
@@ -655,7 +696,7 @@ export async function replacePipeline(): Promise<{
         .from("crm_organisations")
         .update({
           stage: "lost",
-          lost_reason: "Not in the 7 August 2026 pipeline. Kept: has a logged send.",
+          lost_reason: "Not in the current handoff. Kept: has a logged send.",
         })
         .eq("id", o.id);
       continue;
@@ -666,6 +707,22 @@ export async function replacePipeline(): Promise<{
       .eq("id", o.id);
     if (error) throw new Error(`Removing ${o.legal_name}: ${error.message}`);
     removed++;
+  }
+
+  // Any earlier list is empty now that everything moved. An empty list is a
+  // filter that shows nothing, so clear them out and the board is left with
+  // one, which it then selects on its own.
+  const { data: otherLists } = await supabase
+    .from("crm_lists")
+    .select("id")
+    .eq("brand", "ironpeak")
+    .neq("id", listId);
+  for (const l of (otherLists as { id: string }[] | null) ?? []) {
+    const { count } = await supabase
+      .from("crm_organisations")
+      .select("id", { count: "exact", head: true })
+      .eq("list_id", l.id);
+    if (!count) await supabase.from("crm_lists").delete().eq("id", l.id);
   }
 
   revalidatePath("/admin/crm");
