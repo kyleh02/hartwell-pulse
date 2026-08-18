@@ -9,9 +9,10 @@ import { buttonClasses } from "@/components/ui/Button";
 /**
  * Load the current handoff over the top of whatever is here.
  *
- * Named by version rather than by date. "7 Aug" stayed on this button through
- * two rebuilds of the same document and stopped telling anyone which data they
- * were about to load.
+ * Carries no date and no version number, deliberately. "7 Aug" sat on this
+ * button through two rebuilds of the same document and was wrong by the end,
+ * and "v4" would have gone the same way on the next handoff. There is one
+ * pipeline file and one button, so it needs no label beyond what it does.
  *
  * Destructive, and the confirm says so in plain terms rather than asking "are
  * you sure". Anything not in the new list is deleted, EXCEPT companies that
@@ -28,9 +29,9 @@ export function ReplacePipeline() {
   function run() {
     if (
       !window.confirm(
-        `Replace the Ironpeak pipeline with version 4 of the handoff, 18 August?
+        `Replace the Ironpeak pipeline with the current handoff?
 
-The 30 companies are written in with their ranks, hooks and notes. 16 email bodies were rewritten in version 4, so every approval is cleared and each one has to be read and approved again before it can go anywhere.
+The 30 companies are written in with their ranks, hooks and notes. Every approval is cleared, so each email has to be read and approved again before it can go anywhere.
 
 Any draft already sitting in Outlook holds the OLD text. Delete those there: this cannot reach into the mailbox to withdraw them.
 
@@ -70,7 +71,7 @@ This cannot be undone from here.`,
         className={buttonClasses("secondary", "sm")}
       >
         <Replace size={14} />
-        {pending ? "Replacing…" : "Load v4 pipeline"}
+        {pending ? "Replacing…" : "Load pipeline"}
       </button>
       {result && (
         <p className="max-w-sm text-right text-xs text-pulse-success">{result}</p>
