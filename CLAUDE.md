@@ -223,8 +223,18 @@ Live at https://portal.hartwelldigital.com
   leaves a finished draft in Drafts with a deep link straight to it. Kyle presses
   send, then confirms in the portal. What that costs is sending while he is
   asleep. What it keeps is a delivery path that reaches people.
-- `graphSendMail` still exists in `src/lib/graph.ts` and **nothing calls it**. Do
-  not wire it back in without new evidence about the submission path.
+- **The Microsoft 365 tenant itself is blocked.** OWA returns
+  `TenantAccessBlockedException`, which is a tenant-level block by Microsoft,
+  not a password or licence fault, and DNS is clean. Version 4 of the handoff
+  reads the four `5.7.708` codes as the earlier stage of the same thing: an
+  outbound reputation flag that throttled programmatic submission first and
+  escalated a week later. Manual sending did not work because it was manual, it
+  worked because it was slower. **Do not resume scheduled sending until the
+  block is resolved AND the sending arrangement has changed**, since cold
+  outreach from `kyle@ironpeakconsulting.com.au` risks the mailbox the website
+  contact form and live client correspondence depend on.
+- `graphSendMail` has been deleted rather than left sitting unused. Restoring a
+  send path from here is a worse idea after version 4, not a better one.
 - **A draft is not a send, and nothing at draft time writes a touch.**
   `draftOutreach` composes; `confirmSent` writes the `crm_touches` row
   afterwards, from the same body. Logging at draft time would fill the Spam Act
@@ -296,14 +306,39 @@ Live at https://portal.hartwelldigital.com
   hand-edited: 19 email bodies retyped by hand is 19 chances to change a word
   Kyle chose, and he has explicitly rejected specific phrasings. Change the
   markdown and regenerate.
-- The button still says 7 August because that is the handoff's name, but the
-  data is the **11 August (change 8) regeneration**: 16 sends Wednesday 12 to
-  Monday 17 August, Kennewell and Micron rewritten end to end, and the offer
-  line updated across 18 emails.
-- It REPLACES every earlier dataset. `crm-pipeline-master.ts` (59 records) and
-  the target-NN research files are superseded and must not be re-imported; 51
-  records were triaged out deliberately. `SyncMaster.tsx` is dead code, rendered
-  nowhere, for the same reason: it would resurrect them.
+- The current data is **version 4, 18 August 2026**, loaded by "Load v4
+  pipeline". Version 4 rewrote 16 of the 19 bodies to the shape fault, second
+  observation, scope block, link, costless close, at 150 to 175 words, merged
+  the greeting into the opener, and corrected Owen International's subject,
+  which called DISP an accreditation and would have gone out that way. **Two
+  exceptions are deliberate and must not be normalised:** Kennewell runs 198
+  words with no link, because its offer is a caption pass rather than a
+  rebuild, and Universal Motion Simulation opens "Good morning Dr Meikle".
+- **`HARD_WARNINGS` in the generator is keyed by rank number, not by company.**
+  Ranks held across version 4, so the five warnings still land correctly, but
+  if a future handoff re-ranks anything that dict has to move with it or the
+  PRP founder constraint attaches to the wrong company.
+- **Sixteen sends from 12 to 17 August have an unknown outcome.** Nothing wrote
+  back to the handoff after the 11th and the mailbox cannot be opened, so the
+  portal must not assume they sent or did not. `src/lib/crm-unresolved.ts`
+  derives them from the pipeline file (not from `scheduled_send_at`, which a
+  reschedule overwrites) and flags them on the plan and again in the composer at
+  approval. It WARNS rather than blocks: a record that genuinely did not send
+  has to stay approvable, and there is nowhere to record "confirmed not sent"
+  without a migration. Logging the send clears the flag, which is the same
+  record the Spam Act defence rests on.
+- **Replacing the pipeline clears `draft_created_at` as well as the approval.**
+  The cron reads a non-null value as "done", so a record drafted under an old
+  body would never draft again and the rewritten email would sit approved and
+  silently undraftable. Drafts already in Outlook still hold the OLD text and
+  have to be deleted there by hand.
+- It REPLACES every earlier dataset, and the earlier datasets are **gone**.
+  `crm-seed-data.ts`, `crm-pipeline-master.ts` and the four actions and two
+  components that applied them were deleted with version 4: every one of them
+  would have resurrected the companies that were deliberately triaged out. The
+  target-NN research files in the Drive folder are superseded too and must not
+  be re-imported. `replacePipeline` creates the companies it cannot find, so it
+  bootstraps an empty pipeline on its own and nothing else was needed.
 - **The offer was repositioned on 7 August 2026** from capability statements to
   websites. The first 14 sends led with a capability statement and produced
   zero replies in eight days; across ~50 researched companies at least nine had
