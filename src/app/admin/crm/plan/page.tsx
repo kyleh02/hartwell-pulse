@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SendPlan, type PlanRow } from "@/components/crm/SendPlan";
 import { ScheduleTable } from "@/components/crm/ScheduleTable";
 import { AutoSchedule } from "@/components/crm/AutoSchedule";
-import { unresolvedCompanies } from "@/lib/crm-unresolved";
+import { unresolvedDrafts } from "@/lib/crm-unresolved";
 
 export const metadata = { title: "Send plan" };
 
@@ -45,7 +45,7 @@ export default async function SendPlanPage() {
     touchesByOrg.set(t.organisation_id, list);
   }
 
-  const unresolved = unresolvedCompanies(
+  const unresolved = unresolvedDrafts(
     ((data as PlanRow[] | null) ?? []).map((r) => ({
       legal_name: r.legal_name,
       touches: touchesByOrg.get(r.id) ?? [],
@@ -75,26 +75,27 @@ export default async function SendPlanPage() {
         description="What to do today, then the days after it. Approved emails go on their own at the time shown."
       />
 
-      {/* Before anything else, the sends nobody can vouch for. Part H put
-          these out across 12 to 17 August, the mailbox could not be opened
-          that week, and no send was logged. Shown at the top because deciding
-          what to do next depends on it. */}
+      {/* Before anything else, the sends nobody can vouch for. Each of these
+          had a finished draft put in Outlook on 12 or 13 August and no send
+          logged after it. Shown at the top because deciding what to do next
+          depends on it. */}
       {unresolved.length > 0 && (
         <div className="mb-6 rounded-[var(--radius-card)] border border-pulse-warn/40 bg-pulse-warn/10 p-4">
           <p className="mono-label text-pulse-warn">Send status unknown</p>
           <p className="mt-1.5 max-w-2xl text-xs text-pulse-warn">
-            {unresolved.length} of the sends scheduled for 12 to 17 August have
-            nothing logged against them. That is not the same as knowing they
-            did not go. Check Sent Items once the mailbox is back, and log the
-            ones that went, so a second copy of the same cold email does not
-            follow the first.
+            {unresolved.length} records had a finished draft put in Outlook on
+            12 and 13 August, and nothing was ever logged against them. Each one
+            is either still sitting in Drafts unsent, or it went and was never
+            recorded. Check Sent Items and log the ones that went, so a second
+            copy of the same cold email does not follow the first. The rest of
+            that week never got as far as a draft, so it is only these.
           </p>
           <ul className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-pulse-warn">
             {unresolved.map((u) => (
               <li key={u.company} className="data-mono">
                 {u.company}
-                {" · "}
-                {new Date(u.scheduled).toLocaleString("en-AU", {
+                {" · drafted "}
+                {new Date(u.draft.drafted).toLocaleString("en-AU", {
                   timeZone: "Australia/Brisbane",
                   weekday: "short",
                   day: "numeric",

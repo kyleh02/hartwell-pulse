@@ -29,7 +29,7 @@ export function OutreachComposer({
   approvedAt,
   sendError,
   hardWarning,
-  unresolvedSendAt,
+  unresolvedDraft,
   recipient,
 }: {
   organisationId: string;
@@ -40,12 +40,12 @@ export function OutreachComposer({
   sendError: string | null;
   hardWarning: string | null;
   /**
-   * Set when this record was scheduled in the 12 to 17 August window and no
-   * send was ever logged for it. Nobody knows whether it went, so this warns
-   * rather than blocks: a record that genuinely did not send still has to be
+   * Set when a finished draft was put in Outlook on 12 or 13 August and no send
+   * was ever logged for it. Nobody knows whether it went, so this warns rather
+   * than blocks: a record that genuinely did not send still has to be
    * approvable, and the flag clears itself once the send is logged.
    */
-  unresolvedSendAt: string | null;
+  unresolvedDraft: { scheduled: string; drafted: string } | null;
   recipient: string | null;
 }) {
   const router = useRouter();
@@ -130,15 +130,15 @@ export function OutreachComposer({
         )}
       </div>
 
-      {unresolvedSendAt && !approved && (
+      {unresolvedDraft && !approved && (
         <div className="mb-3 rounded-[var(--radius-input)] border border-pulse-warn/40 bg-pulse-warn/10 px-3 py-2 text-xs text-pulse-warn">
           <p className="flex items-start gap-1.5 font-medium">
             <HelpCircle size={13} className="mt-0.5 shrink-0" />
             This one may already have gone.
           </p>
           <p className="mt-1 pl-[19px]">
-            It was scheduled for{" "}
-            {new Date(unresolvedSendAt).toLocaleString("en-AU", {
+            A finished draft was put in your Outlook Drafts folder on{" "}
+            {new Date(unresolvedDraft.drafted).toLocaleString("en-AU", {
               timeZone: "Australia/Brisbane",
               weekday: "long",
               day: "numeric",
@@ -146,10 +146,11 @@ export function OutreachComposer({
               hour: "numeric",
               minute: "2-digit",
             })}
-            , and nothing was logged against it. The mailbox was unreachable
-            that week, so the portal cannot tell whether it sent. Check Sent
-            Items before you approve this, and if it did go, log it rather than
-            approving it again.
+            , and no send was ever logged against it. So it is either still
+            sitting there unsent, or it went and was never recorded. Check Sent
+            Items before approving, and if it did go, log the send instead: that
+            answers this for good and is the record the Spam Act defence rests
+            on.
           </p>
         </div>
       )}

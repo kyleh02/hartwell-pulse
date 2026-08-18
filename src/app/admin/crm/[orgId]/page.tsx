@@ -5,7 +5,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { getCrmMetrics, getCrmSettings, getProspect } from "@/lib/crm";
 import { ProspectDetail } from "@/components/crm/ProspectDetail";
 import { OutreachComposer } from "@/components/crm/OutreachComposer";
-import { unresolvedSendAt } from "@/lib/crm-unresolved";
+import { unresolvedDraft } from "@/lib/crm-unresolved";
 
 export const metadata = { title: "Prospect" };
 
@@ -36,10 +36,10 @@ export default async function CrmProspectPage({
       {/* The email that will go out, and the approval that lets it. Only for
           Ironpeak: the Hartwell pipeline has no automated sending.
 
-          unresolvedSendAt is asked here because approval is the last point a
-          person looks before an email goes. Nothing wrote back to the handoff
-          after 11 August and the mailbox cannot be opened, so a record
-          scheduled that week may already be sitting in their inbox. */}
+          unresolvedDraft is asked here because approval is the last point a
+          person looks before an email goes. Seven records had a finished draft
+          put in Outlook on 12 and 13 August and nothing was ever logged for
+          them, so one of those may already be sitting in their inbox. */}
       {detail.organisation.brand === "ironpeak" && (
         <div className="mb-4">
           <OutreachComposer
@@ -50,7 +50,7 @@ export default async function CrmProspectPage({
             approvedAt={detail.organisation.send_approved_at}
             sendError={detail.organisation.send_error}
             hardWarning={detail.organisation.hard_warning}
-            unresolvedSendAt={unresolvedSendAt(
+            unresolvedDraft={unresolvedDraft(
               detail.organisation.legal_name,
               detail.touches,
             )}

@@ -33,3 +33,6 @@ yarn-error.log*
 
 # vercel
 .vercel
+
+# claude code, personal to this machine
+.claude/settings.local.json

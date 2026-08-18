@@ -39,15 +39,16 @@ Live at https://portal.hartwelldigital.com
 - Write them idempotent: `add column if not exists`, `drop policy if exists`
   before `create policy` (Postgres has no CREATE POLICY IF NOT EXISTS),
   `drop trigger if exists`, guarded `do $$` blocks.
-- **Applied state is not tracked reliably. Check it, never assume it.** This file
-  used to record 0001–0036 as applied "as of 2026-08-07", but 0036 was written
-  after that date, so the note cannot have been right. Nothing from 0037 to 0041
-  has ever been recorded as applied at all.
-- Probe what a migration creates rather than trusting a version note:
-  `information_schema.columns`, `pg_proc.prosrc`, `pg_get_constraintdef`. 0039 is
-  the one to check first, because it adds `draft_created_at` and the drafting
-  cron uses that column to know a record is finished. Without it the same email
-  lands in Drafts again every few minutes.
+- **0035 to 0041 were confirmed applied in production on 18 August 2026**, by
+  probing for the objects each one creates rather than by trusting a note.
+  Everything below 0035 is assumed applied on the strength of the features
+  working, which is weaker evidence.
+- **Applied state is not tracked anywhere, so check it, never assume it.** This
+  file used to record 0001–0036 as applied "as of 2026-08-07", but 0036 was
+  written after that date, so the note cannot have been right. That is the
+  reason for probing: `information_schema.columns` for a column,
+  `pg_proc.prosrc` for what a function body actually says,
+  `pg_get_constraintdef` for a check constraint.
 - The CRM prospect data is NOT a migration: it imports in-app from Pipeline,
   because 30 KB of string literals proved unreliable to paste into the Supabase
   SQL editor.
@@ -318,15 +319,24 @@ Live at https://portal.hartwelldigital.com
   Ranks held across version 4, so the five warnings still land correctly, but
   if a future handoff re-ranks anything that dict has to move with it or the
   PRP founder constraint attaches to the wrong company.
-- **Sixteen sends from 12 to 17 August have an unknown outcome.** Nothing wrote
-  back to the handoff after the 11th and the mailbox cannot be opened, so the
-  portal must not assume they sent or did not. `src/lib/crm-unresolved.ts`
-  derives them from the pipeline file (not from `scheduled_send_at`, which a
-  reschedule overwrites) and flags them on the plan and again in the composer at
-  approval. It WARNS rather than blocks: a record that genuinely did not send
-  has to stay approvable, and there is nowhere to record "confirmed not sent"
-  without a migration. Logging the send clears the flag, which is the same
-  record the Spam Act defence rests on.
+- **Seven sends have an unknown outcome, not sixteen.** Part H scheduled 16
+  across 12 to 17 August, but the database showed only seven were ever approved
+  and drafted: Kennewell, Lintek, One Ocean, Micron on the 12th, then Owen
+  International, Decem and PRP on the 13th. Everything scheduled for the 14th
+  and 17th was never approved, so no draft was ever made for it, and the only
+  send path is Kyle pressing send on a draft. Those nine are not in doubt and
+  are deliberately not flagged: warning about all sixteen when seven are
+  uncertain is how a warning gets ignored.
+- `src/lib/crm-unresolved.ts` holds those seven as **written-down constants, not
+  a query**, and that is load-bearing. The evidence is `draft_created_at`, which
+  replacing the pipeline clears so a rewritten body can draft again, so the
+  database stopped being able to answer the moment "Load v4 pipeline" was
+  pressed. Captured 18 August 2026 from the rows themselves.
+- It WARNS rather than blocks, on the plan and again in the composer at
+  approval. A record that genuinely did not send has to stay approvable, and
+  there is nowhere to record "confirmed not sent" without a migration. Logging
+  the send is the only thing that clears it, which is the same record the Spam
+  Act defence rests on.
 - **Replacing the pipeline clears `draft_created_at` as well as the approval.**
   The cron reads a non-null value as "done", so a record drafted under an old
   body would never draft again and the rewritten email would sit approved and
