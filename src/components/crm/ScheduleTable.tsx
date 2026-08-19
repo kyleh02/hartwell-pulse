@@ -52,7 +52,10 @@ export function ScheduleTable({ rows }: { rows: PlanRow[] }) {
             const newDay = day !== lastDay;
             lastDay = day;
 
-            const sent = Boolean(r.send_attempted_at) && !r.send_error;
+            // From the touch log, not send_attempted_at: a send logged through
+            // the manual flow never wrote that column, so rows that went out
+            // weeks ago were still showing as pending.
+            const sent = Boolean(r.sent_at);
             const failed = Boolean(r.send_error);
             const armed = Boolean(r.send_approved_at) && !sent;
             const overdue = armed && d.getTime() <= now;

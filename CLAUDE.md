@@ -386,6 +386,19 @@ Live at https://portal.hartwelldigital.com
 - `/admin/crm/plan` is the run sheet: the whole schedule as one table, then
   overdue follow-ups and sends grouped by day. The board answers "where is
   everything", the plan answers "what am I doing today".
+- **The plan ticks a row off from the touch log, never from
+  `send_attempted_at`.** Only `markSent` writes that column, so anything logged
+  through the manual flow stayed on the board as outstanding work forever:
+  Copamate and NH Micro went on 30 July and were still listed as to do three
+  weeks later. `sent_at` is computed on the plan page as the latest outbound
+  touch whose outcome is not `bounce`, which also puts the "a bounce is not a
+  send" rule in one place instead of in a stage check in each component.
+- **`autoSchedule` never places anything in the past.** It used to pin a
+  follow-up to its stored `followup_due`, and nine of those windows opened in
+  early August and closed again, so the whole plan rendered as a list of dates
+  that had already gone. A lapsed follow-up now queues from the start day and
+  takes its turn behind whatever is on it; only a follow-up still inside its
+  window beats the four-a-day shape.
 - **Lay out the schedule** (`autoSchedule`) applies the fixed rules in one press
   rather than by hand in SQL: four a day, weekdays only, never on the hour or
   half hour, WA at 11:00 AEST or later so it lands mid-morning Perth, and a

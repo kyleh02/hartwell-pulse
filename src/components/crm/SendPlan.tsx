@@ -45,6 +45,14 @@ export interface PlanRow {
   hard_warning: string | null;
   send_approved_at: string | null;
   send_attempted_at: string | null;
+  /**
+   * The last outbound touch that was not a bounce, from the touch log.
+   *
+   * This is what "sent" means here, not `send_attempted_at`, which only
+   * `markSent` ever writes. Computed on the plan page, so a row logged through
+   * any path ticks off.
+   */
+  sent_at?: string | null;
   send_error: string | null;
   email_body: string | null;
   draft_created_at: string | null;
@@ -154,8 +162,7 @@ Only do this once the email has actually left Outlook. This writes the complianc
   const toSend = rows
     .filter(
       (r) =>
-        r.scheduled_send_at &&
-        (!r.send_attempted_at || r.stage === "bounced"),
+        r.scheduled_send_at && !r.sent_at,
     )
     .sort((a, b) => (a.scheduled_send_at! < b.scheduled_send_at! ? -1 : 1));
   const scheduled = new Set(toSend.map((r) => r.id));
@@ -175,10 +182,11 @@ Only do this once the email has actually left Outlook. This writes the complianc
   // Anything already out the door. Kept visible rather than filed away: seeing
   // what has gone is half of knowing what to do next.
   // A bounced record is not "sent". It was attempted and rejected, and it is
-  // going out again.
+  // going out again, which is why sent_at excludes a bounced touch rather than
+  // this filter having to know about stages.
   const sent = rows
-    .filter((r) => r.send_attempted_at && !r.send_error && r.stage !== "bounced")
-    .sort((a, b) => (a.send_attempted_at! > b.send_attempted_at! ? -1 : 1));
+    .filter((r) => r.sent_at)
+    .sort((a, b) => (a.sent_at! > b.sent_at! ? -1 : 1));
 
   const failed = rows.filter((r) => r.send_error);
 
@@ -320,7 +328,7 @@ Only do this once the email has actually left Outlook. This writes the complianc
                 key={r.id}
                 row={r}
                 tone="quiet"
-                when={`sent ${new Date(r.send_attempted_at!).toLocaleString("en-AU", { timeZone: TZ, day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}`}
+                when={`sent ${new Date(r.sent_at!).toLocaleString("en-AU", { timeZone: TZ, day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}`}
                 busy={false}
               />
             ))}
@@ -479,14 +487,14 @@ function Row({
 
           {/* Only while it can still move. Once it has gone, when it was due is
               history rather than a setting. */}
-          {row.scheduled_send_at && !row.send_attempted_at && !blocked && (
+          {row.scheduled_send_at && !row.sent_at && !blocked && (
             <Reschedule
               organisationId={row.id}
               current={row.scheduled_send_at}
             />
           )}
 
-          {row.send_approved_at && !row.send_attempted_at && (
+          {row.send_approved_at && !row.sent_at && (
             <span className="inline-flex items-center gap-1 text-[11px] text-pulse-success">
               <Check size={11} /> approved
             </span>
@@ -512,7 +520,7 @@ function Row({
           {/* The three states of a send, in order. Draft it, send it in
               Outlook, then say so here. Only the last one writes a record,
               because only the last one is true. */}
-          {!blocked && !row.send_attempted_at && (
+          {!blocked && !row.sent_at && (
             <>
               {!row.draft_created_at && onDraft && (
                 <button

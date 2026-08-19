@@ -1063,9 +1063,24 @@ export async function autoSchedule(
   const isWeekend = (d: Date) => d.getDay() === 0 || d.getDay() === 6;
 
   // Follow-ups first, pinned to the day their window opens.
+  //
+  // Unless that day has gone. Nine of these windows opened in early August and
+  // closed again, and pinning to the stored date put them on a Friday that has
+  // already happened, which is how the whole plan ended up reading as a list of
+  // dates in the past. A lapsed follow-up is still worth sending; it just has
+  // no window left to protect, so it queues from the start day and takes its
+  // turn behind whatever is already on that day rather than beating the
+  // four-a-day shape the way a live window does.
   for (const f of followUps) {
-    const d = new Date(`${f.followup_due}T00:00:00+10:00`);
+    let d = new Date(`${f.followup_due}T00:00:00+10:00`);
+    const lapsed = d.getTime() < start.getTime();
+    if (lapsed) d = new Date(start);
     while (isWeekend(d)) d.setDate(d.getDate() + 1);
+    if (lapsed) {
+      while (isWeekend(d) || (used.get(dayKey(d)) ?? 0) >= 4) {
+        d.setDate(d.getDate() + 1);
+      }
+    }
     const k = dayKey(d);
     const i = used.get(k) ?? 0;
     const [h, m] = DAY_SLOTS[d.getDate() % DAY_SLOTS.length][Math.min(i, 3)];

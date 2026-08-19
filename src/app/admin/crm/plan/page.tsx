@@ -29,21 +29,44 @@ export default async function SendPlanPage() {
     .eq("brand", "ironpeak")
     .order("rank");
 
-  // Every outbound touch since the unresolved week opened. One query rather
-  // than one per row: all that is being asked is whether anything at all was
-  // logged for a company after the 11th.
+  // Every outbound touch, in one query rather than one per row.
+  //
+  // The touch log is what "sent" means. The plan used to read
+  // `send_attempted_at`, which only `markSent` ever writes, so anything logged
+  // through the manual flow stayed on the board as still to do however long ago
+  // it went. Copamate and NH Micro went on 30 July and were still sitting there
+  // as work. The log is the record the Spam Act defence rests on, so it is also
+  // the right thing to tick a row off with.
   const { data: touchData } = await supabase
     .from("crm_touches")
-    .select("organisation_id, direction, sent_at")
-    .gte("sent_at", "2026-08-12T00:00:00+10:00");
-  const touchesByOrg = new Map<string, { direction: string; sent_at: string }[]>();
+    .select("organisation_id, direction, sent_at, outcome")
+    .eq("direction", "out");
+  const touchesByOrg = new Map<
+    string,
+    { direction: string; sent_at: string; outcome: string }[]
+  >();
   for (const t of (touchData as
-    | { organisation_id: string; direction: string; sent_at: string }[]
+    | { organisation_id: string; direction: string; sent_at: string; outcome: string }[]
     | null) ?? []) {
     const list = touchesByOrg.get(t.organisation_id) ?? [];
-    list.push({ direction: t.direction, sent_at: t.sent_at });
+    list.push({ direction: t.direction, sent_at: t.sent_at, outcome: t.outcome });
     touchesByOrg.set(t.organisation_id, list);
   }
+
+  /**
+   * The last time something actually reached someone.
+   *
+   * A bounce is excluded, and that is the same rule the two-email cap uses: the
+   * recipient never saw it, so it is an attempt rather than a send and the row
+   * still has work on it.
+   */
+  const sentAtFor = (orgId: string): string | null => {
+    const landed = (touchesByOrg.get(orgId) ?? []).filter(
+      (t) => t.outcome !== "bounce",
+    );
+    if (landed.length === 0) return null;
+    return landed.reduce((a, b) => (a.sent_at > b.sent_at ? a : b)).sent_at;
+  };
 
   const unresolved = unresolvedDrafts(
     ((data as PlanRow[] | null) ?? []).map((r) => ({
@@ -54,6 +77,7 @@ export default async function SendPlanPage() {
 
   const rows = ((data as PlanRow[] | null) ?? []).map((r) => ({
     ...r,
+    sent_at: sentAtFor(r.id),
     // Supabase returns the embedded table as an array; there is one contact
     // per company by design, so flatten it here rather than in the component.
     contact: Array.isArray(r.crm_contacts) ? r.crm_contacts[0] : r.crm_contacts,
