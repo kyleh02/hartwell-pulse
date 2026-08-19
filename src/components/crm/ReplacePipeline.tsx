@@ -31,7 +31,7 @@ export function ReplacePipeline() {
       !window.confirm(
         `Replace the Ironpeak pipeline with the current handoff?
 
-The 30 companies are written in with their ranks, hooks and notes. Every approval is cleared, so each email has to be read and approved again before it can go anywhere.
+The 30 companies are written in with their ranks, hooks and notes, and the queue is laid out across the coming weekdays. Every approval is cleared, so each email has to be read and approved again before it can go anywhere.
 
 Any draft already sitting in Outlook holds the OLD text. Delete those there: this cannot reach into the mailbox to withdraw them.
 
@@ -48,7 +48,7 @@ This cannot be undone from here.`,
       try {
         const r = await replacePipeline();
         setResult(
-          `${r.created} added, ${r.updated} updated, ${r.removed} removed.`,
+          `${r.created} added, ${r.updated} updated, ${r.removed} removed, ${r.scheduled} scheduled.`,
         );
         if (r.keptWithHistory > 0) {
           setNote(

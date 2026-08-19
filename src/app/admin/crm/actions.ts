@@ -466,6 +466,7 @@ export async function replacePipeline(): Promise<{
   created: number;
   removed: number;
   keptWithHistory: number;
+  scheduled: number;
 }> {
   const { supabase } = await adminSupabase();
 
@@ -552,6 +553,10 @@ export async function replacePipeline(): Promise<{
     listId = (madeList as { id: string }).id;
   }
 
+  const now = Date.now();
+  const futureOnly = (iso: string | null) =>
+    iso && Date.parse(iso) > now ? iso : null;
+
   const byName = new Map(existing.map((o) => [o.legal_name.toLowerCase(), o]));
 
   const keepNames = new Set(PIPELINE_V2.map((r) => r.company.toLowerCase()));
@@ -576,9 +581,14 @@ export async function replacePipeline(): Promise<{
       // sendImmediately means "on receipt, override the window", which is a
       // time already past rather than a special case for the sender to know
       // about. Coastal Aviation's compromised site is the only one.
+      // A slot from the handoff that has already passed is not a plan, it is
+      // history. Part H's week ran 12 to 17 August, and importing those times
+      // verbatim is what made the send plan render as a list of days that had
+      // gone. Anything in the past comes in unscheduled and gets a real slot
+      // from the pass at the end of this function.
       scheduled_send_at: portalAhead(org?.stage, row.stage)
         ? null
-        : (row.scheduledSendAt ??
+        : (futureOnly(row.scheduledSendAt) ??
           (row.sendImmediately ? new Date().toISOString() : null)),
       followup_due: row.followupDue ?? null,
       hook: row.hook,
@@ -725,8 +735,15 @@ export async function replacePipeline(): Promise<{
     if (!count) await supabase.from("crm_lists").delete().eq("id", l.id);
   }
 
+  // Lay the queue out before handing back, so one press produces a plan that
+  // can be worked rather than an empty table and a second button to find. The
+  // handoff's own times are gone by now and nothing is drafted immediately
+  // after a replace, so there is nothing here worth preserving.
+  const { scheduled } = await autoSchedule();
+
   revalidatePath("/admin/crm");
-  return { updated, created, removed, keptWithHistory };
+  revalidatePath("/admin/crm/plan");
+  return { updated, created, removed, keptWithHistory, scheduled };
 }
 
 /**
