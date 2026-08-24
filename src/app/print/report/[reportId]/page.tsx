@@ -72,6 +72,40 @@ export default async function ReportPrintPage({
 
   return (
     <div data-report-print-ready="1">
+      {/*
+        The light palette, forced, in every medium.
+
+        This page kept coming out as a light document on a black page. The
+        portal defaults to dark, and the two indirect fixes for that both
+        failed quietly: seeding the theme into localStorage depends on the head
+        script running the way it does today, and the @media print block
+        depends on the renderer emulating print media and on that rule winning
+        the cascade against a Tailwind utility on <body>.
+
+        Neither dependency is worth having on a page whose entire job is to be
+        photographed. This is the same set of values the print block uses, set
+        here with no media query and no layer, last in document order, on a
+        route nothing else shares. It cannot lose.
+      */}
+      <style>{`
+        :root, :root[data-theme="dark"], :root[data-theme="light"] {
+          --pulse-bg: #ffffff;
+          --pulse-surface: #ffffff;
+          --pulse-surface-2: #f6f5f1;
+          --pulse-border: rgba(0, 0, 0, 0.12);
+          --pulse-border-strong: rgba(0, 0, 0, 0.2);
+          --pulse-gold: #8a7645;
+          --pulse-text: #1a1714;
+          --pulse-text-dim: rgba(26, 23, 20, 0.72);
+          --pulse-text-mute: rgba(26, 23, 20, 0.5);
+        }
+        html, body {
+          background: #ffffff !important;
+          color: #1a1714 !important;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+      `}</style>
       <ReportViewerChrome
         bundle={bundle}
         imageUrls={imageUrls}
