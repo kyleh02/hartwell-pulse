@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Trash2, X, LineChart, SeparatorHorizontal, Columns2 } from "lucide-react";
 import type { InsightSnippet, ReportSectionKind } from "@/lib/types/database";
 import type {
@@ -38,6 +38,8 @@ export function SectionCard({
   onRemove,
   onUploadImage,
   dragHandle,
+  split,
+  onToggleSplit,
 }: {
   section: EditSection;
   available: AvailableMetric[];
@@ -48,23 +50,17 @@ export function SectionCard({
   onRemove: () => void;
   onUploadImage: (file: File) => Promise<void>;
   dragHandle: React.ReactNode;
+  /**
+   * Whether the preview sits beside the text. One setting for the whole
+   * report, held by the editor and remembered between visits, rather than a
+   * switch per card that has to be flicked twenty times on every report.
+   */
+  split: boolean;
+  onToggleSplit: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const isMetrics = section.kind === "metrics";
-
-  /**
-   * Show the rendered section beside the text being typed.
-   *
-   * The draft is Markdown with pipe tables and fenced charts in it, and read
-   * as raw text in a six-line box it is close to unreadable. Worse, the only
-   * way to find out whether a table lined up or a chart came out the right way
-   * round was to save, leave the editor, open the viewer and come back.
-   *
-   * Off by default. On a narrow screen the two panes stack, which is still
-   * more useful than switching pages.
-   */
-  const [split, setSplit] = useState(false);
 
   /**
    * Grow the box to fit what is in it. A fixed six rows means a section with a
@@ -135,7 +131,7 @@ export function SectionCard({
         {!isMetrics && (
           <button
             type="button"
-            onClick={() => setSplit((v) => !v)}
+            onClick={onToggleSplit}
             aria-pressed={split}
             title={
               split

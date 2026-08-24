@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   DndContext,
   closestCenter,
@@ -51,6 +51,18 @@ import {
   RecipientPicker,
   type InvoicePerson,
 } from "@/components/invoices/RecipientPicker";
+
+/**
+ * Whether the side-by-side preview is showing. One setting for the whole
+ * editor, remembered between visits.
+ *
+ * Per card it was a switch to flick on every section of every report, and the
+ * answer was the same every time. Kept in localStorage rather than on the
+ * report or the user: it describes how this browser window is being used, not
+ * anything about the document, and it should not travel to another machine or
+ * be something a save can conflict over. Same reasoning as the theme toggle.
+ */
+const PREVIEW_KEY = "pulse.report.preview";
 
 function newId() {
   return globalThis.crypto?.randomUUID?.() ?? `id-${Math.random().toString(36).slice(2)}`;
@@ -143,8 +155,31 @@ export function ReportEditor({
   const [snippets, setSnippets] = useState(initialSnippets);
   const [saved, setSaved] = useState(true);
   const [brand, setBrand] = useState<Brand>(bundle.report.brand ?? "hartwell");
-  /** The opening block gets the same live preview the sections have. */
-  const [splitOpening, setSplitOpening] = useState(false);
+  /**
+   * Starts off, then corrects itself from storage on mount. Reading it during
+   * the first render instead would make the server and the client disagree
+   * about what to draw, which React treats as an error.
+   */
+  const [showPreview, setShowPreview] = useState(false);
+  useEffect(() => {
+    try {
+      setShowPreview(localStorage.getItem(PREVIEW_KEY) === "on");
+    } catch {
+      // Storage blocked. The toggle still works for this visit, it just will
+      // not be remembered, which is a fine outcome.
+    }
+  }, []);
+  function togglePreview() {
+    setShowPreview((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem(PREVIEW_KEY, next ? "on" : "off");
+      } catch {
+        // As above.
+      }
+      return next;
+    });
+  }
   const [brandError, setBrandError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const router = useRouter();
@@ -463,14 +498,14 @@ The report and every section in it are permanently removed, along with any image
               <p className="mono-label">Opening</p>
               <button
                 type="button"
-                onClick={() => setSplitOpening((v) => !v)}
-                aria-pressed={splitOpening}
+                onClick={togglePreview}
+                aria-pressed={showPreview}
                 className="text-[11px] text-pulse-text-mute hover:text-pulse-text"
               >
-                {splitOpening ? "Hide preview" : "Show preview"}
+                {showPreview ? "Hide preview" : "Show preview"}
               </button>
             </div>
-            <div className={cn("grid gap-4", splitOpening && "lg:grid-cols-2")}>
+            <div className={cn("grid gap-4", showPreview && "lg:grid-cols-2")}>
               <textarea
                 value={summary}
                 onChange={(e) => {
@@ -482,7 +517,7 @@ The report and every section in it are permanently removed, along with any image
                 placeholder="The first thing they read, above the sections. Leave it empty to start straight at the first section."
                 className="w-full resize-y rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 p-3.5 font-mono text-[13px] leading-[1.65] text-pulse-text placeholder:font-sans placeholder:text-pulse-text-mute focus:border-pulse-border-strong focus:outline-none"
               />
-              {splitOpening && (
+              {showPreview && (
                 <div className="rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2/40 p-4">
                   <p className="mono-label mb-3">As it will read</p>
                   <div className="report-section report-lead">
@@ -524,6 +559,8 @@ The report and every section in it are permanently removed, along with any image
                         onRemove={() => removeSection(section.key)}
                         onUploadImage={(file) => handleUploadImage(section.key, file)}
                         dragHandle={handle}
+                        split={showPreview}
+                        onToggleSplit={togglePreview}
                       />
                     )}
                   />

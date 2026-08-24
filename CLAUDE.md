@@ -158,7 +158,14 @@ Live at https://portal.hartwelldigital.com
   thing being changed is not a proof.
 - **Every body field in the editor has a live preview beside it**, rendered by
   the document's own `ReportText` with the document's own styles, so what is
-  shown is what prints. The draft is Markdown with pipe tables and fenced
+  shown is what prints. It is ONE setting for the whole editor, owned by
+  `ReportEditor` and remembered in `localStorage` (`pulse.report.preview`), not
+  a switch per card: the answer was the same on every section of every report.
+  Storage rather than the report row or the user, because it describes how a
+  browser window is being used rather than anything about the document, and it
+  should not travel between machines or be something a save can conflict over.
+  It starts off and corrects itself on mount, since reading storage during the
+  first render makes the server and client disagree about what to draw. The draft is Markdown with pipe tables and fenced
   charts in it, and the only way to see whether a table lined up used to be
   save, leave, open the viewer, come back. The box is monospace and grows to
   fit: pipes only read as a table when they line up, and a fixed six rows means
