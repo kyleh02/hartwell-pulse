@@ -155,11 +155,28 @@ Live at https://portal.hartwelldigital.com
 - **The send email carries the PDF** (0042). A client told their report is
   ready and handed a portal link has a sign-in between them and the thing they
   were promised, and anyone they forward it to has no login at all.
-- **The portal does not GENERATE the PDF, and that is deliberate.** Kyle prints
-  the viewer, which is what the print stylesheet and the `{client} - {title}`
-  tab title already exist for, and attaches that file. A server-side renderer
-  is a headless browser this stack has nowhere to put, and it would attach a
-  document nobody had looked at.
+- **The portal GENERATES the PDF on publish** (headless Chromium via
+  `puppeteer-core` + `@sparticuz/chromium`). It used to be printed by hand and
+  uploaded, on the reasoning that a renderer would attach a document nobody had
+  looked at. That reasoning was kept and the tedium was not: publishing makes
+  the file and attaches it, and NOTHING sends it, so it is still opened and
+  read before Send. Four steps became none.
+- **Rendering is deliberately off the send path.** Chromium is slow to start
+  and a serverless timeout is a real outcome, and none of that may stop a
+  client's report reaching them. A failed render leaves the previous PDF alone,
+  says why, and the manual upload still works exactly as it did. Keep it that
+  way.
+- The renderer opens `/print/report/[reportId]`, which is public in middleware
+  and carries its own check: an HMAC token scoped to that one report id and
+  good for five minutes, signed with `CRON_SECRET`. A headless browser cannot
+  hold a Clerk session, so the page has to prove the request is ours by itself.
+  It renders the SAME `ReportViewerChrome` the client sees rather than a
+  print-only twin, because two documents drift the first time only one changes.
+- `serverExternalPackages` must keep `@sparticuz/chromium` and `puppeteer-core`
+  out of the bundle, or the executable never arrives and the launch fails on a
+  path that does not exist. The route sets `runtime = "nodejs"` and
+  `maxDuration = 60`: a server action inherits the page's ten seconds, and a
+  cold render does not finish in ten.
 - If a PDF is attached it MUST go: a download failure stops the send with a
   message rather than quietly degrading to a link-only email nobody knows is
   degraded. The test send carries it too, because a proof that leaves out the

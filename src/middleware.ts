@@ -13,6 +13,11 @@ const isPublicRoute = createRouteMatcher([
   // The opt-out link at the foot of every outreach email. The person clicking
   // it has no account, and requiring one to be left alone would be absurd.
   "/unsubscribe/(.*)",
+  // The page the PDF renderer opens. A headless browser cannot hold a Clerk
+  // session, so the route carries its own check instead: a signed token,
+  // scoped to one report id, good for five minutes. Path-anchored like the
+  // others, so /printer-foo is not exempted along with it.
+  "/print/(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

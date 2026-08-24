@@ -31,6 +31,7 @@ import { useRouter } from "next/navigation";
 import { SectionCard, type EditSection } from "@/components/reports/SectionCard";
 import { ReportText } from "@/components/reports/ReportText";
 import { cn } from "@/lib/utils/cn";
+import { requestReportPdf } from "@/lib/report-pdf-client";
 import { BrandSwitch } from "@/components/reports/BrandSwitch";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -292,12 +293,31 @@ export function ReportEditor({
       setSaved(true);
     });
   }
+  /**
+   * Publish, then make the PDF from what was just published.
+   *
+   * In that order and not the other way round: the renderer opens the stored
+   * report, so a PDF made before the save would be of the previous version.
+   *
+   * A render failure does not fail the publish. The report is visible either
+   * way, the previous PDF is untouched, and the card offers Make it again or
+   * an upload. Nothing here is on the send path.
+   */
   function publish() {
+    setSendError(null);
     startTransition(async () => {
       await saveReport(bundle.report.id, buildInput());
       await setReportStatus(bundle.report.id, "published");
       setStatus("published");
       setSaved(true);
+      setSendNote("Published. Making the PDF…");
+      const pdf = await requestReportPdf(bundle.report.id);
+      setSendNote(
+        pdf.ok
+          ? `Published, and ${pdf.name} is attached. Open it and read it before you send.`
+          : `Published. The PDF did not render: ${pdf.message}`,
+      );
+      router.refresh();
     });
   }
   function unpublish() {
