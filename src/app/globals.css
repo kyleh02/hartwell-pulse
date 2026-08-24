@@ -126,6 +126,15 @@
     text-size-adjust: 100%;
   }
 
+  /* Light mode has to say so, and not only for tidiness. color-scheme is what
+     the browser paints scrollbars, form controls and the PAGE CANVAS from, and
+     the canvas is the margin area of a printed sheet, outside the html box and
+     beyond the reach of any background property. Left at dark, a light page
+     prints as a light document inside a black border. */
+  :root[data-theme="light"] {
+    color-scheme: light;
+  }
+
   body {
     background-color: var(--pulse-bg);
     color: var(--pulse-text);
@@ -357,6 +366,11 @@
   }
   html,
   body {
+    /* The one that took four attempts to find. A background paints the html
+       box; the sheet's margin is the canvas outside it, and the canvas is
+       painted from color-scheme. Dark here is a black border around every
+       printed page no matter how white the backgrounds underneath are. */
+    color-scheme: light;
     background: #ffffff !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;

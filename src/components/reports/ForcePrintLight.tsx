@@ -33,6 +33,10 @@ export function ForcePrintLight() {
         --pulse-text-mute: rgba(26, 23, 20, 0.5);
       }
       html, body {
+        /* The actual cause of the black border. color-scheme paints the page
+           canvas, which is the sheet's margin, and no background property
+           reaches it. */
+        color-scheme: light !important;
         background: #ffffff !important;
         color: #1a1714 !important;
         -webkit-print-color-adjust: exact;
