@@ -77,6 +77,28 @@ export async function renderReportPdf(
     });
     try {
       const page = await browser.newPage();
+
+      // The portal defaults to DARK, and a fresh headless profile has no theme
+      // stored, so the first PDF came out as a light document sitting on a
+      // black page. Seeded before any navigation, so the inline head script
+      // reads light and the very first paint is right; setting it afterwards
+      // would flash and, worse, would not change what was already painted.
+      await page.evaluateOnNewDocument(
+        (key: string, value: string) => {
+          try {
+            localStorage.setItem(key, value);
+          } catch {
+            // Storage blocked. Print media still forces the light tokens.
+          }
+        },
+        "pulse-theme",
+        "light",
+      );
+      // Belt and braces on the same problem. page.pdf() emulates print media
+      // on its own, but saying so means the @media print block is certainly
+      // the one that applied, whatever a future version decides to default to.
+      await page.emulateMediaType("print");
+
       const url = `${origin}/print/report/${reportId}?token=${encodeURIComponent(token)}`;
       // networkidle0 rather than load: the letterhead and any screenshots are
       // signed Storage URLs fetched after first paint, and a PDF taken before
@@ -96,7 +118,11 @@ export async function renderReportPdf(
         // The document draws its own letterhead and colours, and a PDF that
         // drops them is not the document.
         printBackground: true,
-        margin: { top: "14mm", bottom: "16mm", left: "12mm", right: "12mm" },
+        // No margin here on purpose. globals.css already sets `@page { margin:
+        // 18mm 16mm }`, which is the print design the portal was built with,
+        // and passing a second set of numbers here just gives the document two
+        // answers to the same question.
+        preferCSSPageSize: true,
       });
     } finally {
       await browser.close();
