@@ -119,6 +119,17 @@ export interface Report {
   email_message: string | null;
   template_key: string | null;
   summary: string | null;
+  /**
+   * The PDF that travels with the send email, in the `pulse-reports` bucket.
+   *
+   * Uploaded by Kyle from the printed viewer, not generated here. Null is a
+   * normal state: the email still goes, it just carries a link only.
+   */
+  pdf_path: string | null;
+  /** The filename the client sees, kept because the path carries a uuid. */
+  pdf_name: string | null;
+  /** Compare against updated_at. Older means the PDF is stale. */
+  pdf_uploaded_at: string | null;
   published_at: string | null;
   created_by: string | null;
   created_at: string;

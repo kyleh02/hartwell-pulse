@@ -22,16 +22,29 @@ export interface EmailRef {
 }
 
 /** Send an email via Resend. No-ops (logs) when RESEND_API_KEY isn't set yet. */
+export interface EmailAttachment {
+  filename: string;
+  /** Base64, which is what Resend takes and what a Buffer would become anyway. */
+  content: string;
+}
+
 export async function sendEmail({
   to,
   subject,
   html,
   ref,
+  attachments,
 }: {
   to: string;
   subject: string;
   html: string;
   ref?: EmailRef;
+  /**
+   * Files to send with it. Kept optional and unused by almost every caller:
+   * an attachment is a deliverability cost, so it is for the one email where
+   * the point is that the recipient should not have to go and fetch anything.
+   */
+  attachments?: EmailAttachment[];
 }): Promise<{ ok?: boolean; skipped?: boolean; error?: string }> {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
@@ -40,7 +53,13 @@ export async function sendEmail({
   }
   try {
     const resend = new Resend(key);
-    const { data, error } = await resend.emails.send({ from: FROM, to, subject, html });
+    const { data, error } = await resend.emails.send({
+      from: FROM,
+      to,
+      subject,
+      html,
+      ...(attachments && attachments.length > 0 ? { attachments } : {}),
+    });
     if (error) {
       console.error("[email] send failed:", error);
       await recordEmail({ to, subject, ref, status: "failed", detail: String(error) });

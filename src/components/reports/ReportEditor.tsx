@@ -290,7 +290,11 @@ export function ReportEditor({
       : "";
     if (
       !window.confirm(
-        `Send "${title}" to:\n${who || "nobody, check Send to"}${gaps}\n\nThey get an email with a link and a notification in the portal.`,
+        `Send "${title}" to:\n${who || "nobody, check Send to"}${gaps}\n\nThey get an email with a link and a notification in the portal.${
+          bundle.report.pdf_name
+            ? `\n\n${bundle.report.pdf_name} is attached, so they can read it without signing in.`
+            : "\n\nNo PDF is attached, so the email links to the portal only."
+        }`,
       )
     )
       return;

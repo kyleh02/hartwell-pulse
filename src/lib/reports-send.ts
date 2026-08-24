@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { sendEmail, emailLayout, renderMessage } from "@/lib/email";
+import { sendEmail, emailLayout, renderMessage, type EmailAttachment } from "@/lib/email";
 import { resolveRecipients, firstName } from "@/lib/recipients";
 import { monthLabel } from "@/lib/metrics";
 import { DEFAULT_REPORT_EMAIL } from "@/lib/reports-shared";
@@ -53,11 +53,44 @@ export async function sendReportWith(
   const clientName =
     (clientRow as { business_name?: string } | null)?.business_name ?? "there";
 
+  // ---- the PDF, fetched once rather than once per recipient ----
+  //
+  // If one is attached it MUST go. A send that quietly drops it looks
+  // identical to a send that never had one, and the client is left doing the
+  // exact thing the attachment exists to save her from. So a failure here
+  // stops the send and says why, rather than degrading to a link-only email
+  // nobody knows is degraded.
+  let attachments: EmailAttachment[] | undefined;
+  if (report.pdf_path) {
+    const { data: file, error: dlErr } = await supabase.storage
+      .from("pulse-reports")
+      .download(report.pdf_path);
+    if (dlErr || !file) {
+      return {
+        ok: false,
+        message: `The attached PDF could not be read (${dlErr?.message ?? "not found"}). Upload it again, or remove it, then send.`,
+      };
+    }
+    attachments = [
+      {
+        filename: report.pdf_name || "report.pdf",
+        content: Buffer.from(await file.arrayBuffer()).toString("base64"),
+      },
+    ];
+  }
+
   const month = monthLabel(report.period_month);
   const template = report.email_message || DEFAULT_REPORT_EMAIL;
   const subject = opts.testTo
     ? `[Test] Your ${month} report is ready`
     : `Your ${month} report is ready`;
+
+  // Said by the sender rather than written into the template, because whether
+  // there is a PDF is a fact about this send and the template is Kyle's words.
+  // Without it the attachment is a paperclip the reader has to notice.
+  const attachedLine = attachments
+    ? `<p style="margin:0 0 16px">The PDF is attached to this email, so you can read it without signing in.</p>`
+    : "";
 
   const build = (greeting: string) =>
     emailLayout(
@@ -67,13 +100,21 @@ export async function sendReportWith(
         client: clientName,
         month,
         title: report.title,
-      }),
+      }) + attachedLine,
       "Read report",
       `/reports/${reportId}`,
     );
 
   if (opts.testTo) {
-    await sendEmail({ to: opts.testTo, subject, html: build("Kyle"), ref: { kind: "report", id: reportId } });
+    // The test carries the attachment too. A proof that leaves out the one
+    // thing being changed is not a proof.
+    await sendEmail({
+      to: opts.testTo,
+      subject,
+      html: build("Kyle"),
+      ref: { kind: "report", id: reportId },
+      attachments,
+    });
     return { ok: true, sentTo: [opts.testTo] };
   }
 
@@ -108,7 +149,13 @@ export async function sendReportWith(
       emailed_at: now,
     });
     if (p.email) {
-      await sendEmail({ to: p.email, subject, html: build(firstName(p)), ref: { kind: "report", id: reportId } });
+      await sendEmail({
+        to: p.email,
+        subject,
+        html: build(firstName(p)),
+        ref: { kind: "report", id: reportId },
+        attachments,
+      });
       sentTo.push(p.email);
     }
   }

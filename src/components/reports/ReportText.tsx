@@ -8,7 +8,7 @@
 // clicks and position is in every report draft, and rendering one as
 // pipe-delimited text would make the whole report look broken.
 
-import { StatRow, BarChart, Compare } from "@/components/reports/ReportBlocks";
+import { StatRow, BarChart, Compare, NoteBlock } from "@/components/reports/ReportBlocks";
 import type { StatItem, BarItem } from "@/components/reports/ReportBlocks";
 
 /**
@@ -28,6 +28,10 @@ import type { StatItem, BarItem } from "@/components/reports/ReportBlocks";
  *   Desktop | 40.2 | average position
  *   Mobile ranks far better, though on a small sample.
  *   ```
+ *
+ *   ```note One thing to verify before leaning on this
+ *   Numbers this good usually mean something. I am checking this week.
+ *   ```                         (blank lines split it into paragraphs)
  *
  * They exist because a column of numbers in a table is data, and a report is
  * meant to make a point. A bar chart shows at a glance that one query carries
@@ -74,19 +78,30 @@ export function ReportText({ body }: { body: string | null }) {
   const lines = body.split("\n");
   const blocks: React.ReactNode[] = [];
   let bullets: string[] = [];
+  let ordered = false;
   let key = 0;
 
   const flushBullets = () => {
     if (bullets.length === 0) return;
     const k = key++;
+    const items = bullets.map((b, i) => (
+      <li key={i}>{inline(b, `u${k}-${i}`)}</li>
+    ));
+    const cls =
+      "my-3 space-y-1.5 pl-5 leading-relaxed text-pulse-text-dim marker:text-pulse-text-mute";
     blocks.push(
-      <ul key={k} className="my-3 list-disc space-y-1.5 pl-5 leading-relaxed text-pulse-text-dim">
-        {bullets.map((b, i) => (
-          <li key={i}>{inline(b, `u${k}-${i}`)}</li>
-        ))}
-      </ul>,
+      ordered ? (
+        <ol key={k} className={`list-decimal ${cls}`}>
+          {items}
+        </ol>
+      ) : (
+        <ul key={k} className={`list-disc ${cls}`}>
+          {items}
+        </ul>
+      ),
     );
     bullets = [];
+    ordered = false;
   };
 
   for (let i = 0; i < lines.length; i++) {
@@ -144,6 +159,24 @@ export function ReportText({ body }: { body: string | null }) {
             right={{ label: rows[1][0], value: rows[1][1] ?? "", note: rows[1][2] }}
             note={note || undefined}
           />,
+        );
+        continue;
+      }
+      if (kind === "note") {
+        // Raw lines rather than parseRows: a callout is prose, and a stray
+        // pipe in a sentence should not turn it into a table.
+        const paras = inner
+          .join("\n")
+          .split(/\n\s*\n/)
+          .map((b) => b.trim())
+          .filter(Boolean);
+        const k = key++;
+        blocks.push(
+          <NoteBlock key={k} title={title || undefined}>
+            {paras.map((t, pi) => (
+              <p key={pi}>{inline(t.replace(/\n/g, " "), `n${k}-${pi}`)}</p>
+            ))}
+          </NoteBlock>,
         );
         continue;
       }
@@ -237,7 +270,21 @@ export function ReportText({ body }: { body: string | null }) {
     }
 
     if (line.startsWith("- ")) {
+      if (ordered) flushBullets();
+      ordered = false;
       bullets.push(line.slice(2));
+      continue;
+    }
+
+    // "1. " and friends. A report's recommendations are a sequence, and dots
+    // lose the order that "do this one first" depends on. The number comes
+    // from the list position rather than what was typed, so inserting a step
+    // does not mean renumbering the rest by hand.
+    const numbered = /^\d+[.)]\s+(.*)$/.exec(line);
+    if (numbered) {
+      if (!ordered) flushBullets();
+      ordered = true;
+      bullets.push(numbered[1]);
       continue;
     }
 

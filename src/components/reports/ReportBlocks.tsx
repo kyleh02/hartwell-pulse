@@ -161,3 +161,33 @@ export function Compare({
     </div>
   );
 }
+
+/**
+ * An aside the writer wants read, not skimmed past.
+ *
+ * A report carries two kinds of paragraph: the account of what happened, and
+ * the caveat that stops a number being trusted further than it deserves. Both
+ * were rendering as identical prose, so the caveat was the easiest thing on the
+ * page to miss, which is the opposite of what it is for.
+ *
+ * One style rather than two. The drafts these come from use a light box and a
+ * dark box, but that is their visual language and this document has its own;
+ * two boxes competing for the same job is a decision to make on every callout
+ * for no gain in meaning.
+ */
+export function NoteBlock({
+  title,
+  children,
+}: {
+  title?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="report-block my-5 border-l-2 border-pulse-gold bg-pulse-surface-2/50 py-3.5 pl-4 pr-4">
+      {title && <p className="mono-label mb-2">{title}</p>}
+      <div className="space-y-2.5 text-sm leading-relaxed text-pulse-text-dim">
+        {children}
+      </div>
+    </div>
+  );
+}

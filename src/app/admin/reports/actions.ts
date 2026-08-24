@@ -303,6 +303,98 @@ export async function uploadReportImage(
 }
 
 /**
+ * Attach the PDF that goes out with the send email.
+ *
+ * Uploaded, not generated. The portal has no renderer and putting a headless
+ * browser behind this to make a document nobody has looked at would be worse
+ * than the current arrangement: Kyle prints the viewer, reads what the client
+ * will read, and attaches that exact file.
+ *
+ * Replacing one removes the old object. A private bucket full of superseded
+ * PDFs is invisible and pays rent forever, which is the same reason
+ * deleteReport sweeps its images.
+ */
+export async function uploadReportPdf(
+  formData: FormData,
+): Promise<{ ok: true; name: string } | { ok: false; message: string }> {
+  const { supabase } = await adminSupabase();
+  const reportId = String(formData.get("reportId") ?? "");
+  const file = formData.get("file");
+  if (!(file instanceof File) || !reportId) {
+    return { ok: false, message: "Choose a PDF first." };
+  }
+  if (file.type !== "application/pdf" && !/\.pdf$/i.test(file.name)) {
+    return { ok: false, message: "That is not a PDF." };
+  }
+
+  const { data: report } = await supabase
+    .from("reports")
+    .select("client_id, pdf_path")
+    .eq("id", reportId)
+    .maybeSingle();
+  if (!report) return { ok: false, message: "That report no longer exists." };
+  const { client_id: clientId, pdf_path: oldPath } = report as {
+    client_id: string;
+    pdf_path: string | null;
+  };
+
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `${clientId}/${reportId}/pdf/${randomUUID()}-${safeName}`;
+  const { error: upErr } = await supabase.storage
+    .from("pulse-reports")
+    .upload(path, file, { contentType: "application/pdf", upsert: false });
+  if (upErr) return { ok: false, message: upErr.message };
+
+  // Checked, because an unchecked write here means the file sits in storage
+  // while the report still points at the old one, and the send goes out with
+  // last month's numbers over this month's letterhead.
+  const { error: updErr } = await supabase
+    .from("reports")
+    .update({
+      pdf_path: path,
+      pdf_name: safeName,
+      pdf_uploaded_at: new Date().toISOString(),
+    })
+    .eq("id", reportId);
+  if (updErr) {
+    await supabase.storage.from("pulse-reports").remove([path]);
+    return { ok: false, message: updErr.message };
+  }
+
+  if (oldPath && oldPath !== path) {
+    await supabase.storage.from("pulse-reports").remove([oldPath]);
+  }
+
+  revalidatePath(`/admin/reports/${reportId}`);
+  return { ok: true, name: safeName };
+}
+
+/** Take the PDF off, so the email goes with a link only. */
+export async function removeReportPdf(
+  reportId: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const { supabase } = await adminSupabase();
+  const { data: report } = await supabase
+    .from("reports")
+    .select("pdf_path")
+    .eq("id", reportId)
+    .maybeSingle();
+  if (!report) return { ok: false, message: "That report no longer exists." };
+
+  const { error } = await supabase
+    .from("reports")
+    .update({ pdf_path: null, pdf_name: null, pdf_uploaded_at: null })
+    .eq("id", reportId);
+  if (error) return { ok: false, message: error.message };
+
+  const path = (report as { pdf_path: string | null }).pdf_path;
+  if (path) await supabase.storage.from("pulse-reports").remove([path]);
+
+  revalidatePath(`/admin/reports/${reportId}`);
+  return { ok: true };
+}
+
+/**
  * Create a report from a Markdown draft.
  *
  * Reports get written as Markdown before they get typed into a form, so this

@@ -5,6 +5,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { getReportBundle, listSnippets, resolveImageUrls } from "@/lib/reports";
 import { sectionBlocks, type ReportBlock } from "@/lib/reports-shared";
 import { ReportEditor } from "@/components/reports/ReportEditor";
+import { ReportPdf } from "@/components/reports/ReportPdf";
 
 export const metadata = { title: "Edit report" };
 
@@ -50,6 +51,14 @@ export default async function EditReportPage({
         <ArrowLeft size={15} strokeWidth={1.75} />
         All reports
       </Link>
+      {/* Above the editor rather than inside it: what goes out with the email
+          is a decision about the send, and the send controls sit at the top. */}
+      <ReportPdf
+        reportId={bundle.report.id}
+        pdfName={bundle.report.pdf_name}
+        pdfUploadedAt={bundle.report.pdf_uploaded_at}
+        reportUpdatedAt={bundle.report.updated_at}
+      />
       <ReportEditor
         bundle={bundle}
         imageUrls={imageUrls}

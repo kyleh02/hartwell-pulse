@@ -134,6 +134,31 @@ Live at https://portal.hartwelldigital.com
   field exists, check something actually displays it.
 - `findPlaceholders()` warns on `[ADD: ...]`, TODO, TBC before a send. Reports
   are written before all their numbers are in.
+- **The report body is a closed Markdown subset in `ReportText.tsx`, not a
+  library**, so nothing in a body can inject markup. Paragraphs, `- ` bullets,
+  `1. ` numbered lists, `### ` subheadings, pipe tables (header needs a
+  `|---|` divider row), `**bold**`, and four fenced blocks: ```stats,
+  ```bar Title, ```compare Title and ```note Title. The fences exist because a
+  column of numbers in a table is data and a report is meant to make a point.
+- Numbered lists render as `<ol>` and take their numbers from position, not
+  from what was typed, so inserting a step does not mean renumbering the rest.
+  `note` is one style rather than a light and a dark one: two boxes competing
+  for the same job is a decision to make on every callout for no gain.
+- **The send email carries the PDF** (0042). A client told their report is
+  ready and handed a portal link has a sign-in between them and the thing they
+  were promised, and anyone they forward it to has no login at all.
+- **The portal does not GENERATE the PDF, and that is deliberate.** Kyle prints
+  the viewer, which is what the print stylesheet and the `{client} - {title}`
+  tab title already exist for, and attaches that file. A server-side renderer
+  is a headless browser this stack has nowhere to put, and it would attach a
+  document nobody had looked at.
+- If a PDF is attached it MUST go: a download failure stops the send with a
+  message rather than quietly degrading to a link-only email nobody knows is
+  degraded. The test send carries it too, because a proof that leaves out the
+  thing being changed is not a proof.
+- `pdf_uploaded_at` older than the report's `updated_at` means the attachment
+  is stale, and the editor says so. Nothing can tell that from the file, so the
+  two timestamps are simply shown to disagree.
 - The tab title on a report viewer is the suggested PDF filename, so it is
   `{client} - {title}`, and the admin preview uses the same one as the client
   page. A file called "Report preview.pdf" reaching a client is a mistake.
