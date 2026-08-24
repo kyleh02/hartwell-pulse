@@ -79,6 +79,17 @@ export function ReportText({ body }: { body: string | null }) {
   const blocks: React.ReactNode[] = [];
   let bullets: string[] = [];
   let ordered = false;
+  /**
+   * What the first item of an ordered run was numbered.
+   *
+   * Positions still supply every number after it, so inserting a step in the
+   * middle does not mean renumbering by hand. What this carries is the one
+   * thing position cannot know: that a second list is a continuation of the
+   * one above it rather than a fresh count. A report that splits its
+   * recommendations under two headings and numbers them 1, 2, 3 then 4, 5 is
+   * saying they are one sequence, and restarting at 1 loses that.
+   */
+  let orderedStart = 1;
   let key = 0;
 
   const flushBullets = () => {
@@ -91,7 +102,11 @@ export function ReportText({ body }: { body: string | null }) {
       "my-5 space-y-2.5 pl-6 leading-[1.75] text-pulse-text-dim marker:text-pulse-text-mute";
     blocks.push(
       ordered ? (
-        <ol key={k} className={`list-decimal ${cls}`}>
+        <ol
+          key={k}
+          start={orderedStart === 1 ? undefined : orderedStart}
+          className={`list-decimal ${cls}`}
+        >
           {items}
         </ol>
       ) : (
@@ -102,6 +117,7 @@ export function ReportText({ body }: { body: string | null }) {
     );
     bullets = [];
     ordered = false;
+    orderedStart = 1;
   };
 
   for (let i = 0; i < lines.length; i++) {
@@ -280,11 +296,14 @@ export function ReportText({ body }: { body: string | null }) {
     // lose the order that "do this one first" depends on. The number comes
     // from the list position rather than what was typed, so inserting a step
     // does not mean renumbering the rest by hand.
-    const numbered = /^\d+[.)]\s+(.*)$/.exec(line);
+    const numbered = /^(\d+)[.)]\s+(.*)$/.exec(line);
     if (numbered) {
-      if (!ordered) flushBullets();
+      if (!ordered) {
+        flushBullets();
+        orderedStart = Number(numbered[1]) || 1;
+      }
       ordered = true;
-      bullets.push(numbered[1]);
+      bullets.push(numbered[2]);
       continue;
     }
 

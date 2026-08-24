@@ -142,6 +142,9 @@ Live at https://portal.hartwelldigital.com
   column of numbers in a table is data and a report is meant to make a point.
 - Numbered lists render as `<ol>` and take their numbers from position, not
   from what was typed, so inserting a step does not mean renumbering the rest.
+  The ONE exception is the first item of a list: start it at 4 and the list
+  starts at 4, which is how a set of recommendations split under two
+  subheadings stays one sequence instead of restarting.
   `note` is one style rather than a light and a dark one: two boxes competing
   for the same job is a decision to make on every callout for no gain.
 - **The send email carries the PDF** (0042). A client told their report is
