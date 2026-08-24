@@ -6,6 +6,7 @@ import { getReportBundle, resolveImageUrls } from "@/lib/reports";
 import { getBusinessSettings } from "@/lib/invoices";
 import { sectionBlocks, type ReportBlock } from "@/lib/reports-shared";
 import { ReportViewerChrome } from "@/components/reports/ReportViewerChrome";
+import { ForcePrintLight } from "@/components/reports/ForcePrintLight";
 
 /**
  * Deliberately the same title the client's own page uses, not "Preview". The
@@ -45,6 +46,9 @@ export default async function AdminReportPreviewPage({
 
   return (
     <div>
+      {/* This page exists to be printed, so it states the light palette rather
+          than inheriting whatever theme the browser happens to be in. */}
+      <ForcePrintLight />
       <Link
         href={`/admin/reports/${reportId}`}
         className="no-print mb-4 inline-flex items-center gap-1.5 text-sm text-pulse-text-dim transition-colors hover:text-pulse-text"
