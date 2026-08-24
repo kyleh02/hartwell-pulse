@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, Paperclip, RefreshCw, X } from "lucide-react";
+import { ExternalLink, FileText, Paperclip, RefreshCw, X } from "lucide-react";
 import { uploadReportPdf, removeReportPdf } from "@/app/admin/reports/actions";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import { requestReportPdf } from "@/lib/report-pdf-client";
@@ -30,11 +30,19 @@ export function ReportPdf({
   pdfName,
   pdfUploadedAt,
   reportUpdatedAt,
+  printUrl = null,
 }: {
   reportId: string;
   pdfName: string | null;
   pdfUploadedAt: string | null;
   reportUpdatedAt: string;
+  /**
+   * The page the renderer photographs, signed and openable.
+   *
+   * When a PDF comes out wrong, the first question is whether the page was
+   * wrong or the rendering was, and there was no way to tell them apart.
+   */
+  printUrl?: string | null;
 }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -137,6 +145,18 @@ export function ReportPdf({
             <Paperclip size={14} />
             Upload
           </button>
+          {printUrl && (
+            <a
+              href={printUrl}
+              target="_blank"
+              rel="noreferrer"
+              className={buttonClasses("ghost", "sm")}
+              title="Open the page the renderer photographs"
+            >
+              <ExternalLink size={14} />
+              Print page
+            </a>
+          )}
           {pdfName && (
             <Button variant="ghost" size="sm" onClick={remove} disabled={pending}>
               <X size={14} /> Remove

@@ -6,6 +6,7 @@ import { getReportBundle, listSnippets, resolveImageUrls } from "@/lib/reports";
 import { sectionBlocks, type ReportBlock } from "@/lib/reports-shared";
 import { ReportEditor } from "@/components/reports/ReportEditor";
 import { ReportPdf } from "@/components/reports/ReportPdf";
+import { printTokenFor } from "@/lib/report-print-token";
 
 export const metadata = { title: "Edit report" };
 
@@ -58,6 +59,18 @@ export default async function EditReportPage({
         pdfName={bundle.report.pdf_name}
         pdfUploadedAt={bundle.report.pdf_uploaded_at}
         reportUpdatedAt={bundle.report.updated_at}
+        printUrl={(() => {
+          // The exact page the renderer photographs, openable in a real
+          // browser. Worth having permanently: when a PDF comes out wrong the
+          // first question is whether the page was wrong or the rendering was,
+          // and until now there was no way to look. The token is minted here
+          // because only the server holds the secret, and it lasts five
+          // minutes like any other.
+          const t = printTokenFor(bundle.report.id);
+          return t
+            ? `/print/report/${bundle.report.id}?token=${encodeURIComponent(t)}`
+            : null;
+        })()}
       />
       <ReportEditor
         bundle={bundle}
