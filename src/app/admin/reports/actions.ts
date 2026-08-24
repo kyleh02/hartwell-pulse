@@ -338,8 +338,18 @@ export async function uploadReportPdf(
     pdf_path: string | null;
   };
 
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const path = `${clientId}/${reportId}/pdf/${randomUUID()}-${safeName}`;
+  // Two names again, for the same reason the rendered one has two. The client
+  // sees the file she was sent; the storage key is folded down to ASCII
+  // because nobody sees it and a non-ASCII object key invites trouble.
+  const displayName = file.name.replace(/[\\/:*?"<>|]/g, "").trim() || "report.pdf";
+  const keyName =
+    displayName
+      .normalize("NFKD")
+      .replace(/\p{M}/gu, "")
+      .replace(/[^a-zA-Z0-9.]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase() || "report.pdf";
+  const path = `${clientId}/${reportId}/pdf/${randomUUID()}-${keyName}`;
   const { error: upErr } = await supabase.storage
     .from("pulse-reports")
     .upload(path, file, { contentType: "application/pdf", upsert: false });
@@ -352,7 +362,7 @@ export async function uploadReportPdf(
     .from("reports")
     .update({
       pdf_path: path,
-      pdf_name: safeName,
+      pdf_name: displayName,
       pdf_uploaded_at: new Date().toISOString(),
     })
     .eq("id", reportId);
@@ -366,7 +376,7 @@ export async function uploadReportPdf(
   }
 
   revalidatePath(`/admin/reports/${reportId}`);
-  return { ok: true, name: safeName };
+  return { ok: true, name: displayName };
 }
 
 /** Take the PDF off, so the email goes with a link only. */

@@ -54,13 +54,34 @@ export async function renderReportPdf(
   };
   const client = Array.isArray(report.clients) ? report.clients[0] : report.clients;
 
-  // The same name the viewer's tab title suggests, so a file made here and one
-  // saved by hand are called the same thing.
-  const safeName = `${client?.business_name ?? "Report"} - ${report.title}`
-    .replace(/[^a-zA-Z0-9 ._-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-");
-  const fileName = `${safeName || "report"}.pdf`;
+  // What the client sees on the attachment. Her business name as she spells it,
+  // accent and all, then the report title, spaces between the words.
+  //
+  // Two names rather than one, and that is the fix for the accent going
+  // missing: the storage key used to be this string, so making the key safe
+  // made the filename wrong. Only the characters a filesystem genuinely
+  // refuses come out, and no hyphens are put in. "Haus-of-Vitality-Month-One-
+  // Report.pdf" reads like a slug in a downloads folder; this reads like a
+  // document.
+  const displayName =
+    `${client?.business_name ?? "Report"} ${report.title}`
+      // Illegal in a Windows or macOS filename. Everything else, including
+      // accented letters, is left exactly as written.
+      .replace(/[\\/:*?"<>|]/g, "")
+      .replace(/\s+/g, " ")
+      .trim() || "Report";
+  const fileName = `${displayName}.pdf`;
+
+  // The storage key is a different problem with a different answer. It is
+  // never shown to anyone, and a non-ASCII object key is asking for trouble
+  // from something in the chain, so this one is folded down hard.
+  const keyName =
+    displayName
+      .normalize("NFKD")
+      .replace(/\p{M}/gu, "")
+      .replace(/[^a-zA-Z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase() || "report";
 
   let pdf: Uint8Array;
   try {
@@ -134,7 +155,7 @@ export async function renderReportPdf(
     };
   }
 
-  const path = `${report.client_id}/${reportId}/pdf/${Date.now()}-${fileName}`;
+  const path = `${report.client_id}/${reportId}/pdf/${Date.now()}-${keyName}.pdf`;
   const { error: upErr } = await supabase.storage
     .from("pulse-reports")
     .upload(path, Buffer.from(pdf), {
