@@ -88,7 +88,7 @@ export function ReportText({ body }: { body: string | null }) {
       <li key={i}>{inline(b, `u${k}-${i}`)}</li>
     ));
     const cls =
-      "my-3 space-y-1.5 pl-5 leading-relaxed text-pulse-text-dim marker:text-pulse-text-mute";
+      "my-5 space-y-2.5 pl-6 leading-[1.75] text-pulse-text-dim marker:text-pulse-text-mute";
     blocks.push(
       ordered ? (
         <ol key={k} className={`list-decimal ${cls}`}>
@@ -208,15 +208,15 @@ export function ReportText({ body }: { body: string | null }) {
       blocks.push(
         // Scrolls in its own box so a wide table never drags the page sideways
         // on a phone.
-        <div key={k} className="my-4 overflow-x-auto">
-          <table className="w-full min-w-[18rem] text-sm">
+        <div key={k} className="my-7 overflow-x-auto">
+          <table className="w-full min-w-[18rem] text-[0.9375rem]">
             {hasHeader && (
               <thead>
                 <tr className="border-b border-pulse-border text-left">
                   {header.map((h, hi) => (
                     <th
                       key={hi}
-                      className={`mono-label py-2 pr-4 font-medium ${hi > 0 ? "text-right" : ""}`}
+                      className={`mono-label pb-3 pr-6 font-medium ${hi > 0 ? "text-right" : ""}`}
                     >
                       {h}
                     </th>
@@ -232,8 +232,8 @@ export function ReportText({ body }: { body: string | null }) {
                       key={ci}
                       className={
                         ci === 0
-                          ? "py-2 pr-4 align-top text-pulse-text-dim"
-                          : "data-mono py-2 pr-4 text-right align-top text-pulse-text"
+                          ? "py-3 pr-6 align-top text-pulse-text-dim"
+                          : "data-mono py-3 pr-6 text-right align-top text-pulse-text"
                       }
                     >
                       {inline(c, `t${k}-${ri}-${ci}`)}
@@ -254,7 +254,7 @@ export function ReportText({ body }: { body: string | null }) {
       blocks.push(
         <h4
           key={key++}
-          className="report-heading mb-1.5 mt-6 text-sm font-medium text-pulse-text"
+          className="report-heading mb-3 mt-10 text-[0.9375rem] font-medium text-pulse-text"
         >
           {line.slice(4)}
         </h4>,
@@ -265,7 +265,7 @@ export function ReportText({ body }: { body: string | null }) {
     // ---- rule, used as a divider in drafts ----
     if (/^-{3,}$/.test(line)) {
       flushBullets();
-      blocks.push(<hr key={key++} className="my-6 border-pulse-border" />);
+      blocks.push(<hr key={key++} className="my-9 border-pulse-border" />);
       continue;
     }
 
@@ -292,7 +292,7 @@ export function ReportText({ body }: { body: string | null }) {
     if (line.length > 0) {
       const k = key++;
       blocks.push(
-        <p key={k} className="my-3 leading-relaxed text-pulse-text-dim">
+        <p key={k} className="my-4 leading-[1.75] text-pulse-text-dim">
           {inline(line, `p${k}`)}
         </p>,
       );
@@ -300,5 +300,5 @@ export function ReportText({ body }: { body: string | null }) {
   }
   flushBullets();
 
-  return <div className="report-prose text-sm">{blocks}</div>;
+  return <div className="report-prose text-[0.9375rem]">{blocks}</div>;
 }

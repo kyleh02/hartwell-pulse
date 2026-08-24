@@ -25,7 +25,7 @@ export function ReportDocument({
   const hidden = new Set(hiddenIndices);
   const summary = bundle.report.summary?.trim();
   return (
-    <article className="space-y-12">
+    <article className="space-y-20">
       {/* The opening block: everything above the first heading in the draft.
           The importer has always stored this, and nothing ever rendered it, so
           a report's at-a-glance table went straight into the database and was
@@ -59,9 +59,9 @@ export function ReportDocument({
           >
             {/* The heading and its rule are one unit, so a page never breaks
                 between a section title and the first line under it. */}
-            <div className="report-section-head mb-5 border-b border-pulse-border pb-3">
+            <div className="report-section-head mb-8 border-b border-pulse-border pb-4">
               <SectionLabel parts={[section.kind, section.title]} />
-              <h2 className="report-heading mt-2 text-xl font-semibold tracking-tight text-pulse-text">
+              <h2 className="report-heading mt-2.5 text-[1.375rem] font-semibold tracking-tight text-pulse-text">
                 {section.title}
               </h2>
             </div>
@@ -69,7 +69,7 @@ export function ReportDocument({
             <ReportText body={section.body} />
 
             {metricBlocks.length > 0 && (
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="mt-8 grid gap-4 sm:grid-cols-2">
                 {metricBlocks.map((b) => (
                   <div key={b.id} className="report-block">
                     <ReportMetricBlock
@@ -82,7 +82,7 @@ export function ReportDocument({
             )}
 
             {imageBlocks.map((b) => (
-              <figure key={b.id} className="report-figure mt-5">
+              <figure key={b.id} className="report-figure mt-8">
                 {imageUrls[b.path] && (
                   <ZoomableImage
                     src={imageUrls[b.path]}

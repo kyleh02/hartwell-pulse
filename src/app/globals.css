@@ -250,7 +250,8 @@
      under it, the way a standfirst does. Not a different colour or weight:
      size alone is enough to say "start here". */
   .report-lead .report-prose {
-    font-size: 0.9375rem;
+    font-size: 1.0625rem;
+    line-height: 1.7;
   }
 
   /* A card that responds to being pointed at. Border and a 1px rise only:
