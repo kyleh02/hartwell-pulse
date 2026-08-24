@@ -127,7 +127,12 @@ Live at https://portal.hartwelldigital.com
   Send emails the chosen people and stamps `sent_at`. Migration 0032 dropped
   the `reports_notify` trigger that used to put a line in everyone's WEEKLY
   digest on publish: a finished report could sit unmentioned for six days.
-- Reports have "Test to me", same as invoices, reading the saved row.
+- Reports have "Test to me", same as invoices, reading the saved row. It is
+  offered on a DRAFT as well as a published report: checking a report is right
+  is what you do before the client can see it, and making publishing the price
+  of a test had that backwards. It carries the PDF, and the result names the
+  file it attached or says plainly that none was, because "it looked fine" does
+  not answer "did the attachment go".
 - `reports.summary` (everything above the first `##` in an imported draft, i.e.
   the at-a-glance block) was written by the importer and rendered by nothing
   for its whole life. It renders now and is editable as "Opening". If a report

@@ -366,7 +366,9 @@ export function ReportEditor({
         return;
       }
       setSendNote(
-        `Test sent to ${res.sentTo.join(", ")}. Nothing was recorded and the client got nothing.`,
+        res.attached
+          ? `Test sent to ${res.sentTo.join(", ")} with ${res.attached} attached. Nothing was recorded and the client got nothing.`
+          : `Test sent to ${res.sentTo.join(", ")}, with NO PDF attached, because none is on this report yet. The client would get the same link-only email. Nothing was recorded and the client got nothing.`,
       );
     });
   }
@@ -426,17 +428,21 @@ The report and every section in it are permanently removed, along with any image
           <Button variant="secondary" size="sm" onClick={save} disabled={pending}>
             Save
           </Button>
+          {/* On a draft as well as a published report. Checking it is right
+              is the thing you do BEFORE the client can see it, and publishing
+              first to unlock the test had that backwards. The sender allows a
+              test on a draft already; only this button was gated. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={sendTest}
+            disabled={pending}
+            title="Send this report to yourself, exactly as the client would get it, attachment and all"
+          >
+            <MailCheck size={14} /> Test to me
+          </Button>
           {status === "published" ? (
             <>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={sendTest}
-                disabled={pending}
-                title="Send this report to yourself, exactly as the client would get it"
-              >
-                <MailCheck size={14} /> Test to me
-              </Button>
               <Button size="sm" onClick={send} disabled={pending}>
                 <Send size={14} /> {sentAt ? "Send again" : "Send"}
               </Button>

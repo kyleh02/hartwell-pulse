@@ -7,7 +7,18 @@ import { DEFAULT_REPORT_EMAIL } from "@/lib/reports-shared";
 import type { Report } from "@/lib/types/database";
 
 export type SendReportResult =
-  | { ok: true; sentTo: string[] }
+  | {
+      ok: true;
+      sentTo: string[];
+      /**
+       * The PDF filename that went with it, or null if none was attached.
+       *
+       * Reported back rather than left implicit so a test send can say which
+       * of the two emails it was. "It looked fine" is not an answer to "did
+       * the attachment go", and that is the whole question a test is asked.
+       */
+      attached: string | null;
+    }
   | { ok: false; message: string };
 
 /**
@@ -115,7 +126,11 @@ export async function sendReportWith(
       ref: { kind: "report", id: reportId },
       attachments,
     });
-    return { ok: true, sentTo: [opts.testTo] };
+    return {
+      ok: true,
+      sentTo: [opts.testTo],
+      attached: attachments ? (report.pdf_name ?? "the PDF") : null,
+    };
   }
 
   const people = await resolveRecipients(
@@ -164,5 +179,9 @@ export async function sendReportWith(
   // Kyle sends again rather than believing it landed.
   await supabase.from("reports").update({ sent_at: now }).eq("id", reportId);
 
-  return { ok: true, sentTo };
+  return {
+    ok: true,
+    sentTo,
+    attached: attachments ? (report.pdf_name ?? "the PDF") : null,
+  };
 }
