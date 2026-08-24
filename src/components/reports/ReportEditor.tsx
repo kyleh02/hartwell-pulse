@@ -29,6 +29,8 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SectionCard, type EditSection } from "@/components/reports/SectionCard";
+import { ReportText } from "@/components/reports/ReportText";
+import { cn } from "@/lib/utils/cn";
 import { BrandSwitch } from "@/components/reports/BrandSwitch";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -141,6 +143,8 @@ export function ReportEditor({
   const [snippets, setSnippets] = useState(initialSnippets);
   const [saved, setSaved] = useState(true);
   const [brand, setBrand] = useState<Brand>(bundle.report.brand ?? "hartwell");
+  /** The opening block gets the same live preview the sections have. */
+  const [splitOpening, setSplitOpening] = useState(false);
   const [brandError, setBrandError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const router = useRouter();
@@ -455,17 +459,44 @@ The report and every section in it are permanently removed, along with any image
               imported draft lands here, which is usually the at-a-glance
               table, so it needs to be editable and not just stored. */}
           <div className="mb-3 rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-4">
-            <p className="mono-label mb-2">Opening</p>
-            <textarea
-              value={summary}
-              onChange={(e) => {
-                setSummary(e.target.value);
-                touch();
-              }}
-              rows={5}
-              placeholder="The first thing they read, above the sections. Leave it empty to start straight at the first section."
-              className="w-full resize-y rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 p-3 text-sm leading-relaxed text-pulse-text placeholder:text-pulse-text-mute focus:border-pulse-border-strong focus:outline-none"
-            />
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="mono-label">Opening</p>
+              <button
+                type="button"
+                onClick={() => setSplitOpening((v) => !v)}
+                aria-pressed={splitOpening}
+                className="text-[11px] text-pulse-text-mute hover:text-pulse-text"
+              >
+                {splitOpening ? "Hide preview" : "Show preview"}
+              </button>
+            </div>
+            <div className={cn("grid gap-4", splitOpening && "lg:grid-cols-2")}>
+              <textarea
+                value={summary}
+                onChange={(e) => {
+                  setSummary(e.target.value);
+                  touch();
+                }}
+                rows={7}
+                spellCheck
+                placeholder="The first thing they read, above the sections. Leave it empty to start straight at the first section."
+                className="w-full resize-y rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 p-3.5 font-mono text-[13px] leading-[1.65] text-pulse-text placeholder:font-sans placeholder:text-pulse-text-mute focus:border-pulse-border-strong focus:outline-none"
+              />
+              {splitOpening && (
+                <div className="rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2/40 p-4">
+                  <p className="mono-label mb-3">As it will read</p>
+                  <div className="report-section report-lead">
+                    {summary.trim() ? (
+                      <ReportText body={summary} />
+                    ) : (
+                      <p className="text-sm text-pulse-text-mute">
+                        Nothing to show yet.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <DndContext

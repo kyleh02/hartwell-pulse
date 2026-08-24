@@ -156,6 +156,13 @@ Live at https://portal.hartwelldigital.com
   message rather than quietly degrading to a link-only email nobody knows is
   degraded. The test send carries it too, because a proof that leaves out the
   thing being changed is not a proof.
+- **Every body field in the editor has a live preview beside it**, rendered by
+  the document's own `ReportText` with the document's own styles, so what is
+  shown is what prints. The draft is Markdown with pipe tables and fenced
+  charts in it, and the only way to see whether a table lined up used to be
+  save, leave, open the viewer, come back. The box is monospace and grows to
+  fit: pipes only read as a table when they line up, and a fixed six rows means
+  editing a table through a letterbox.
 - `pdf_uploaded_at` older than the report's `updated_at` means the attachment
   is stale, and the editor says so. Nothing can tell that from the file, so the
   two timestamps are simply shown to disagree.

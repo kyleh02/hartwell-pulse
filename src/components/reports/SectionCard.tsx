@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef } from "react";
-import { Trash2, X, LineChart, SeparatorHorizontal } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Trash2, X, LineChart, SeparatorHorizontal, Columns2 } from "lucide-react";
 import type { InsightSnippet, ReportSectionKind } from "@/lib/types/database";
 import type {
   AvailableMetric,
@@ -10,6 +10,7 @@ import type {
 } from "@/lib/reports-shared";
 import { metricKeyOf } from "@/lib/reports-shared";
 import { ReportMetricBlock } from "@/components/reports/ReportMetricBlock";
+import { ReportText } from "@/components/reports/ReportText";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { cn } from "@/lib/utils/cn";
 
@@ -49,7 +50,33 @@ export function SectionCard({
   dragHandle: React.ReactNode;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
   const isMetrics = section.kind === "metrics";
+
+  /**
+   * Show the rendered section beside the text being typed.
+   *
+   * The draft is Markdown with pipe tables and fenced charts in it, and read
+   * as raw text in a six-line box it is close to unreadable. Worse, the only
+   * way to find out whether a table lined up or a chart came out the right way
+   * round was to save, leave the editor, open the viewer and come back.
+   *
+   * Off by default. On a narrow screen the two panes stack, which is still
+   * more useful than switching pages.
+   */
+  const [split, setSplit] = useState(false);
+
+  /**
+   * Grow the box to fit what is in it. A fixed six rows means a section with a
+   * table in it is edited through a letterbox, scrolling to see the line above
+   * the one being typed.
+   */
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.max(el.scrollHeight + 2, 220)}px`;
+  }, [section.body, split]);
 
   const addedKeys = new Set(
     section.blocks
@@ -105,6 +132,26 @@ export function SectionCard({
           className="flex-1 rounded-[var(--radius-input)] bg-transparent px-2 py-1 text-sm font-medium text-pulse-text focus:bg-pulse-surface-2 focus:outline-none"
           placeholder="Section title"
         />
+        {!isMetrics && (
+          <button
+            type="button"
+            onClick={() => setSplit((v) => !v)}
+            aria-pressed={split}
+            title={
+              split
+                ? "Hide the preview"
+                : "Show what this section looks like, beside the text"
+            }
+            className={cn(
+              "flex h-8 w-8 items-center justify-center rounded-[var(--radius-input)] hover:bg-pulse-surface-2",
+              split
+                ? "text-pulse-gold"
+                : "text-pulse-text-mute hover:text-pulse-text",
+            )}
+          >
+            <Columns2 size={15} />
+          </button>
+        )}
         {/* Print control. CSS keeps a heading with its text and a table row in
             one piece, but only the writer knows a section is a new chapter. */}
         <button
@@ -144,13 +191,39 @@ export function SectionCard({
       <div className="space-y-4 p-4">
         {!isMetrics && (
           <>
-            <textarea
-              value={section.body}
-              onChange={(e) => onUpdate({ body: e.target.value })}
-              rows={6}
-              placeholder="Write in plain Australian English, in your voice. Start a line with '- ' for a bullet."
-              className="w-full resize-y rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 p-3 text-sm leading-relaxed text-pulse-text placeholder:text-pulse-text-mute focus:border-pulse-border-strong focus:outline-none"
-            />
+            <div
+              className={cn(
+                "grid gap-4",
+                split && "lg:grid-cols-2",
+              )}
+            >
+              {/* Monospace on purpose. A pipe table only reads as a table when
+                  the pipes line up, and the same goes for a fenced chart. */}
+              <textarea
+                ref={bodyRef}
+                value={section.body}
+                onChange={(e) => onUpdate({ body: e.target.value })}
+                spellCheck
+                placeholder="Write in plain Australian English, in your voice. Start a line with '- ' for a bullet."
+                className="w-full resize-y rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 p-3.5 font-mono text-[13px] leading-[1.65] text-pulse-text placeholder:font-sans placeholder:text-pulse-text-mute focus:border-pulse-border-strong focus:outline-none"
+              />
+              {split && (
+                <div className="rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2/40 p-4">
+                  <p className="mono-label mb-3">As it will read</p>
+                  {/* The document's own component and the document's own
+                      styles, so what is shown here is what prints. */}
+                  <div className="report-section">
+                    {section.body.trim() ? (
+                      <ReportText body={section.body} />
+                    ) : (
+                      <p className="text-sm text-pulse-text-mute">
+                        Nothing to show yet.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             {snippets.length > 0 && (
               <select
                 value=""
