@@ -3,6 +3,7 @@ import { createAdminSupabase } from "@/lib/supabase/admin";
 import { cronAuthorized } from "@/lib/cron-auth";
 import { generateWorkItems } from "@/lib/work-generate";
 import { materialiseRecurrences } from "@/lib/work-recurrence";
+import { nudgeTimedItems } from "@/lib/work-nudge";
 
 export const dynamic = "force-dynamic";
 
@@ -29,10 +30,12 @@ export async function GET(req: NextRequest) {
   const supabase = createAdminSupabase();
   const generated = await generateWorkItems(supabase);
   const recurring = await materialiseRecurrences(supabase);
+  const nudged = await nudgeTimedItems(supabase);
 
   return Response.json({
     generated: generated.made,
     byKind: generated.byKind,
     recurring: recurring.made,
+    nudged,
   });
 }

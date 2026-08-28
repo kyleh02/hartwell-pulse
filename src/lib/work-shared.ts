@@ -29,6 +29,7 @@ export interface WorkItem {
   drop_reason: string | null;
   snoozed_until: string | null;
   asked_at: string | null;
+  nudged_at: string | null;
   position: number | null;
   hours: number | null;
   hours_note: string | null;

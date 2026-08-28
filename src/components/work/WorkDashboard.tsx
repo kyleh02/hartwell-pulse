@@ -1,21 +1,23 @@
 "use client";
 
-import { useState } from "react";
-import { CalendarDays, Columns3, ListChecks, Repeat } from "lucide-react";
+import { useMemo, useState } from "react";
+import { CalendarDays, CheckCheck, Columns3, ListChecks, Repeat } from "lucide-react";
 import Link from "next/link";
 import { TodayList } from "@/components/work/TodayList";
 import { WorkBoard, WorkCalendar } from "@/components/work/WorkViews";
 import { NewWorkForm } from "@/components/work/NewWorkForm";
+import { DoneList } from "@/components/work/DoneList";
 import type { WorkRow } from "@/lib/work-shared";
 import { cn } from "@/lib/utils/cn";
 import { buttonClasses } from "@/components/ui/Button";
 
-type View = "today" | "board" | "calendar";
+type View = "today" | "board" | "calendar" | "done";
 
 const VIEWS: { key: View; label: string; icon: React.ReactNode }[] = [
   { key: "today", label: "Today", icon: <ListChecks size={14} /> },
   { key: "board", label: "Board", icon: <Columns3 size={14} /> },
   { key: "calendar", label: "Calendar", icon: <CalendarDays size={14} /> },
+  { key: "done", label: "Done", icon: <CheckCheck size={14} /> },
 ];
 
 /**
@@ -34,6 +36,22 @@ export function WorkDashboard({
   clients: { id: string; business_name: string }[];
 }) {
   const [view, setView] = useState<View>("today");
+
+  // Open rows drive the three working views; closed ones only the Done list.
+  // Split here rather than in each view, so none of them can forget.
+  const open = useMemo(() => rows.filter((r) => r.state === "open"), [rows]);
+  const closed = useMemo(
+    () =>
+      rows
+        .filter((r) => r.state !== "open")
+        .sort((a, b) =>
+          (b.done_at ?? b.dropped_at ?? "").localeCompare(
+            a.done_at ?? a.dropped_at ?? "",
+          ),
+        )
+        .slice(0, 50),
+    [rows],
+  );
 
   return (
     <div>
@@ -67,9 +85,10 @@ export function WorkDashboard({
         </div>
       </div>
 
-      {view === "today" && <TodayList rows={rows} />}
-      {view === "board" && <WorkBoard rows={rows} />}
-      {view === "calendar" && <WorkCalendar rows={rows} />}
+      {view === "today" && <TodayList rows={open} />}
+      {view === "board" && <WorkBoard rows={open} />}
+      {view === "calendar" && <WorkCalendar rows={open} />}
+      {view === "done" && <DoneList rows={closed} />}
     </div>
   );
 }

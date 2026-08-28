@@ -288,6 +288,24 @@ All five phases, across three commits.
 
 Migrations 0044 and 0045.
 
+## Closed after a review of the build
+
+Three gaps found by checking the build against the decisions rather than
+against itself.
+
+- **The timed nudge was missing.** Decision 15 was a morning brief PLUS a
+  nudge for anything with a clock on it, and only the brief shipped. Added,
+  with `nudged_at` (0046) so it fires once: without that column the hourly
+  cron would announce the same 08:47 send every hour, which is the nagging
+  again.
+- **Ticking something made it vanish.** No way to see what was finished and no
+  way back from a mis-tick. There is a Done view now, with the dropped items
+  and their reasons beside it, and Put it back on every row.
+- **An item could not be edited.** A typo in a title or a wrong date meant
+  deleting and retyping. Title and date are editable in the expanded row, and
+  the edit keeps an existing clock rather than silently moving an 08:47 send
+  to midnight.
+
 ## Still open
 
 - **`board_cards` is not dropped.** Its rows are copied into work items and the

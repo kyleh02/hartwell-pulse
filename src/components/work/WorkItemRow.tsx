@@ -23,6 +23,8 @@ import {
   deleteStep,
   logHours,
   deleteWork,
+  updateWork,
+  reopenWork,
 } from "@/app/admin/work/actions";
 import {
   daysOverdue,
@@ -89,6 +91,11 @@ export function WorkItemRow({
   const [dropReason, setDropReason] = useState("");
   const [newStep, setNewStep] = useState("");
   const [hoursText, setHoursText] = useState(row.hours?.toString() ?? "");
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(row.title);
+  const [editDue, setEditDue] = useState(
+    row.due_at ? new Date(row.due_at).toISOString().slice(0, 10) : "",
+  );
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -179,9 +186,19 @@ export function WorkItemRow({
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
+          {row.state !== "open" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={pending}
+              onClick={() => run(() => reopenWork(row.id))}
+            >
+              Put it back
+            </Button>
+          )}
           <button
             type="button"
-            disabled={pending}
+            disabled={pending || row.state !== "open"}
             onClick={() => setSnoozeOpen((v) => !v)}
             title="Snooze"
             className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-input)] text-pulse-text-mute hover:bg-pulse-surface-2 hover:text-pulse-text"
@@ -272,6 +289,59 @@ export function WorkItemRow({
           )}
 
           <div>
+            <div className="mb-2.5 flex items-center gap-2.5">
+              <p className="mono-label">Title and date</p>
+              <button
+                type="button"
+                onClick={() => setEditing((v) => !v)}
+                className="text-[11px] text-pulse-text-mute hover:text-pulse-text"
+              >
+                {editing ? "cancel" : "change"}
+              </button>
+            </div>
+            {editing && (
+              <div className="mb-5 flex flex-wrap items-center gap-2">
+                <input
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="min-w-0 flex-1 rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 px-3 py-1.5 text-sm text-pulse-text focus:outline-none"
+                />
+                <input
+                  type="date"
+                  value={editDue}
+                  onChange={(e) => setEditDue(e.target.value)}
+                  className="rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 px-2.5 py-1.5 text-xs text-pulse-text focus:outline-none"
+                />
+                <Button
+                  size="sm"
+                  disabled={pending}
+                  onClick={() => {
+                    setEditing(false);
+                    run(() =>
+                      updateWork(row.id, {
+                        title: editTitle,
+                        // Keeping the clock only if it had one: a date picker
+                        // has no time in it, and silently moving an 08:47 send
+                        // to midnight would be worse than refusing the edit.
+                        dueAt: editDue
+                          ? new Date(
+                              `${editDue}T${
+                                row.has_time && row.due_at
+                                  ? new Date(row.due_at)
+                                      .toTimeString()
+                                      .slice(0, 5)
+                                  : "09:00"
+                              }:00+10:00`,
+                            ).toISOString()
+                          : null,
+                      }),
+                    );
+                  }}
+                >
+                  Save
+                </Button>
+              </div>
+            )}
             <p className="mono-label mb-2.5">Steps</p>
             <ul className="space-y-1.5">
               {row.steps.map((s) => (

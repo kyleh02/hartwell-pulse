@@ -22,8 +22,10 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminDashboardPage() {
   const supabase = await createServerSupabase();
+  // Closed rows come too, so the Done view can show them and a mis-tick has a
+  // way back. The list filters them out; nothing else has to know.
   const [rows, strip, { data: clientData }] = await Promise.all([
-    listWork(supabase),
+    listWork(supabase, { includeClosed: true }),
     getWorkStrip(supabase),
     supabase.from("clients").select("id, business_name").order("business_name"),
   ]);
