@@ -297,6 +297,102 @@ export async function deleteInvoice(invoiceId: string) {
  * actually stored rather than what is on screen. If the numbers look wrong in
  * the test, they are wrong in the database.
  */
+/**
+ * Attach a PDF to an invoice by hand.
+ *
+ * The portal makes one itself, so this is the way out when a render fails,
+ * times out, or comes out wrong. Same split of names as everywhere else: the
+ * client sees the file she was sent, and the storage key is folded to ASCII
+ * because nobody sees it and a non-ASCII object key invites trouble.
+ */
+export async function uploadInvoicePdf(
+  formData: FormData,
+): Promise<{ ok: true; name: string } | { ok: false; message: string }> {
+  const { supabase } = await adminSupabase();
+  const invoiceId = String(formData.get("invoiceId") ?? "");
+  const file = formData.get("file");
+  if (!(file instanceof File) || !invoiceId) {
+    return { ok: false, message: "Choose a PDF first." };
+  }
+  if (file.type !== "application/pdf" && !/\.pdf$/i.test(file.name)) {
+    return { ok: false, message: "That is not a PDF." };
+  }
+
+  const { data: row } = await supabase
+    .from("invoices")
+    .select("client_id, pdf_path")
+    .eq("id", invoiceId)
+    .maybeSingle();
+  if (!row) return { ok: false, message: "That invoice no longer exists." };
+  const { client_id: clientId, pdf_path: oldPath } = row as {
+    client_id: string;
+    pdf_path: string | null;
+  };
+
+  const displayName = file.name.replace(/[\\/:*?"<>|]/g, "").trim() || "invoice.pdf";
+  const keyName =
+    displayName
+      .normalize("NFKD")
+      .replace(/\p{M}/gu, "")
+      .replace(/[^a-zA-Z0-9.]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase() || "invoice.pdf";
+  const path = `${clientId}/${invoiceId}/pdf/${Date.now()}-${keyName}`;
+
+  const { error: upErr } = await supabase.storage
+    .from("pulse-reports")
+    .upload(path, file, { contentType: "application/pdf", upsert: false });
+  if (upErr) return { ok: false, message: upErr.message };
+
+  // Checked. An unchecked write on the money path is a fault waiting for an
+  // excuse, and this one would leave the invoice pointing at the previous file
+  // while the new one sits in storage unused.
+  const { error: updErr } = await supabase
+    .from("invoices")
+    .update({
+      pdf_path: path,
+      pdf_name: displayName,
+      pdf_uploaded_at: new Date().toISOString(),
+    })
+    .eq("id", invoiceId);
+  if (updErr) {
+    await supabase.storage.from("pulse-reports").remove([path]);
+    return { ok: false, message: updErr.message };
+  }
+
+  if (oldPath && oldPath !== path) {
+    await supabase.storage.from("pulse-reports").remove([oldPath]);
+  }
+
+  revalidatePath(`/admin/invoices/${invoiceId}`);
+  return { ok: true, name: displayName };
+}
+
+/** Take the PDF off, so the email goes with a link only. */
+export async function removeInvoicePdf(
+  invoiceId: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const { supabase } = await adminSupabase();
+  const { data: row } = await supabase
+    .from("invoices")
+    .select("pdf_path")
+    .eq("id", invoiceId)
+    .maybeSingle();
+  if (!row) return { ok: false, message: "That invoice no longer exists." };
+
+  const { error } = await supabase
+    .from("invoices")
+    .update({ pdf_path: null, pdf_name: null, pdf_uploaded_at: null })
+    .eq("id", invoiceId);
+  if (error) return { ok: false, message: error.message };
+
+  const path = (row as { pdf_path: string | null }).pdf_path;
+  if (path) await supabase.storage.from("pulse-reports").remove([path]);
+
+  revalidatePath(`/admin/invoices/${invoiceId}`);
+  return { ok: true };
+}
+
 export async function sendTestInvoice(invoiceId: string): Promise<string> {
   const { supabase, session } = await adminSupabase();
 

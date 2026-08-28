@@ -5,8 +5,8 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { getReportBundle, listSnippets, resolveImageUrls } from "@/lib/reports";
 import { sectionBlocks, type ReportBlock } from "@/lib/reports-shared";
 import { ReportEditor } from "@/components/reports/ReportEditor";
-import { ReportPdf } from "@/components/reports/ReportPdf";
-import { printTokenFor } from "@/lib/report-print-token";
+import { DocumentPdf } from "@/components/documents/DocumentPdf";
+import { printTokenFor } from "@/lib/print-token";
 
 export const metadata = { title: "Edit report" };
 
@@ -54,11 +54,12 @@ export default async function EditReportPage({
       </Link>
       {/* Above the editor rather than inside it: what goes out with the email
           is a decision about the send, and the send controls sit at the top. */}
-      <ReportPdf
-        reportId={bundle.report.id}
+      <DocumentPdf
+        kind="report"
+        id={bundle.report.id}
         pdfName={bundle.report.pdf_name}
         pdfUploadedAt={bundle.report.pdf_uploaded_at}
-        reportUpdatedAt={bundle.report.updated_at}
+        updatedAt={bundle.report.updated_at}
         printUrl={(() => {
           // The exact page the renderer photographs, openable in a real
           // browser. Worth having permanently: when a PDF comes out wrong the
@@ -66,7 +67,7 @@ export default async function EditReportPage({
           // and until now there was no way to look. The token is minted here
           // because only the server holds the secret, and it lasts five
           // minutes like any other.
-          const t = printTokenFor(bundle.report.id);
+          const t = printTokenFor("report", bundle.report.id);
           return t
             ? `/print/report/${bundle.report.id}?token=${encodeURIComponent(t)}`
             : null;

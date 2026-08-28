@@ -6,6 +6,8 @@ import {
   listPricingItems,
 } from "@/lib/invoices";
 import { InvoiceBuilder } from "@/components/invoices/InvoiceBuilder";
+import { DocumentPdf } from "@/components/documents/DocumentPdf";
+import { printTokenFor } from "@/lib/print-token";
 import type { EmailEvent, InvoiceSend } from "@/lib/types/database";
 
 export const metadata = { title: "Invoice" };
@@ -56,14 +58,34 @@ export default async function EditInvoicePage({
     .order("sent_at", { ascending: true });
   const events = (eventRows as EmailEvent[] | null) ?? [];
 
+  // The exact page the renderer photographs, openable in a real browser. Minted
+  // here because only the server holds the secret, and good for five minutes.
+  const printToken = printTokenFor("invoice", invoiceId);
+
   return (
-    <InvoiceBuilder
-      bundle={bundle}
-      business={business}
-      pricingItems={pricing}
-      people={people}
-      sends={sends}
-      emailEvents={events}
-    />
+    <>
+      {/* Above the builder: what goes out with the email is a decision about
+          the send, and a draft invoice is exactly when to check it. */}
+      <DocumentPdf
+        kind="invoice"
+        id={bundle.invoice.id}
+        pdfName={bundle.invoice.pdf_name}
+        pdfUploadedAt={bundle.invoice.pdf_uploaded_at}
+        updatedAt={bundle.invoice.updated_at}
+        printUrl={
+          printToken
+            ? `/print/invoice/${invoiceId}?token=${encodeURIComponent(printToken)}`
+            : null
+        }
+      />
+      <InvoiceBuilder
+        bundle={bundle}
+        business={business}
+        pricingItems={pricing}
+        people={people}
+        sends={sends}
+        emailEvents={events}
+      />
+    </>
   );
 }

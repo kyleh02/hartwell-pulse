@@ -1,7 +1,8 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { formatMoney, DEFAULT_INVOICE_EMAIL } from "@/lib/invoices-shared";
-import { sendEmail, emailLayout, renderMessage } from "@/lib/email";
+import { sendEmail, emailLayout, renderMessage, type EmailAttachment } from "@/lib/email";
+import { renderInvoicePdf } from "@/lib/invoice-pdf";
 import { resolveRecipients, type Recipient } from "@/lib/recipients";
 import type { Invoice } from "@/lib/types/database";
 
@@ -90,11 +91,59 @@ export async function sendInvoiceWith(
   // Revision is the honest test: it only moves when the invoice was actually
   // changed after it went out. A plain resend of an unchanged invoice still
   // reads as the original, which is what it is.
+  // ---- the PDF, made if missing, fetched once ----
+  //
+  // An invoice has no publish step to hang the render on, so this is where it
+  // happens. And unlike a report, a failure here NEVER stops the send: the
+  // recurring cron sends invoices with nobody watching, and an invoice that
+  // does not arrive is worse than one that arrives with a link instead of an
+  // attachment. So every branch below falls through to sending.
+  let attachments: EmailAttachment[] | undefined;
+  let pdfPath = invoice.pdf_path;
+  let pdfName = invoice.pdf_name;
+  if (!pdfPath) {
+    const origin = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+    if (origin) {
+      const made = await renderInvoicePdf(supabase, invoiceId, origin);
+      if (made.ok) {
+        const { data: fresh } = await supabase
+          .from("invoices")
+          .select("pdf_path, pdf_name")
+          .eq("id", invoiceId)
+          .maybeSingle();
+        pdfPath = (fresh as { pdf_path: string | null } | null)?.pdf_path ?? null;
+        pdfName = (fresh as { pdf_name: string | null } | null)?.pdf_name ?? null;
+      } else {
+        console.warn(`[invoice ${invoiceId}] PDF render failed: ${made.message}`);
+      }
+    }
+  }
+  if (pdfPath) {
+    const { data: file, error: dlErr } = await supabase.storage
+      .from("pulse-reports")
+      .download(pdfPath);
+    if (dlErr || !file) {
+      console.warn(`[invoice ${invoiceId}] PDF unreadable: ${dlErr?.message}`);
+    } else {
+      attachments = [
+        {
+          filename: pdfName || "invoice.pdf",
+          content: Buffer.from(await file.arrayBuffer()).toString("base64"),
+        },
+      ];
+    }
+  }
+
   const amended = (invoice.revision ?? 0) > 0;
   const noun = amended ? "Updated invoice" : "New invoice";
   const subject = opts.testTo
     ? `[Test] ${noun} ${invoice.invoice_number}`
     : `${noun} ${invoice.invoice_number}`;
+  // Said by the sender rather than written into the template, because whether
+  // there is a PDF is a fact about this send and the template is Kyle's words.
+  const attachedLine = attachments
+    ? `<p style="margin:0 0 16px">The invoice is attached to this email, so you can pay it without signing in.</p>`
+    : "";
   const notifTitle = `${noun} ${invoice.invoice_number} for ${formatMoney(invoice.total)}`;
   const notifBody = `Due ${prettyDate(invoice.due_date)}.`;
   const now = new Date().toISOString();
@@ -102,11 +151,19 @@ export async function sendInvoiceWith(
   if (opts.testTo) {
     const html = emailLayout(
       `${noun}: ${invoice.invoice_number}`,
-      messageHtml,
+      messageHtml + attachedLine,
       "View invoice",
       `/invoices/${invoiceId}`,
     );
-    await sendEmail({ to: opts.testTo, subject, html, ref: { kind: "invoice", id: invoiceId } });
+    // The test carries the attachment too. A proof that leaves out the thing
+    // being changed is not a proof.
+    await sendEmail({
+      to: opts.testTo,
+      subject,
+      html,
+      ref: { kind: "invoice", id: invoiceId },
+      attachments,
+    });
     return; // A proof changes nothing: no notification, no status, no record.
   }
 
@@ -135,11 +192,17 @@ export async function sendInvoiceWith(
     if (u.email) {
       const html = emailLayout(
         `${noun}: ${invoice.invoice_number}`,
-        messageHtml,
+        messageHtml + attachedLine,
         "View invoice",
         `/invoices/${invoiceId}`,
       );
-      await sendEmail({ to: u.email, subject, html, ref: { kind: "invoice", id: invoiceId } });
+      await sendEmail({
+        to: u.email,
+        subject,
+        html,
+        ref: { kind: "invoice", id: invoiceId },
+        attachments,
+      });
       delivered.push(u.email);
     }
   }

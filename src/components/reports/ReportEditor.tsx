@@ -31,7 +31,7 @@ import { useRouter } from "next/navigation";
 import { SectionCard, type EditSection } from "@/components/reports/SectionCard";
 import { ReportText } from "@/components/reports/ReportText";
 import { cn } from "@/lib/utils/cn";
-import { requestReportPdf } from "@/lib/report-pdf-client";
+import { requestDocumentPdf } from "@/lib/pdf-client";
 import { BrandSwitch } from "@/components/reports/BrandSwitch";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -311,7 +311,7 @@ export function ReportEditor({
       setStatus("published");
       setSaved(true);
       setSendNote("Published. Making the PDF…");
-      const pdf = await requestReportPdf(bundle.report.id);
+      const pdf = await requestDocumentPdf("report", bundle.report.id);
       setSendNote(
         pdf.ok
           ? `Published, and ${pdf.name} is attached. Open it and read it before you send.`

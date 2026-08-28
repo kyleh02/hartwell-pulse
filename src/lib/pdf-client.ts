@@ -1,16 +1,17 @@
 /**
- * Ask the server to make the PDF for a report.
+ * Ask the server to make the PDF for a report or an invoice.
  *
  * A plain fetch rather than a server action, because the render needs a longer
  * timeout than a page's actions get, and only a route handler can ask for one.
- * Shared so the Publish button and the Generate button cannot drift into
- * calling it differently.
+ * Shared so the publish button, the card and the invoice editor cannot drift
+ * into calling it differently.
  */
-export async function requestReportPdf(
-  reportId: string,
+export async function requestDocumentPdf(
+  kind: "report" | "invoice",
+  id: string,
 ): Promise<{ ok: true; name: string } | { ok: false; message: string }> {
   try {
-    const res = await fetch(`/api/reports/${reportId}/pdf`, { method: "POST" });
+    const res = await fetch(`/api/${kind}s/${id}/pdf`, { method: "POST" });
     if (!res.ok) {
       return {
         ok: false,

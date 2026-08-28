@@ -582,6 +582,17 @@ export interface Invoice {
   recurring_period: string | null;
   created_at: string;
   updated_at: string;
+  /**
+   * The PDF that travels with the send email, in the `pulse-reports` bucket.
+   *
+   * Null is a normal state: the email still goes, it just carries a link only.
+   * Compare pdf_uploaded_at against updated_at — older means it predates the
+   * last edit, and on a reissued invoice that means superseded figures under
+   * the same number.
+   */
+  pdf_path: string | null;
+  pdf_name: string | null;
+  pdf_uploaded_at: string | null;
 }
 
 export interface InvoiceLineItem {

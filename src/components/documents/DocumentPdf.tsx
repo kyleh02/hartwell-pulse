@@ -4,38 +4,41 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ExternalLink, FileText, Paperclip, RefreshCw, X } from "lucide-react";
 import { uploadReportPdf, removeReportPdf } from "@/app/admin/reports/actions";
+import { uploadInvoicePdf, removeInvoicePdf } from "@/app/admin/invoices/actions";
 import { Button, buttonClasses } from "@/components/ui/Button";
-import { requestReportPdf } from "@/lib/report-pdf-client";
+import { requestDocumentPdf } from "@/lib/pdf-client";
 
 /**
- * The PDF that goes out with the send email.
+ * The PDF that goes out with the send email, for a report or an invoice.
  *
- * A client is told their report is ready and handed a link into a portal they
- * have to sign in to. For the person who wants to read it on a phone between
- * meetings, or forward it to a business partner who has no login at all, that
- * is a wall in front of the thing they were promised. The PDF removes it.
+ * A client told their document is ready and handed a portal link has a sign-in
+ * between them and the thing they were sent. On an invoice that is worse than
+ * on a report: it goes to whoever pays the bills, which is often not the person
+ * with the login, and a bookkeeper cannot pay what they cannot open.
  *
- * Made by the portal now, from the report itself, when it is published. What
- * stayed manual is the LOOKING: the file is attached here and nothing sends
- * it, so it can be opened and read before Send is pressed. That was the whole
- * value of the old print-it-yourself routine, and it survives without the four
- * steps that went with it.
+ * Made by the portal from the document itself. What stayed manual is the
+ * LOOKING: the file is attached here and nothing sends it, so it can be opened
+ * and read before Send is pressed. Uploading still works and is not a fallback
+ * nobody thought about; if a render fails or comes out wrong, drop a file in by
+ * hand and the send behaves identically.
  *
- * Uploading still works and is not a fallback nobody thought about. If a
- * render fails, times out, or comes out wrong, the file can be dropped in by
- * hand exactly as before and the send behaves identically.
+ * One component for both kinds. Two would drift, and the first sign of that
+ * would be one document type quietly losing a safeguard the other kept.
  */
-export function ReportPdf({
-  reportId,
+export function DocumentPdf({
+  kind,
+  id,
   pdfName,
   pdfUploadedAt,
-  reportUpdatedAt,
+  updatedAt,
   printUrl = null,
 }: {
-  reportId: string;
+  kind: "report" | "invoice";
+  id: string;
   pdfName: string | null;
   pdfUploadedAt: string | null;
-  reportUpdatedAt: string;
+  /** The document's own updated_at, for the staleness check. */
+  updatedAt: string;
   /**
    * The page the renderer photographs, signed and openable.
    *
@@ -50,11 +53,22 @@ export function ReportPdf({
   const [note, setNote] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  const noun = kind === "invoice" ? "invoice" : "report";
+
+  /**
+   * A PDF older than the last edit says what the document used to say, over the
+   * letterhead of the one it says now. Nothing can detect that from the file
+   * itself, so the two timestamps are simply shown to disagree.
+   */
+  const stale =
+    Boolean(pdfUploadedAt) &&
+    new Date(pdfUploadedAt!).getTime() < new Date(updatedAt).getTime();
+
   function generate() {
     setError(null);
-    setNote("Rendering the report. A cold start takes a few seconds.");
+    setNote("Rendering. A cold start takes a few seconds.");
     startTransition(async () => {
-      const res = await requestReportPdf(reportId);
+      const res = await requestDocumentPdf(kind, id);
       if (!res.ok) {
         setNote(null);
         setError(res.message);
@@ -65,22 +79,14 @@ export function ReportPdf({
     });
   }
 
-  /**
-   * A PDF older than the last edit says what the report used to say, over the
-   * letterhead of the one it says now. Nothing can detect that from the file
-   * itself, so the two timestamps are simply shown to disagree.
-   */
-  const stale =
-    Boolean(pdfUploadedAt) &&
-    new Date(pdfUploadedAt!).getTime() < new Date(reportUpdatedAt).getTime();
-
   function upload(file: File) {
     setError(null);
     const fd = new FormData();
-    fd.append("reportId", reportId);
+    fd.append(kind === "invoice" ? "invoiceId" : "reportId", id);
     fd.append("file", file);
     startTransition(async () => {
-      const res = await uploadReportPdf(fd);
+      const res =
+        kind === "invoice" ? await uploadInvoicePdf(fd) : await uploadReportPdf(fd);
       if (!res.ok) setError(res.message);
       else router.refresh();
       if (fileRef.current) fileRef.current.value = "";
@@ -90,7 +96,8 @@ export function ReportPdf({
   function remove() {
     setError(null);
     startTransition(async () => {
-      const res = await removeReportPdf(reportId);
+      const res =
+        kind === "invoice" ? await removeInvoicePdf(id) : await removeReportPdf(id);
       if (!res.ok) setError(res.message);
       else router.refresh();
     });
@@ -108,9 +115,9 @@ export function ReportPdf({
             </p>
           ) : (
             <p className="mt-1.5 max-w-md text-xs text-pulse-text-dim">
-              Nothing attached, so the email will link to the portal only and
-              she will have to sign in to read it. Publishing makes one
-              automatically, or press Make the PDF now.
+              {kind === "invoice"
+                ? "Nothing attached yet. Sending will make one automatically, or press Make the PDF now to check it first."
+                : "Nothing attached, so the email will link to the portal only. Publishing makes one automatically, or press Make the PDF now."}
             </p>
           )}
         </div>
@@ -167,15 +174,13 @@ export function ReportPdf({
 
       {stale && (
         <p className="mt-3 rounded-[var(--radius-input)] border border-pulse-warn/40 bg-pulse-warn/10 px-3 py-2 text-xs text-pulse-warn">
-          This PDF was made before the last edit to the report, so it is out of
-          date. Press Make it again before sending, or the email carries one
-          version and the portal shows another.
+          {kind === "invoice"
+            ? "This PDF was made before the last edit, so it may show a superseded amount or due date under the same invoice number. Press Make it again before sending."
+            : `This PDF was made before the last edit to the ${noun}, so it is out of date. Press Make it again before sending, or the email carries one version and the portal shows another.`}
         </p>
       )}
 
-      {note && (
-        <p className="mt-3 text-xs text-pulse-text-dim">{note}</p>
-      )}
+      {note && <p className="mt-3 text-xs text-pulse-text-dim">{note}</p>}
 
       {error && (
         <p className="mt-3 rounded-[var(--radius-input)] border border-pulse-danger/40 bg-pulse-danger/10 px-3 py-2 text-xs text-pulse-danger">

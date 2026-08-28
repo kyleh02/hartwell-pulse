@@ -4,7 +4,7 @@ import { getReportBundle, resolveImageUrls } from "@/lib/reports";
 import { getBusinessSettings } from "@/lib/invoices";
 import { sectionBlocks, type ReportBlock } from "@/lib/reports-shared";
 import { ReportViewerChrome } from "@/components/reports/ReportViewerChrome";
-import { printTokenValid } from "@/lib/report-print-token";
+import { printTokenValid } from "@/lib/print-token";
 import { ForcePrintLight } from "@/components/reports/ForcePrintLight";
 
 /**
@@ -56,7 +56,7 @@ export default async function ReportPrintPage({
 
   // notFound rather than a message: an unsigned request should not learn
   // whether the id it guessed exists.
-  if (!printTokenValid(reportId, token)) notFound();
+  if (!printTokenValid("report", reportId, token)) notFound();
 
   const supabase = createAdminSupabase();
   const [bundle, business] = await Promise.all([

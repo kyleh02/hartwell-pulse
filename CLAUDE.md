@@ -152,6 +152,21 @@ Live at https://portal.hartwelldigital.com
   subheadings stays one sequence instead of restarting.
   `note` is one style rather than a light and a dark one: two boxes competing
   for the same job is a decision to make on every callout for no gain.
+- **Invoices carry a PDF too** (0043), and the machinery is shared: one
+  renderer (`pdf-render.ts`), one signed print token, one card. Two copies of a
+  headless browser launch is two places for the theme seeding, the wait
+  condition and the page size to drift apart, and the first sign of that would
+  be one document type printing correctly and the other not.
+- **The invoice rule is INVERTED from the report rule, deliberately.** A report
+  send stops if its attached PDF cannot be read, because a person is there to
+  read the message. An invoice send never stops: it has no publish step to
+  render at, the recurring cron sends it with nobody watching, and an invoice
+  that does not arrive is worse than one that arrives carrying a link instead
+  of an attachment. So the invoice send makes the PDF if none exists, attaches
+  it if it can, and sends regardless.
+- The print token is signed with the KIND as well as the id, so a token minted
+  for a report cannot be pointed at an invoice. Both print routes are public,
+  and that signature is the only thing between them and the world.
 - **The send email carries the PDF** (0042). A client told their report is
   ready and handed a portal link has a sign-in between them and the thing they
   were promised, and anyone they forward it to has no login at all.
