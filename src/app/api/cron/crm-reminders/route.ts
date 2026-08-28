@@ -4,10 +4,15 @@ import { cronAuthorized } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
 
-// Daily. Turns due CRM tasks into notifications for Kyle, which ride the
-// existing bell, email and web push pipeline. Also books a re-verify task when
-// a prospect's evidence has gone stale, since a fault cited in an email that
-// has since been fixed destroys credibility.
+// Daily. Books a re-verify task when a prospect's evidence has gone stale,
+// since a fault cited in an email that has since been fixed destroys
+// credibility.
+//
+// It used to also turn every due CRM task into a notification. That is gone.
+// Those tasks become work items now, on the dashboard, where they have a Done
+// button and a Snooze and a Not doing. A notification could only be read, and
+// reading one changed nothing, so it came back the next morning and the one
+// after that. This is the cron that was driving Kyle mad.
 export async function GET(req: NextRequest) {
   const auth = cronAuthorized(req);
   if (!auth.ok) {
@@ -29,49 +34,12 @@ export async function GET(req: NextRequest) {
   const admins = ((adminData as { clerk_user_id: string }[] | null) ?? []).map(
     (a) => a.clerk_user_id,
   );
-  if (admins.length === 0) return Response.json({ reminders: 0, reverify: 0 });
+  if (admins.length === 0) return Response.json({ reverify: 0 });
 
-  const { data: dueData } = await supabase
-    .from("crm_tasks")
-    .select("id, title, due_on, organisation_id, crm_organisations(legal_name)")
-    .is("done_at", null)
-    .is("notified_at", null)
-    .lte("due_on", today)
-    .order("due_on")
-    .limit(50);
-  const due =
-    (dueData as
-      | {
-          id: string;
-          title: string;
-          due_on: string;
-          organisation_id: string | null;
-          crm_organisations: { legal_name: string } | null;
-        }[]
-      | null) ?? [];
-
-  let reminders = 0;
-  for (const task of due) {
-    const company = task.crm_organisations?.legal_name ?? "Ironpeak outreach";
-    for (const recipient of admins) {
-      await supabase.from("notifications").insert({
-        recipient_user_id: recipient,
-        client_id: null,
-        type: "crm_reminder",
-        title: `Due today: ${company}`,
-        body: task.title,
-        link: task.organisation_id ? `/admin/crm/${task.organisation_id}` : "/admin/crm",
-        channel: "instant",
-      });
-    }
-    // Stamped so a task nags once, not every morning until it is done. The
-    // portal still lists it under Due now for as long as it is open.
-    await supabase
-      .from("crm_tasks")
-      .update({ notified_at: new Date().toISOString() })
-      .eq("id", task.id);
-    reminders++;
-  }
+  // The task-to-notification loop lived here. Work items replaced it: see
+  // src/lib/work-generate.ts, fromCrmTasks. Nothing is lost, because the
+  // dashboard shows the same tasks with buttons on them instead of a bell that
+  // could only be dismissed.
 
   // Evidence older than the re-verify window, on companies still in play.
   const { data: settingsData } = await supabase
@@ -108,5 +76,5 @@ export async function GET(req: NextRequest) {
     reverify++;
   }
 
-  return Response.json({ reminders, reverify });
+  return Response.json({ reverify });
 }

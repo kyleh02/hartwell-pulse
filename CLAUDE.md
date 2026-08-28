@@ -540,6 +540,37 @@ Live at https://portal.hartwelldigital.com
 - Benchmarks that do not change: 2 to 3 substantive replies per 15 sent, and
   **zero opt-outs** — that last one is the health metric, shown first.
 
+## The dashboard: work items
+- **Everything Kyle owes anyone is a `work_items` row.** The dashboard used to
+  read `board_cards` and nothing else, which is why it went unused: the work
+  lived in the CRM, the invoices and the reports and none of it reached the
+  page. Design and reasoning in `docs/dashboard-spec.md` (0044, 0045).
+- **A tick may never fabricate a record with legal or financial weight.**
+  `completeWork` REFUSES a `crm_send` and an `invoice` and says where to go
+  instead. The touch log is the Spam Act defence and paid means money arrived;
+  neither gets decided by a checkbox among twelve others. Everything else
+  closes, and a `crm_task` closes at its source too because a LinkedIn connect
+  is harmless and reversible.
+- **The partial unique index is the whole design.**
+  `(source_kind, source_key) where state = 'open'` lets the generator run
+  hourly and never make a second open item. The key carries a STAGE, not a row:
+  `invoice:<id>:overdue7` and `:overdue30` are different work, which is how
+  Not doing suppresses one nag without suppressing the invoice forever.
+- **Overdue asks once.** Seven days unanswered raises a question with a button;
+  answering sets `asked_at` and it never returns. That is the difference from
+  the notification it replaced, which asked every morning and could only be
+  read.
+- **`crm-reminders` no longer notifies per task**, and that cron was the thing
+  driving Kyle mad. Those tasks are work items now. It still books re-verify
+  tasks, which is the half worth keeping.
+- **One notification a day for Kyle's own work**: `/api/cron/brief` at 21:00
+  UTC, which is 7am Brisbane, and it stays silent when nothing is due. Client
+  triggered notifications are untouched, because those are someone waiting.
+- A recurrence per client is the answer to "what counts as a retained client":
+  nothing infers it, Kyle sets one up once and it becomes a fact.
+- `board_cards` is migrated into work items by 0044 and deliberately NOT
+  dropped. It goes when the new page has been used in anger for a while.
+
 ## Celebrations and gamification
 - Admin surfaces only. Clients are businesses and defence buyers are
   conservative, so confetti in a client portal would read as unserious.
