@@ -245,16 +245,48 @@ Each phase is useful on its own and safe to stop after.
 
 ---
 
-## Open questions
+## The five questions, answered in the build
 
-1. **Retained clients.** Which clients get a monthly report item made
-   automatically, and what marks them as such?
-2. **Not doing, on a generated item.** Does dropping "Chase INV-0039" suppress
-   that invoice forever, or only until it goes further overdue? Suggested:
-   suppress that instance, and let a materially changed state (30 days rather
-   than 7) make a fresh one.
-3. **How early should invoice items appear?** Three days is a guess.
-4. **The weekly check.** Which clients, which day, and is it one item or one
-   per client?
-5. **Ironpeak sends while the tenant is blocked.** Should send items be
-   generated at all until that is resolved, or suppressed with a note?
+Kyle said build it rather than answer these, so they were decided in the code
+and are listed here to be overruled.
+
+1. **Retained clients.** Not inferred at all. A recurrence per client, set up
+   once on `/admin/work/recurring`, IS the declaration. A rule reading services
+   or invoice history would be wrong about exactly the accounts mid-change, and
+   wrong silently.
+2. **Not doing, on a generated item.** Suppresses that stage only. The source
+   key carries the stage, so dropping `invoice:<id>:overdue7` leaves
+   `:overdue30` free to arrive three weeks later.
+3. **Invoice timing.** Four stages: 3 days before due, on the day, 7 days
+   overdue, 30 days overdue. The last one says to pick up the phone.
+4. **The weekly check.** A recurrence, not a rule, for the same reason as 1.
+   One per client if the checks differ, one for all of them if they do not.
+5. **Ironpeak sends while the tenant is blocked.** Generated, but only for
+   records that are BOTH approved and scheduled. An unapproved record is not
+   work yet, it is a decision Kyle has not made, so nothing appears until he
+   makes it. That means the tenant block suppresses these on its own.
+
+## What is built
+
+All five phases, across three commits.
+
+- **Phase 1** `work_items`, `work_item_steps`, Today, board, calendar,
+  manual items, hours, and the `board_cards` migration.
+- **Phases 2 to 4** the generators, `/api/cron/work` hourly, recurrences,
+  `/api/cron/brief` at 7am Brisbane, and the removal of the per-task
+  notification loop from `crm-reminders`.
+- **Recurrence management** at `/admin/work/recurring`.
+
+Migrations 0044 and 0045.
+
+## Still open
+
+- **`board_cards` is not dropped.** Its rows are copied into work items and the
+  table is left alone until the new page has been used in anger. Dropping it is
+  a later, deliberate act.
+- **Hours do not reach an invoice.** Logged and readable per item; pulling
+  unbilled hours onto an invoice was decided against for now.
+- **The hourly cron needs setting up on cron-job.org**, hitting
+  `/api/cron/work` with the CRON_SECRET as a bearer token. Vercel Hobby caps
+  its own crons at daily, which is why the brief is in `vercel.json` and this
+  one is not.

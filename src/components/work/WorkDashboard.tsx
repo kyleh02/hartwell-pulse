@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarDays, Columns3, ListChecks } from "lucide-react";
+import { CalendarDays, Columns3, ListChecks, Repeat } from "lucide-react";
+import Link from "next/link";
 import { TodayList } from "@/components/work/TodayList";
 import { WorkBoard, WorkCalendar } from "@/components/work/WorkViews";
 import { NewWorkForm } from "@/components/work/NewWorkForm";
 import type { WorkRow } from "@/lib/work-shared";
 import { cn } from "@/lib/utils/cn";
+import { buttonClasses } from "@/components/ui/Button";
 
 type View = "today" | "board" | "calendar";
 
@@ -54,7 +56,15 @@ export function WorkDashboard({
             </button>
           ))}
         </div>
-        <NewWorkForm clients={clients} />
+        <div className="flex items-center gap-2">
+          <Link
+            href="/admin/work/recurring"
+            className={buttonClasses("ghost", "sm")}
+          >
+            <Repeat size={14} /> Recurring
+          </Link>
+          <NewWorkForm clients={clients} />
+        </div>
       </div>
 
       {view === "today" && <TodayList rows={rows} />}

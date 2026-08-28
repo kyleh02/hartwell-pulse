@@ -290,3 +290,83 @@ export async function reorderWork(ids: string[]): Promise<Result> {
   refresh();
   return { ok: true };
 }
+
+// ---------------------------------------------------------------------------
+// Recurrences: the work that comes back
+// ---------------------------------------------------------------------------
+
+export interface RecurrenceInput {
+  title: string;
+  detail?: string | null;
+  clientId?: string | null;
+  brand?: "hartwell" | "ironpeak" | null;
+  pattern: "weekly" | "monthly" | "quarterly" | "annual";
+  dayOfWeek?: number | null;
+  dayOfMonth?: number | null;
+  leadDays?: number;
+  steps?: string[];
+}
+
+/**
+ * Set up something that comes back.
+ *
+ * One per client rather than a rule that infers which clients are retained.
+ * An inference would be wrong about exactly the clients that matter, the ones
+ * mid-change, and it would be wrong silently.
+ */
+export async function createRecurrence(
+  input: RecurrenceInput,
+): Promise<Result> {
+  const { supabase } = await adminSupabase();
+  if (!input.title.trim()) return { ok: false, message: "Give it a title." };
+
+  const { error } = await supabase.from("work_item_recurrences").insert({
+    title: input.title.trim(),
+    detail: input.detail?.trim() || null,
+    client_id: input.clientId || null,
+    brand: input.brand || null,
+    pattern: input.pattern,
+    day_of_week: input.pattern === "weekly" ? (input.dayOfWeek ?? 1) : null,
+    day_of_month: input.pattern === "weekly" ? null : (input.dayOfMonth ?? 1),
+    lead_days: input.leadDays ?? 0,
+    steps: (input.steps ?? [])
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((label) => ({ label })),
+  });
+  if (error) return { ok: false, message: error.message };
+  revalidatePath("/admin/work/recurring");
+  return { ok: true };
+}
+
+/**
+ * Pause one without losing it.
+ *
+ * Deleting a recurrence loses the checklist that took a while to get right,
+ * and a client going quiet for two months is not the same as the arrangement
+ * ending.
+ */
+export async function toggleRecurrence(
+  id: string,
+  active: boolean,
+): Promise<Result> {
+  const { supabase } = await adminSupabase();
+  const { error } = await supabase
+    .from("work_item_recurrences")
+    .update({ active })
+    .eq("id", id);
+  if (error) return { ok: false, message: error.message };
+  revalidatePath("/admin/work/recurring");
+  return { ok: true };
+}
+
+export async function deleteRecurrence(id: string): Promise<Result> {
+  const { supabase } = await adminSupabase();
+  const { error } = await supabase
+    .from("work_item_recurrences")
+    .delete()
+    .eq("id", id);
+  if (error) return { ok: false, message: error.message };
+  revalidatePath("/admin/work/recurring");
+  return { ok: true };
+}
