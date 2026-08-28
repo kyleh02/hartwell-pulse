@@ -1,31 +1,45 @@
 import { PageHeader } from "@/components/ui/PageHeader";
 import { createServerSupabase } from "@/lib/supabase/server";
-import type { BoardCard, Client } from "@/lib/types/database";
-import { AdminDashboard } from "@/components/admin/AdminDashboard";
+import { listWork, getWorkStrip } from "@/lib/work";
+import { WorkStrip } from "@/components/work/WorkStrip";
+import { WorkDashboard } from "@/components/work/WorkDashboard";
+import type { Client } from "@/lib/types/database";
 
-export const metadata = { title: "Admin" };
+export const metadata = { title: "Dashboard" };
+
+/**
+ * The dashboard, rebuilt on work items.
+ *
+ * It used to read `board_cards` and nothing else, which is why it was never
+ * opened: the work lived in the CRM, the invoices and the reports, and none of
+ * it reached this page. Now everything is a work item and this is the only
+ * place that has to be looked at.
+ *
+ * Nothing is cached. A list of what to do next that is thirty seconds stale is
+ * a list that gets doubted, and doubting it is the end of using it.
+ */
+export const dynamic = "force-dynamic";
 
 export default async function AdminDashboardPage() {
   const supabase = await createServerSupabase();
-  const [{ data: cardData }, { data: clientData }] = await Promise.all([
-    supabase.from("board_cards").select("*").order("position", { ascending: true }),
+  const [rows, strip, { data: clientData }] = await Promise.all([
+    listWork(supabase),
+    getWorkStrip(supabase),
     supabase.from("clients").select("id, business_name").order("business_name"),
   ]);
 
-  const cards = (cardData as BoardCard[] | null) ?? [];
-  const clients = (clientData as Pick<Client, "id" | "business_name">[] | null) ?? [];
-
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const clients =
+    (clientData as Pick<Client, "id" | "business_name">[] | null) ?? [];
 
   return (
     <div>
       <PageHeader
         label={["Command", "Overview"]}
         title="Dashboard"
-        description="Plan the month and run the day. Switch between the calendar and the board to see all client work in one place."
+        description="Everything you owe someone, in one list. Tick it, snooze it, or say you are not doing it."
       />
-      <AdminDashboard initialCards={cards} clients={clients} today={today} />
+      <WorkStrip strip={strip} />
+      <WorkDashboard rows={rows} clients={clients} />
     </div>
   );
 }
