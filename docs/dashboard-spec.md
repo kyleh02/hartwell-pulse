@@ -1,8 +1,8 @@
 # The dashboard, rebuilt as a work system
 
-Design agreed with Kyle on 26 August 2026, across four rounds of questions.
-Nothing here is built yet. This document is the thing to argue with before any
-code exists, and the thing to read first if the chat that produced it is lost.
+Design agreed with Kyle on 26 August 2026, across four rounds of questions,
+and built the same day. This is the reference for why it is shaped as it is,
+and the thing to read first if the chat that produced it is lost.
 
 ---
 
@@ -92,7 +92,11 @@ has_time       boolean not null default false
 source_kind    text not null default 'manual'
                  check in ('manual','crm_send','crm_task','invoice',
                            'report','recurring','notification')
-source_id      uuid null            -- the row it stands for
+source_id      uuid null            -- the row it stands for, for linking
+source_key     text null            -- what makes it unique, and it is a STAGE
+                                    -- not a row: "invoice:<id>:overdue7" and
+                                    -- ":overdue30" are different work about
+                                    -- one invoice
 
 state          text not null default 'open'
                  check in ('open','done','dropped')
@@ -115,14 +119,19 @@ updated_at     timestamptz not null default now()
 
 ```sql
 create unique index work_items_source_open_idx
-  on work_items (source_kind, source_id)
-  where state = 'open' and source_kind <> 'manual';
+  on work_items (source_kind, source_key)
+  where state = 'open' and source_key is not null;
 ```
 
-A generator can run every hour and never make a second item for the same
-invoice. This is the same trick the recurring invoice cron already uses, and it
-is what stops the dashboard becoming the notification problem with a nicer
-font.
+A generator can run every hour and never make a second OPEN item for the same
+stage. Same trick the recurring invoice cron already uses, and it is what stops
+the dashboard becoming the notification problem in a nicer font.
+
+Keyed on the stage rather than the row, and partial on `open` rather than
+covering everything, for one reason each. The stage is what lets Not doing
+suppress a single nag: drop `invoice:<id>:overdue7` and `:overdue30` is still
+free to arrive three weeks later. The partial is what lets it arrive at all,
+since a dropped row would otherwise block its own successor forever.
 
 ### `work_item_steps`
 
