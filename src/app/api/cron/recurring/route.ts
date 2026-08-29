@@ -2,9 +2,36 @@ import { type NextRequest } from "next/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { cronAuthorized } from "@/lib/cron-auth";
 import { sendInvoiceWith } from "@/lib/invoices-send";
+import { renderInvoicePdf } from "@/lib/invoice-pdf";
 import type { Invoice, InvoiceLineItem } from "@/lib/types/database";
 
 export const dynamic = "force-dynamic";
+// A route handler, so it may take a minute. That is what lets it render the
+// PDF before sending: a server action gets ten seconds and a cold Chromium
+// start does not finish in ten, which is precisely how the manual send broke.
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+/**
+ * Make the PDF for an invoice about to go out unattended, and never let that
+ * stop the send.
+ *
+ * Nobody is watching this run. An invoice arriving with a link instead of an
+ * attachment is a small loss; an invoice not arriving is a client not paying.
+ */
+async function tryRenderPdf(
+  supabase: ReturnType<typeof createAdminSupabase>,
+  invoiceId: string,
+) {
+  const origin = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+  if (!origin) return;
+  try {
+    const res = await renderInvoicePdf(supabase, invoiceId, origin);
+    if (!res.ok) console.warn(`[recurring ${invoiceId}] PDF: ${res.message}`);
+  } catch (e) {
+    console.warn(`[recurring ${invoiceId}] PDF threw: ${String(e)}`);
+  }
+}
 
 function fmt(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -171,6 +198,7 @@ export async function GET(req: NextRequest) {
             .maybeSingle();
           const ex = existing as { id: string; status: string } | null;
           if (ex && ex.status === "draft") {
+            await tryRenderPdf(supabase, ex.id);
             await sendInvoiceWith(supabase, ex.id, { adminNotice: true });
             results.push({ template: t.id, status: "recovered-send" });
           } else {
@@ -201,6 +229,7 @@ export async function GET(req: NextRequest) {
 
       // Reuse the manual-send path (email, notify, then status -> sent) and add an
       // admin heads-up so the auto-send isn't silent.
+      await tryRenderPdf(supabase, newId);
       await sendInvoiceWith(supabase, newId, { adminNotice: true });
       results.push({ template: t.id, status: "sent" });
     } catch (e) {

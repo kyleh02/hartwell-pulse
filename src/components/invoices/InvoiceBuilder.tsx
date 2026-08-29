@@ -45,6 +45,7 @@ import { SendHistory } from "@/components/invoices/SendHistory";
 import { LastSent } from "@/components/invoices/LastSent";
 import { Button } from "@/components/ui/Button";
 import { celebrate } from "@/lib/celebrate";
+import { requestDocumentPdf } from "@/lib/pdf-client";
 import { Badge } from "@/components/ui/Badge";
 
 function newId() {
@@ -240,6 +241,14 @@ export function InvoiceBuilder({
     startTransition(async () => {
       try {
         await saveInvoice(invoice.id, buildInput());
+        // Make the PDF BEFORE sending, and through the route rather than the
+        // action: rendering needs up to sixty seconds and a server action gets
+        // ten. Failure here is deliberately ignored. The invoice still goes,
+        // carrying a link instead of an attachment, because an invoice that
+        // does not arrive is worse than one that arrives without its PDF.
+        if (!invoice.pdf_path) {
+          await requestDocumentPdf("invoice", invoice.id);
+        }
         await sendInvoice(invoice.id);
         setStatus("sent");
         setSaved(true);

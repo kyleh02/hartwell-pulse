@@ -157,13 +157,17 @@ Live at https://portal.hartwelldigital.com
   headless browser launch is two places for the theme seeding, the wait
   condition and the page size to drift apart, and the first sign of that would
   be one document type printing correctly and the other not.
-- **The invoice rule is INVERTED from the report rule, deliberately.** A report
-  send stops if its attached PDF cannot be read, because a person is there to
-  read the message. An invoice send never stops: it has no publish step to
-  render at, the recurring cron sends it with nobody watching, and an invoice
-  that does not arrive is worse than one that arrives carrying a link instead
-  of an attachment. So the invoice send makes the PDF if none exists, attaches
-  it if it can, and sends regardless.
+- **NOTHING renders inside a server action. Ever.** An action inherits the
+  page's ten seconds on Hobby and a cold Chromium start does not finish in ten.
+  The invoice send did render, once, and pressing Send hung and died with a
+  blank screen. Rendering happens in route handlers, which can ask for sixty
+  seconds: `/api/invoices/[id]/pdf`, `/api/reports/[id]/pdf`, and the recurring
+  cron. The editor calls the route BEFORE calling the send action.
+- **An invoice send never stops for a missing PDF**, which is still inverted
+  from reports. A report send halts if its attachment cannot be read because a
+  person is there to read the message; an invoice goes regardless, because the
+  recurring cron sends it with nobody watching and an invoice that does not
+  arrive is worse than one carrying a link.
 - The print token is signed with the KIND as well as the id, so a token minted
   for a report cannot be pointed at an invoice. Both print routes are public,
   and that signature is the only thing between them and the world.

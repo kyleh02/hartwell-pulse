@@ -2,7 +2,6 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { formatMoney, DEFAULT_INVOICE_EMAIL } from "@/lib/invoices-shared";
 import { sendEmail, emailLayout, renderMessage, type EmailAttachment } from "@/lib/email";
-import { renderInvoicePdf } from "@/lib/invoice-pdf";
 import { resolveRecipients, type Recipient } from "@/lib/recipients";
 import type { Invoice } from "@/lib/types/database";
 
@@ -93,41 +92,34 @@ export async function sendInvoiceWith(
   // reads as the original, which is what it is.
   // ---- the PDF, made if missing, fetched once ----
   //
-  // An invoice has no publish step to hang the render on, so this is where it
-  // happens. And unlike a report, a failure here NEVER stops the send: the
-  // recurring cron sends invoices with nobody watching, and an invoice that
-  // does not arrive is worse than one that arrives with a link instead of an
-  // attachment. So every branch below falls through to sending.
+  // Attach what is already there. NOTHING is rendered here, and that is a
+  // correction rather than a preference.
+  //
+  // The first version made the PDF at this point, reasoning that an invoice
+  // has no publish step to hang it on. That reasoning was about failure
+  // semantics and missed where the code runs: this is reached from a server
+  // action, which inherits the page's ten seconds on Hobby, and a cold
+  // Chromium start does not finish in ten. Pressing Send hung and died.
+  //
+  // The report path never had this problem because rendering was deliberately
+  // kept off the send. So is this one now. The editor makes the PDF through
+  // /api/invoices/[id]/pdf, which is a route handler and may take sixty
+  // seconds, and the send simply carries whatever exists.
+  //
+  // A missing PDF never stops the send. An invoice that does not arrive is
+  // worse than one that arrives carrying a link, and the recurring cron sends
+  // these with nobody watching.
   let attachments: EmailAttachment[] | undefined;
-  let pdfPath = invoice.pdf_path;
-  let pdfName = invoice.pdf_name;
-  if (!pdfPath) {
-    const origin = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
-    if (origin) {
-      const made = await renderInvoicePdf(supabase, invoiceId, origin);
-      if (made.ok) {
-        const { data: fresh } = await supabase
-          .from("invoices")
-          .select("pdf_path, pdf_name")
-          .eq("id", invoiceId)
-          .maybeSingle();
-        pdfPath = (fresh as { pdf_path: string | null } | null)?.pdf_path ?? null;
-        pdfName = (fresh as { pdf_name: string | null } | null)?.pdf_name ?? null;
-      } else {
-        console.warn(`[invoice ${invoiceId}] PDF render failed: ${made.message}`);
-      }
-    }
-  }
-  if (pdfPath) {
+  if (invoice.pdf_path) {
     const { data: file, error: dlErr } = await supabase.storage
       .from("pulse-reports")
-      .download(pdfPath);
+      .download(invoice.pdf_path);
     if (dlErr || !file) {
       console.warn(`[invoice ${invoiceId}] PDF unreadable: ${dlErr?.message}`);
     } else {
       attachments = [
         {
-          filename: pdfName || "invoice.pdf",
+          filename: invoice.pdf_name || "invoice.pdf",
           content: Buffer.from(await file.arrayBuffer()).toString("base64"),
         },
       ];
