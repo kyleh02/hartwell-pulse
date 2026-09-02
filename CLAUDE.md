@@ -39,10 +39,14 @@ Live at https://portal.hartwelldigital.com
 - Write them idempotent: `add column if not exists`, `drop policy if exists`
   before `create policy` (Postgres has no CREATE POLICY IF NOT EXISTS),
   `drop trigger if exists`, guarded `do $$` blocks.
-- **0035 to 0041 were confirmed applied in production on 18 August 2026**, by
-  probing for the objects each one creates rather than by trusting a note.
-  Everything below 0035 is assumed applied on the strength of the features
-  working, which is weaker evidence.
+- **ALL of 0001 to 0046 were confirmed applied in production on 2 September
+  2026**, by probing the live database for the signature table or column of each
+  migration: 34 probes, none missing. This supersedes the earlier note that only
+  0035 to 0041 were verified and everything below was assumed. Re-probe after
+  any new migration rather than trusting this line: attempt a zero-row select on
+  the object a migration creates (`select <column>` or `select *` with
+  `head: true`) and read the error code. `42P01`/`PGRST205` means the table is
+  absent, `42703`/`PGRST204` means the column is.
 - **Applied state is not tracked anywhere, so check it, never assume it.** This
   file used to record 0001–0036 as applied "as of 2026-08-07", but 0036 was
   written after that date, so the note cannot have been right. That is the
