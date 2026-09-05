@@ -9,6 +9,7 @@ import {
   Send,
   MailCheck,
   RotateCcw,
+  Layers,
 } from "lucide-react";
 import type {
   BusinessSettings,
@@ -19,12 +20,14 @@ import type {
   InvoiceSend,
   InvoiceStatus,
   PricingItem,
+  RateMode,
 } from "@/lib/types/database";
 import type { InvoiceBundle, LineDraft } from "@/lib/invoices-shared";
 import {
   computeTotals,
   lineAmount,
   formatMoney,
+  groupByPhase,
   DEFAULT_INVOICE_EMAIL,
 } from "@/lib/invoices-shared";
 import {
@@ -82,11 +85,15 @@ export function InvoiceBuilder({
       description: l.description,
       quantity: Number(l.quantity),
       unit_amount: Number(l.unit_amount),
+      phase_position: l.phase_position ?? null,
+      phase_title: l.phase_title ?? "",
+      phase_note: l.phase_note ?? "",
     })),
   );
   const [issueDate, setIssueDate] = useState(invoice.issue_date.slice(0, 10));
   const [dueDate, setDueDate] = useState(invoice.due_date.slice(0, 10));
   const [gstMode, setGstMode] = useState<GstMode>(invoice.gst_mode);
+  const [rateMode, setRateMode] = useState<RateMode>(invoice.rate_mode ?? "fixed");
   const [brand, setBrand] = useState(invoice.brand ?? "hartwell");
   const [deposit, setDeposit] = useState(String(invoice.deposit_amount ?? 0));
   const [depositLabel, setDepositLabel] = useState(invoice.deposit_label ?? "");
@@ -120,14 +127,41 @@ export function InvoiceBuilder({
   const editable = status === "draft" || status === "sent";
   const isDraft = status === "draft";
   const totals = computeTotals(lines, gstMode);
+  const hourly = rateMode === "hourly";
+  // Phasing is not a separate flag: an invoice is phased when its lines carry a
+  // phase. One source of truth means the toggle can never disagree with the
+  // document.
+  const phased = lines.some((l) => l.phase_position !== null);
+  const groups = groupByPhase(lines);
+  const phaseOptions = groups
+    .filter((g) => g.title !== null)
+    .map((g) => ({ pos: g.lines[0].phase_position as number, label: g.title as string }));
 
   function touch() {
     setSaved(false);
   }
+  // A line added at the bottom of a phased invoice belongs to the last phase.
+  // Without this it falls out the back as an unphased row sitting under the final
+  // phase subtotal, which reads on the document like a mistake.
+  function tailPhase(p: LineDraft[]) {
+    const last = p[p.length - 1];
+    return {
+      phase_position: last?.phase_position ?? null,
+      phase_title: last?.phase_title ?? "",
+      phase_note: last?.phase_note ?? "",
+    };
+  }
   function addBlank() {
     setLines((p) => [
       ...p,
-      { id: newId(), title: "", description: "", quantity: 1, unit_amount: 0 },
+      {
+        id: newId(),
+        title: "",
+        description: "",
+        quantity: 1,
+        unit_amount: 0,
+        ...tailPhase(p),
+      },
     ]);
     touch();
   }
@@ -135,7 +169,14 @@ export function InvoiceBuilder({
     // A discount is just a line with a negative amount — enter the amount as e.g. -500.
     setLines((p) => [
       ...p,
-      { id: newId(), title: "Discount", description: "", quantity: 1, unit_amount: 0 },
+      {
+        id: newId(),
+        title: "Discount",
+        description: "",
+        quantity: 1,
+        unit_amount: 0,
+        ...tailPhase(p),
+      },
     ]);
     touch();
   }
@@ -150,6 +191,7 @@ export function InvoiceBuilder({
         description: it.tier ?? "",
         quantity: 1,
         unit_amount: Number(it.default_amount),
+        ...tailPhase(p),
       },
     ]);
     touch();
@@ -163,11 +205,197 @@ export function InvoiceBuilder({
     touch();
   }
 
+  // ---- phases ------------------------------------------------------------
+  // A phase is not a record of its own: it is the run of lines that share a
+  // phase_position, with the heading copied onto each of them. That is why every
+  // operation below rewrites lines rather than a phase list, and why the order of
+  // `lines` stays meaningful — the document groups by walking it.
+  function blankLine(pos: number | null, title: string, note: string): LineDraft {
+    return {
+      id: newId(),
+      title: "",
+      description: "",
+      quantity: 1,
+      unit_amount: 0,
+      phase_position: pos,
+      phase_title: title,
+      phase_note: note,
+    };
+  }
+  /** Index of the last line in a phase, so an addition lands inside it. */
+  function lastIndexOfPhase(p: LineDraft[], pos: number) {
+    let at = -1;
+    p.forEach((l, i) => {
+      if (l.phase_position === pos) at = i;
+    });
+    return at;
+  }
+  function enablePhases() {
+    setLines((p) =>
+      p.length === 0
+        ? [blankLine(0, "Phase 1", "")]
+        : p.map((l) => ({
+            ...l,
+            phase_position: 0,
+            phase_title: l.phase_title || "Phase 1",
+          })),
+    );
+    touch();
+  }
+  function removePhases() {
+    setLines((p) =>
+      p.map((l) => ({ ...l, phase_position: null, phase_title: "", phase_note: "" })),
+    );
+    touch();
+  }
+  function addPhase() {
+    setLines((p) => {
+      const next =
+        p.reduce(
+          (m, l) => (l.phase_position === null ? m : Math.max(m, l.phase_position)),
+          -1,
+        ) + 1;
+      return [...p, blankLine(next, "Phase " + String(next + 1), "")];
+    });
+    touch();
+  }
+  function updatePhase(pos: number, patch: Partial<LineDraft>) {
+    setLines((p) => p.map((l) => (l.phase_position === pos ? { ...l, ...patch } : l)));
+    touch();
+  }
+  function removePhase(pos: number) {
+    setLines((p) => {
+      const kept = p.filter((l) => l.phase_position !== pos);
+      // Renumber what is left so the phases stay 0..n-1 in document order. A gap
+      // would still render, but a "Phase 3" with no Phase 2 above it is exactly
+      // the kind of thing a client notices.
+      const order: number[] = [];
+      for (const l of kept) {
+        if (l.phase_position !== null && !order.includes(l.phase_position)) {
+          order.push(l.phase_position);
+        }
+      }
+      return kept.map((l) =>
+        l.phase_position === null
+          ? l
+          : { ...l, phase_position: order.indexOf(l.phase_position) },
+      );
+    });
+    touch();
+  }
+  function addLineToPhase(pos: number) {
+    setLines((p) => {
+      const head = p.find((l) => l.phase_position === pos);
+      const line = blankLine(pos, head?.phase_title ?? "", head?.phase_note ?? "");
+      const at = lastIndexOfPhase(p, pos);
+      return at < 0 ? [...p, line] : [...p.slice(0, at + 1), line, ...p.slice(at + 1)];
+    });
+    touch();
+  }
+  function moveLineToPhase(id: string, pos: number) {
+    setLines((p) => {
+      const line = p.find((l) => l.id === id);
+      if (!line || line.phase_position === pos) return p;
+      const rest = p.filter((l) => l.id !== id);
+      const head = rest.find((l) => l.phase_position === pos);
+      const moved: LineDraft = {
+        ...line,
+        phase_position: pos,
+        phase_title: head?.phase_title ?? "Phase " + String(pos + 1),
+        phase_note: head?.phase_note ?? "",
+      };
+      const at = lastIndexOfPhase(rest, pos);
+      return at < 0
+        ? [...rest, moved]
+        : [...rest.slice(0, at + 1), moved, ...rest.slice(at + 1)];
+    });
+    touch();
+  }
+
+  // One line editor, used the same whether the invoice is phased or flat, so a
+  // line cannot look or behave differently depending on where it sits.
+  //
+  // Both number fields take step="any" because hours come in quarters and halves
+  // and the browser rejects a fractional value against the default step of 1,
+  // which reads to the admin as the field simply refusing to accept 2.5.
+  function lineCard(l: LineDraft) {
+    return (
+      <div
+        key={l.id}
+        className="space-y-2 rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2/30 p-2"
+      >
+        <input
+          value={l.title}
+          disabled={!editable}
+          onChange={(e) => updateLine(l.id, { title: e.target.value })}
+          placeholder="Title — e.g. Custom website design & build"
+          className={`${fieldCls} w-full font-medium`}
+        />
+        <textarea
+          value={l.description}
+          disabled={!editable}
+          onChange={(e) => updateLine(l.id, { description: e.target.value })}
+          placeholder="Description (optional) — what they're getting and why it's worth it. Shows beneath the title."
+          rows={2}
+          className={`${fieldCls} w-full resize-y`}
+        />
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {editable && phaseOptions.length > 1 && l.phase_position !== null && (
+            <select
+              value={l.phase_position}
+              aria-label="Phase"
+              onChange={(e) => moveLineToPhase(l.id, Number(e.target.value))}
+              className={`${fieldCls} mr-auto text-xs`}
+            >
+              {phaseOptions.map((o) => (
+                <option key={o.pos} value={o.pos}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          )}
+          <span className="mono-label">{hourly ? "Hours" : "Qty"}</span>
+          <input
+            type="number"
+            step="any"
+            value={l.quantity}
+            disabled={!editable}
+            onChange={(e) => updateLine(l.id, { quantity: Number(e.target.value) })}
+            className={`${fieldCls} w-16 text-right`}
+          />
+          <span className="mono-label">{hourly ? "Rate" : "Unit"}</span>
+          <input
+            type="number"
+            step="any"
+            value={l.unit_amount}
+            disabled={!editable}
+            onChange={(e) => updateLine(l.id, { unit_amount: Number(e.target.value) })}
+            className={`${fieldCls} w-24 text-right`}
+          />
+          <span className="data-mono w-24 text-right text-sm text-pulse-text">
+            {formatMoney(lineAmount(l))}
+          </span>
+          {editable && (
+            <button
+              type="button"
+              onClick={() => removeLine(l.id)}
+              aria-label="Remove line"
+              className="text-pulse-text-mute hover:text-pulse-danger"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   function buildInput() {
     return {
       issue_date: issueDate,
       due_date: dueDate,
       brand,
+      rate_mode: rateMode,
       deposit_amount: Number(deposit) || 0,
       deposit_label: depositLabel,
       gst_mode: gstMode,
@@ -182,6 +410,9 @@ export function InvoiceBuilder({
         description: l.description,
         quantity: Number(l.quantity) || 0,
         unit_amount: Number(l.unit_amount) || 0,
+        phase_position: l.phase_position,
+        phase_title: l.phase_title,
+        phase_note: l.phase_note,
       })),
     };
   }
@@ -334,6 +565,7 @@ export function InvoiceBuilder({
       issue_date: issueDate,
       due_date: dueDate,
       brand,
+      rate_mode: rateMode,
       deposit_amount: Number(deposit) || 0,
       deposit_label: depositLabel,
       gst_mode: gstMode,
@@ -355,6 +587,9 @@ export function InvoiceBuilder({
       unit_amount: Number(l.unit_amount) || 0,
       amount: lineAmount(l),
       position: i,
+      phase_position: l.phase_position,
+      phase_title: l.phase_position === null ? null : l.phase_title || null,
+      phase_note: l.phase_position === null ? null : l.phase_note || null,
     })) as InvoiceLineItem[],
   };
 
@@ -578,6 +813,26 @@ export function InvoiceBuilder({
             </select>
           </label>
 
+          <label className="flex items-start gap-2 text-sm text-pulse-text-dim">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={hourly}
+              disabled={!editable}
+              onChange={(e) => {
+                setRateMode(e.target.checked ? "hourly" : "fixed");
+                touch();
+              }}
+            />
+            <span>
+              Bill by the hour
+              <span className="mt-0.5 block text-[11px] text-pulse-text-mute">
+                Each line becomes hours at an hourly rate, and the invoice shows
+                the Hours and Rate columns instead of a single amount.
+              </span>
+            </span>
+          </label>
+
           <div className="flex flex-col gap-1.5">
             <label className="flex items-center gap-2 text-sm text-pulse-text-dim">
               <input
@@ -642,64 +897,97 @@ export function InvoiceBuilder({
           </div>
 
           <div className="rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-3">
-            <p className="mono-label mb-2">Line items</p>
-            <div className="space-y-2">
-              {lines.map((l) => (
-                <div
-                  key={l.id}
-                  className="space-y-2 rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2/30 p-2"
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="mono-label">Line items</p>
+              {editable && (
+                <button
+                  type="button"
+                  onClick={phased ? removePhases : enablePhases}
+                  className="inline-flex items-center gap-1 rounded-[var(--radius-input)] border border-dashed border-pulse-border px-2 py-1 text-[11px] text-pulse-text-dim hover:text-pulse-text"
                 >
-                  <input
-                    value={l.title}
-                    disabled={!editable}
-                    onChange={(e) => updateLine(l.id, { title: e.target.value })}
-                    placeholder="Title — e.g. Custom website design & build"
-                    className={`${fieldCls} w-full font-medium`}
-                  />
-                  <textarea
-                    value={l.description}
-                    disabled={!editable}
-                    onChange={(e) => updateLine(l.id, { description: e.target.value })}
-                    placeholder="Description (optional) — what they're getting and why it's worth it. Shows beneath the title."
-                    rows={2}
-                    className={`${fieldCls} w-full resize-y`}
-                  />
-                  <div className="flex items-center justify-end gap-2">
-                    <span className="mono-label">Qty</span>
-                    <input
-                      type="number"
-                      value={l.quantity}
-                      disabled={!editable}
-                      onChange={(e) => updateLine(l.id, { quantity: Number(e.target.value) })}
-                      className={`${fieldCls} w-14 text-right`}
-                    />
-                    <span className="mono-label">Unit</span>
-                    <input
-                      type="number"
-                      value={l.unit_amount}
-                      disabled={!editable}
-                      onChange={(e) =>
-                        updateLine(l.id, { unit_amount: Number(e.target.value) })
-                      }
-                      className={`${fieldCls} w-24 text-right`}
-                    />
-                    <span className="data-mono w-24 text-right text-sm text-pulse-text">
-                      {formatMoney(lineAmount(l))}
-                    </span>
-                    {editable && (
-                      <button
-                        type="button"
-                        onClick={() => removeLine(l.id)}
-                        aria-label="Remove line"
-                        className="text-pulse-text-mute hover:text-pulse-danger"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
+                  <Layers size={12} />
+                  {phased ? "Remove phases" : "Group into phases"}
+                </button>
+              )}
             </div>
+
+            {phased ? (
+              <div className="space-y-3">
+                {groups.map((g) => {
+                  const pos = g.lines[0].phase_position;
+                  // A run with no phase renders bare, so a line pulled out of a
+                  // phase is still visible and editable rather than vanishing.
+                  if (pos === null) {
+                    return (
+                      <div key={g.key} className="space-y-2">
+                        {g.lines.map(lineCard)}
+                      </div>
+                    );
+                  }
+                  return (
+                    <div
+                      key={g.key}
+                      className="rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2/20 p-2.5"
+                    >
+                      <div className="mb-2 flex items-start gap-2">
+                        <div className="flex-1 space-y-1.5">
+                          <input
+                            value={g.lines[0].phase_title}
+                            disabled={!editable}
+                            onChange={(e) =>
+                              updatePhase(pos, { phase_title: e.target.value })
+                            }
+                            placeholder={`Phase ${pos + 1} — e.g. Design and build`}
+                            className={`${fieldCls} w-full font-medium`}
+                          />
+                          <input
+                            value={g.lines[0].phase_note}
+                            disabled={!editable}
+                            onChange={(e) =>
+                              updatePhase(pos, { phase_note: e.target.value })
+                            }
+                            placeholder="Note (optional) — e.g. Payable on commencement"
+                            className={`${fieldCls} w-full text-xs`}
+                          />
+                        </div>
+                        {editable && (
+                          <button
+                            type="button"
+                            onClick={() => removePhase(pos)}
+                            aria-label="Remove phase and its lines"
+                            className="mt-1.5 text-pulse-text-mute hover:text-pulse-danger"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                      <div className="space-y-2">{g.lines.map(lineCard)}</div>
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        {editable ? (
+                          <button
+                            type="button"
+                            onClick={() => addLineToPhase(pos)}
+                            className="inline-flex items-center gap-1 rounded-[var(--radius-input)] border border-dashed border-pulse-border px-2 py-1 text-[11px] text-pulse-text-dim hover:text-pulse-text"
+                          >
+                            <Plus size={12} /> Line
+                          </button>
+                        ) : (
+                          <span />
+                        )}
+                        <span className="text-xs text-pulse-text-mute">
+                          Subtotal{" "}
+                          <span className="data-mono text-pulse-text">
+                            {formatMoney(g.subtotal)}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="space-y-2">{lines.map(lineCard)}</div>
+            )}
 
             {editable && (
               <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -717,6 +1005,15 @@ export function InvoiceBuilder({
                 >
                   <Plus size={13} /> Discount
                 </button>
+                {phased && (
+                  <button
+                    type="button"
+                    onClick={addPhase}
+                    className="inline-flex items-center gap-1 rounded-[var(--radius-input)] border border-dashed border-pulse-border px-2.5 py-1.5 text-xs text-pulse-text-dim hover:text-pulse-text"
+                  >
+                    <Plus size={13} /> Phase
+                  </button>
+                )}
                 {pricingItems.length > 0 && (
                   <select
                     value=""

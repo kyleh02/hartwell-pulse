@@ -542,6 +542,8 @@ export interface PricingItem {
 export type Brand = "hartwell" | "ironpeak";
 export type InvoiceBrand = Brand;
 
+export type RateMode = "fixed" | "hourly";
+
 export interface Invoice {
   id: string;
   client_id: string;
@@ -562,6 +564,11 @@ export interface Invoice {
   issue_date: string;
   due_date: string;
   gst_mode: GstMode;
+  /**
+   * "hourly" bills quantity as hours at an hourly rate. Presentation only: the
+   * maths is quantity * unit_amount either way. See migration 0047.
+   */
+  rate_mode: RateMode;
   subtotal: number;
   discount: number;
   discount_label: string | null;
@@ -605,6 +612,12 @@ export interface InvoiceLineItem {
   unit_amount: number;
   amount: number;
   position: number;
+  /** Groups lines under a shared heading. Null means the line is not phased. */
+  phase_position: number | null;
+  /** The heading, copied onto every line of the phase. */
+  phase_title: string | null;
+  /** Optional line under the heading, e.g. "Payable on commencement". */
+  phase_note: string | null;
 }
 
 export interface BoardCard {

@@ -1,6 +1,7 @@
+import { Fragment } from "react";
 import type { BusinessSettings } from "@/lib/types/database";
 import type { InvoiceBundle } from "@/lib/invoices-shared";
-import { formatMoney, gstLabel } from "@/lib/invoices-shared";
+import { formatMoney, gstLabel, groupByPhase } from "@/lib/invoices-shared";
 import { Wordmark } from "@/components/brand/Wordmark";
 import { IronpeakWordmark } from "@/components/brand/IronpeakMark";
 import { IRONPEAK, IRONPEAK_DOC_CLASS } from "@/lib/brand";
@@ -28,7 +29,16 @@ export function InvoiceDocument({
   const amountDue = invoice.total - Number(invoice.deposit_amount ?? 0);
   // Flat-fee work is almost always qty 1, where Unit == Amount — so show the
   // Qty/Unit columns only when a line actually has a quantity other than 1.
-  const showRate = lines.some((l) => Number(l.quantity) !== 1);
+  // An hourly invoice must always show its working: the client is paying for
+  // hours at a rate, and a bare Amount hides both.
+  const hourly = invoice.rate_mode === "hourly";
+  const showRate = hourly || lines.some((l) => Number(l.quantity) !== 1);
+  const cols = showRate ? 4 : 2;
+  // Phases are a presentation of the same lines: each group gets a heading and
+  // its own subtotal, and the totals underneath are untouched. An invoice with
+  // no phases produces exactly one group with a null title, which renders as a
+  // plain run of rows — so the unphased document is byte-for-byte what it was.
+  const groups = groupByPhase(lines);
 
   return (
     <div
@@ -111,10 +121,10 @@ export function InvoiceDocument({
             {showRate && (
               <>
                 <th className="whitespace-nowrap py-2 pl-4 text-right font-medium">
-                  Qty
+                  {hourly ? "Hours" : "Qty"}
                 </th>
                 <th className="whitespace-nowrap py-2 pl-4 text-right font-medium">
-                  Unit
+                  {hourly ? "Rate/hr" : "Unit"}
                 </th>
               </>
             )}
@@ -127,42 +137,81 @@ export function InvoiceDocument({
           {lines.length === 0 ? (
             <tr>
               <td
-                colSpan={showRate ? 4 : 2}
+                colSpan={cols}
                 className="py-4 text-center text-xs text-pulse-text-mute"
               >
                 No line items.
               </td>
             </tr>
           ) : (
-            lines.map((l) => (
-              <tr key={l.id} className="border-b border-pulse-border">
-                <td className="w-full py-2.5 pr-4 align-top text-pulse-text-dim">
-                  {l.title && (
-                    <span className="block font-medium text-pulse-text">
-                      {l.title}
-                    </span>
-                  )}
-                  {l.description && (
-                    <span className="block whitespace-pre-wrap">{l.description}</span>
-                  )}
-                  {!l.title && !l.description && <span>—</span>}
-                </td>
-                {showRate && (
-                  <>
-                    <td className="data-mono whitespace-nowrap py-2.5 pl-4 text-right align-top text-pulse-text-dim">
-                      {l.quantity}
+            groups.map((g, gi) => (
+              <Fragment key={g.key}>
+                {g.title && (
+                  <tr>
+                    {/* Space above each heading separates it from the phase
+                        before it. Not `first:pt-0`: this cell is always the
+                        first child of its row, so that variant would strip the
+                        padding from every heading, not just the top one. */}
+                    <td
+                      colSpan={cols}
+                      className={`pb-1.5 align-bottom ${gi === 0 ? "pt-0" : "pt-5"}`}
+                    >
+                      <span className="mono-label text-pulse-gold">{g.title}</span>
+                      {g.note && (
+                        <span className="mt-0.5 block text-xs text-pulse-text-mute">
+                          {g.note}
+                        </span>
+                      )}
                     </td>
-                    <td className="data-mono whitespace-nowrap py-2.5 pl-4 text-right align-top text-pulse-text-dim">
-                      {formatMoney(l.unit_amount)}
-                    </td>
-                  </>
+                  </tr>
                 )}
-                <td
-                  className={`data-mono whitespace-nowrap py-2.5 pl-4 text-right align-top ${l.amount < 0 ? "text-pulse-text-mute" : "text-pulse-text"}`}
-                >
-                  {formatMoney(l.amount)}
-                </td>
-              </tr>
+                {g.lines.map((l) => (
+                  <tr key={l.id} className="border-b border-pulse-border">
+                    <td className="w-full py-2.5 pr-4 align-top text-pulse-text-dim">
+                      {l.title && (
+                        <span className="block font-medium text-pulse-text">
+                          {l.title}
+                        </span>
+                      )}
+                      {l.description && (
+                        <span className="block whitespace-pre-wrap">{l.description}</span>
+                      )}
+                      {!l.title && !l.description && <span>—</span>}
+                    </td>
+                    {showRate && (
+                      <>
+                        <td className="data-mono whitespace-nowrap py-2.5 pl-4 text-right align-top text-pulse-text-dim">
+                          {l.quantity}
+                        </td>
+                        <td className="data-mono whitespace-nowrap py-2.5 pl-4 text-right align-top text-pulse-text-dim">
+                          {formatMoney(l.unit_amount)}
+                        </td>
+                      </>
+                    )}
+                    <td
+                      className={`data-mono whitespace-nowrap py-2.5 pl-4 text-right align-top ${l.amount < 0 ? "text-pulse-text-mute" : "text-pulse-text"}`}
+                    >
+                      {formatMoney(l.amount)}
+                    </td>
+                  </tr>
+                ))}
+                {/* Every phase closes with its own figure, so a client reading
+                    a two-phase quote can see what each phase costs without
+                    adding the lines up themselves. */}
+                {g.title && (
+                  <tr className="border-b border-pulse-border">
+                    <td
+                      colSpan={cols - 1}
+                      className="py-2 pr-4 text-right text-xs text-pulse-text-mute"
+                    >
+                      {g.title} subtotal
+                    </td>
+                    <td className="data-mono whitespace-nowrap py-2 pl-4 text-right text-sm text-pulse-text">
+                      {formatMoney(g.subtotal)}
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))
           )}
         </tbody>

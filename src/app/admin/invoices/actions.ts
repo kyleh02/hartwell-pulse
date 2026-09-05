@@ -79,6 +79,7 @@ export interface SaveInvoiceInput {
   issue_date: string;
   due_date: string;
   brand: string;
+  rate_mode: string;
   deposit_amount: number;
   deposit_label: string;
   gst_mode: GstMode;
@@ -93,6 +94,10 @@ export interface SaveInvoiceInput {
     description: string;
     quantity: number;
     unit_amount: number;
+    /** Null on an unphased invoice. Lines sharing a value render as one phase. */
+    phase_position: number | null;
+    phase_title: string;
+    phase_note: string;
   }[];
 }
 
@@ -141,6 +146,7 @@ export async function saveInvoice(invoiceId: string, input: SaveInvoiceInput) {
       issue_date: input.issue_date,
       due_date: input.due_date,
       brand: input.brand,
+      rate_mode: input.rate_mode,
       deposit_amount: input.deposit_amount,
       deposit_label: input.deposit_label || null,
       gst_mode: input.gst_mode,
@@ -178,6 +184,13 @@ export async function saveInvoice(invoiceId: string, input: SaveInvoiceInput) {
       unit_amount: l.unit_amount,
       amount: lineAmount(l),
       position: i,
+      phase_position: l.phase_position,
+      // Only meaningful on a phased line, and blanking them on an unphased one
+      // keeps a row that was pulled out of a phase from carrying a stale heading.
+      phase_title:
+        l.phase_position === null ? null : l.phase_title.trim() || null,
+      phase_note:
+        l.phase_position === null ? null : l.phase_note.trim() || null,
     }));
     const { error } = await supabase.from("invoice_line_items").insert(rows);
     if (error) throw new Error(error.message);

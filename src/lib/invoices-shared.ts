@@ -12,6 +12,66 @@ export interface LineDraft {
   description: string;
   quantity: number;
   unit_amount: number;
+  /** Null when the invoice is not phased. See groupByPhase. */
+  phase_position: number | null;
+  phase_title: string;
+  phase_note: string;
+}
+
+/** Anything the phase grouper can read a phase off. */
+export interface PhaseFields {
+  phase_position?: number | null;
+  phase_title?: string | null;
+  phase_note?: string | null;
+}
+
+export interface PhaseGroup<T> {
+  /** Stable key for rendering. "none" for the unphased run. */
+  key: string;
+  /** Null for lines that are not in a phase, so they render bare as before. */
+  title: string | null;
+  note: string | null;
+  lines: T[];
+  /** Net of the group, so a discount line inside a phase reduces its own phase. */
+  subtotal: number;
+}
+
+/**
+ * Split lines into the runs that share a phase, in document order.
+ *
+ * A new group starts whenever phase_position changes, which means the grouping
+ * follows the order the lines are actually in rather than trying to reorder the
+ * invoice behind the admin's back. Lines with no phase come back as a group with
+ * a null title, which the document renders exactly as an unphased invoice.
+ */
+export function groupByPhase<T extends PhaseFields & { quantity: number; unit_amount: number }>(
+  lines: T[],
+): PhaseGroup<T>[] {
+  const groups: PhaseGroup<T>[] = [];
+  let currentPos: number | null | undefined;
+  for (const l of lines) {
+    const pos = l.phase_position ?? null;
+    const last = groups[groups.length - 1];
+    if (!last || pos !== currentPos) {
+      groups.push({
+        key: pos === null ? `none-${groups.length}` : `phase-${pos}`,
+        title: pos === null ? null : (l.phase_title ?? "").trim() || `Phase ${pos + 1}`,
+        note: pos === null ? null : (l.phase_note ?? "").trim() || null,
+        lines: [l],
+        subtotal: lineAmount(l),
+      });
+      currentPos = pos;
+    } else {
+      last.lines.push(l);
+      last.subtotal = round(last.subtotal + lineAmount(l));
+    }
+  }
+  return groups;
+}
+
+/** Is this invoice phased at all? Drives whether headings render. */
+export function hasPhases(lines: PhaseFields[]): boolean {
+  return lines.some((l) => l.phase_position !== null && l.phase_position !== undefined);
 }
 
 export interface InvoiceTotals {

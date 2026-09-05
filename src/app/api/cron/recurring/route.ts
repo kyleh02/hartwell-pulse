@@ -168,6 +168,7 @@ export async function GET(req: NextRequest) {
           issue_date: issueStr,
           due_date: fmt(due),
           gst_mode: t.gst_mode,
+          rate_mode: t.rate_mode,
           discount: t.discount,
           discount_label: t.discount_label,
           subtotal: t.subtotal,
@@ -224,6 +225,11 @@ export async function GET(req: NextRequest) {
         unit_amount: l.unit_amount,
         amount: l.amount,
         position: l.position,
+        // A phased template bills a phased invoice. Dropping these would quietly
+        // flatten every generated invoice back to a plain list of lines.
+        phase_position: l.phase_position,
+        phase_title: fill(l.phase_title, period_vars),
+        phase_note: fill(l.phase_note, period_vars),
       }));
       if (rows.length > 0) await supabase.from("invoice_line_items").insert(rows);
 
