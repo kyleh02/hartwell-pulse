@@ -18,6 +18,7 @@ function defaultBusiness(): BusinessSettings {
     bank_bsb: null,
     bank_account: null,
     payment_terms_days: 14,
+    default_hourly_rate: null,
     reminder_days_before: 3,
     gst_mode: "add",
     invoice_email_message: null,
@@ -56,6 +57,7 @@ export function SettingsManager({
         bank_bsb: biz.bank_bsb,
         bank_account: biz.bank_account,
         payment_terms_days: biz.payment_terms_days,
+        default_hourly_rate: biz.default_hourly_rate,
         reminder_days_before: biz.reminder_days_before,
         gst_mode: biz.gst_mode,
         invoice_email_message: biz.invoice_email_message,
@@ -141,6 +143,28 @@ export function SettingsManager({
           <label className="flex flex-col gap-1">
             <span className="mono-label">Default terms (days)</span>
             <input type="number" className={field} value={biz.payment_terms_days} onChange={(e) => setField("payment_terms_days", Number(e.target.value))} />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="mono-label">Standard hourly rate</span>
+            <input
+              type="number"
+              step="any"
+              min={0}
+              placeholder="95"
+              className={field}
+              value={biz.default_hourly_rate ?? ""}
+              onChange={(e) =>
+                setField(
+                  "default_hourly_rate",
+                  e.target.value === "" ? null : Number(e.target.value),
+                )
+              }
+            />
+            <span className="text-[11px] text-pulse-text-mute">
+              Filled into every invoice billed by the hour. Each invoice keeps
+              its own copy, so changing this never rewrites one already sent, and
+              any single line can still be billed at a different rate.
+            </span>
           </label>
           <label className="flex flex-col gap-1">
             <span className="mono-label">Remind before due (days)</span>

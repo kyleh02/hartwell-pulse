@@ -69,6 +69,61 @@ export function groupByPhase<T extends PhaseFields & { quantity: number; unit_am
   return groups;
 }
 
+/**
+ * Move a dragged line to where it was dropped, and give it the phase it landed in.
+ *
+ * `overId` is either another line's id, or "phase:<n>" / "phase:none" for a drop
+ * on the phase itself rather than on one of its lines.
+ *
+ * The insertion index for a drop on a line is that line's index in the ORIGINAL
+ * list, not in the list with the dragged one already removed. That is the index
+ * dnd-kit slides the other rows to preview, and the two differ by one whenever
+ * the drag was downward, which lands the line a place short of where the preview
+ * promised. A drop on the phase itself appends to the end of that phase, which is
+ * the only way to get a line past the last one in it.
+ */
+export function moveLine(
+  lines: LineDraft[],
+  activeId: string,
+  overId: string,
+): LineDraft[] {
+  const oldIndex = lines.findIndex((l) => l.id === activeId);
+  if (oldIndex < 0) return lines;
+  const moving = lines[oldIndex];
+  const rest = lines.filter((l) => l.id !== activeId);
+
+  let targetPos: number | null;
+  let at: number;
+  if (overId.startsWith("phase:")) {
+    const raw = overId.slice("phase:".length);
+    targetPos = raw === "none" ? null : Number(raw);
+    let last = -1;
+    rest.forEach((l, i) => {
+      if ((l.phase_position ?? null) === targetPos) last = i;
+    });
+    at = last < 0 ? rest.length : last + 1;
+  } else {
+    const overIndex = lines.findIndex((l) => l.id === overId);
+    if (overIndex < 0) return lines;
+    targetPos = lines[overIndex].phase_position;
+    at = overIndex;
+  }
+
+  // The heading is copied onto every line of a phase, so a line arriving in one
+  // has to take that heading or it would start a second run under its old title.
+  const head =
+    targetPos === null
+      ? undefined
+      : rest.find((l) => l.phase_position === targetPos);
+  const moved: LineDraft = {
+    ...moving,
+    phase_position: targetPos,
+    phase_title: targetPos === null ? "" : (head?.phase_title ?? moving.phase_title),
+    phase_note: targetPos === null ? "" : (head?.phase_note ?? moving.phase_note),
+  };
+  return [...rest.slice(0, at), moved, ...rest.slice(at)];
+}
+
 /** Is this invoice phased at all? Drives whether headings render. */
 export function hasPhases(lines: PhaseFields[]): boolean {
   return lines.some((l) => l.phase_position !== null && l.phase_position !== undefined);

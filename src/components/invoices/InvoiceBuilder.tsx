@@ -17,10 +17,12 @@ import {
   DragOverlay,
   KeyboardSensor,
   PointerSensor,
-  closestCorners,
+  pointerWithin,
+  rectIntersection,
   useDroppable,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
@@ -50,6 +52,7 @@ import {
   formatMoney,
   groupByPhase,
   hourlySummary,
+  moveLine,
   DEFAULT_INVOICE_EMAIL,
 } from "@/lib/invoices-shared";
 import {
@@ -301,6 +304,41 @@ function SortableLine({
   );
 }
 
+/**
+ * First of these that is a real number.
+ *
+ * Postgres numerics arrive as strings, and an unset one as null, so the values
+ * being chosen between are not uniformly typed.
+ */
+function firstRate(...vals: (number | string | null | undefined)[]): number | null {
+  for (const v of vals) {
+    if (v === null || v === undefined || v === "") continue;
+    const n = Number(v);
+    if (!Number.isNaN(n)) return n;
+  }
+  return null;
+}
+
+/**
+ * Work out what a dragged line is over, preferring a line to the phase holding
+ * it.
+ *
+ * A phase is a drop target covering all of its own lines, so a pointer on a line
+ * hits both. Left to a plain distance test the phase can win, and dropping then
+ * means "append to the end of this phase" rather than "put it here" - which
+ * reads as the line refusing to stay where it was put, especially dragging
+ * upward, where the end of the phase is the opposite way from the intent.
+ *
+ * The phase still wins where it should: over its empty space, or when it has no
+ * lines left to hit.
+ */
+const preferLine: CollisionDetection = (args) => {
+  const pointer = pointerWithin(args);
+  const hits = pointer.length > 0 ? pointer : rectIntersection(args);
+  const line = hits.find((h) => !String(h.id).startsWith("phase:"));
+  return line ? [line] : hits;
+};
+
 const STATUS_TONE: Record<InvoiceStatus, "neutral" | "gold" | "success" | "danger"> = {
   draft: "neutral",
   sent: "gold",
@@ -353,15 +391,23 @@ export function InvoiceBuilder({
   // pressing "standard" then zeroed the line, because nothing is what it
   // thought the standard was. Fall back to the lines, and the next save writes
   // it to the column for good.
+  //
+  // In order: what this invoice was billed at, then the standard rate from
+  // Settings, then whatever the lines agree on.
+  //
+  // The Settings rate is the step that makes this reliable. Reading the lines
+  // cannot work on the invoice that needs it most: as soon as one line is billed
+  // at something else the lines disagree, no single rate can honestly be taken
+  // from them, and the button for putting a line back on the standard has
+  // nothing to put it back to.
   const resolvedRate =
-    invoice.hourly_rate !== null && invoice.hourly_rate !== undefined
-      ? Number(invoice.hourly_rate)
-      : hourlySummary(
-          bundle.lines.map((l) => ({
-            quantity: Number(l.quantity),
-            unit_amount: Number(l.unit_amount),
-          })),
-        ).rate;
+    firstRate(invoice.hourly_rate, business?.default_hourly_rate) ??
+    hourlySummary(
+      bundle.lines.map((l) => ({
+        quantity: Number(l.quantity),
+        unit_amount: Number(l.unit_amount),
+      })),
+    ).rate;
   const [hourlyRate, setHourlyRate] = useState(
     resolvedRate === null ? "" : String(resolvedRate),
   );
@@ -444,12 +490,14 @@ export function InvoiceBuilder({
       next.delete(id);
       return next;
     });
-    // With no standard rate set there is nothing to go back TO, and writing the
-    // 0 that an empty box parses to would wipe a real figure. Just stop treating
-    // the line as an override.
-    if (hourlyRate === "") return;
+    // Fall back to the Settings rate if the box has been cleared, so the button
+    // still has somewhere to put the line. Only with no standard rate anywhere
+    // is there nothing to go back TO, and writing the 0 that an empty box parses
+    // to would wipe a real figure.
+    const standard = firstRate(hourlyRate, business?.default_hourly_rate);
+    if (standard === null) return;
     setLines((p) =>
-      p.map((l) => (l.id === id ? { ...l, unit_amount: Number(hourlyRate) } : l)),
+      p.map((l) => (l.id === id ? { ...l, unit_amount: standard } : l)),
     );
     touch();
   }
@@ -647,41 +695,7 @@ export function InvoiceBuilder({
     const moving = lines.find((l) => l.id === activeId);
     if (!moving) return;
 
-    setLines((p) => {
-      const rest = p.filter((l) => l.id !== activeId);
-      let targetPos: number | null;
-      let at: number;
-      if (overId.startsWith("phase:")) {
-        const raw = overId.slice("phase:".length);
-        targetPos = raw === "none" ? null : Number(raw);
-        let last = -1;
-        rest.forEach((l, i) => {
-          if ((l.phase_position ?? null) === targetPos) last = i;
-        });
-        at = last < 0 ? rest.length : last + 1;
-      } else {
-        const i = rest.findIndex((l) => l.id === overId);
-        if (i < 0) return p;
-        targetPos = rest[i].phase_position;
-        at = i;
-      }
-      // The heading is denormalised onto every line of a phase, so a line
-      // arriving in one has to be given that phase's heading or it would start a
-      // second run under the old title.
-      const head =
-        targetPos === null
-          ? undefined
-          : rest.find((l) => l.phase_position === targetPos);
-      const moved: LineDraft = {
-        ...moving,
-        phase_position: targetPos,
-        phase_title:
-          targetPos === null ? "" : (head?.phase_title ?? moving.phase_title),
-        phase_note:
-          targetPos === null ? "" : (head?.phase_note ?? moving.phase_note),
-      };
-      return [...rest.slice(0, at), moved, ...rest.slice(at)];
-    });
+    setLines((p) => moveLine(p, activeId, overId));
     touch();
   }
 
@@ -1275,7 +1289,7 @@ export function InvoiceBuilder({
 
             <DndContext
               sensors={sensors}
-              collisionDetection={closestCorners}
+              collisionDetection={preferLine}
               onDragStart={(e: DragStartEvent) => setActiveLineId(String(e.active.id))}
               onDragCancel={() => setActiveLineId(null)}
               onDragEnd={handleLineDragEnd}

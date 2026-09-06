@@ -517,6 +517,8 @@ export interface BusinessSettings {
   bank_bsb: string | null;
   bank_account: string | null;
   payment_terms_days: number;
+  /** Standard rate charged by the hour. Fills into new hourly invoices. */
+  default_hourly_rate: number | null;
   reminder_days_before: number; // heads-up before due; 0 disables
   gst_mode: GstMode;
   invoice_email_message: string | null;
