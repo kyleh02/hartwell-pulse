@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type CSSProperties } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -10,7 +10,28 @@ import {
   MailCheck,
   RotateCcw,
   Layers,
+  GripVertical,
 } from "lucide-react";
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  closestCorners,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { cn } from "@/lib/utils/cn";
 import type {
   BusinessSettings,
   GstMode,
@@ -54,6 +75,217 @@ import { Badge } from "@/components/ui/Badge";
 
 function newId() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+/**
+ * A drop target that is the whole phase, not just the gaps between its lines.
+ *
+ * Without it a phase could only be dropped INTO by aiming at one of its existing
+ * lines, so the last line of a phase could never be dragged past the end of
+ * another one.
+ */
+function DropZone({
+  id,
+  className,
+  children,
+}: {
+  id: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        className,
+        "rounded-[var(--radius-input)] transition-colors",
+        isOver && "bg-pulse-gold/5 ring-1 ring-pulse-gold/30",
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
+ * One line editor.
+ *
+ * Declared at module scope on purpose. Defined inside InvoiceBuilder it would be
+ * a new component type on every render, so React would unmount and remount every
+ * row on each keystroke and the field being typed in would lose focus.
+ */
+function SortableLine({
+  line: l,
+  editable,
+  hourly,
+  hourlyRate,
+  fieldCls,
+  phaseOptions,
+  custom,
+  onUpdate,
+  onRemove,
+  onMovePhase,
+  onMarkCustom,
+  onClearCustom,
+}: {
+  line: LineDraft;
+  editable: boolean;
+  hourly: boolean;
+  hourlyRate: string;
+  fieldCls: string;
+  phaseOptions: { pos: number; label: string }[];
+  custom: boolean;
+  onUpdate: (id: string, patch: Partial<LineDraft>) => void;
+  onRemove: (id: string) => void;
+  onMovePhase: (id: string, pos: number) => void;
+  onMarkCustom: (id: string) => void;
+  onClearCustom: (id: string) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: l.id, disabled: !editable });
+  // transition is what makes the other rows glide aside as one is dragged over
+  // them, rather than snapping.
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-start gap-2 rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2/30 p-2"
+    >
+      {editable && (
+        <button
+          type="button"
+          ref={setActivatorNodeRef}
+          {...attributes}
+          {...listeners}
+          aria-label="Drag to reorder"
+          // touch-none stops the browser scrolling the page instead of dragging.
+          className="mt-2 cursor-grab touch-none text-pulse-text-mute hover:text-pulse-text active:cursor-grabbing"
+        >
+          <GripVertical size={14} />
+        </button>
+      )}
+      <div className="min-w-0 flex-1 space-y-2">
+        <input
+          value={l.title}
+          disabled={!editable}
+          onChange={(e) => onUpdate(l.id, { title: e.target.value })}
+          placeholder="Title — e.g. Custom website design & build"
+          className={`${fieldCls} w-full font-medium`}
+        />
+        <textarea
+          value={l.description}
+          disabled={!editable}
+          onChange={(e) => onUpdate(l.id, { description: e.target.value })}
+          placeholder="Description (optional) — what they're getting and why it's worth it. Shows beneath the title."
+          rows={2}
+          className={`${fieldCls} w-full resize-y`}
+        />
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {editable && phaseOptions.length > 1 && l.phase_position !== null && (
+            <select
+              value={l.phase_position}
+              aria-label="Phase"
+              onChange={(e) => onMovePhase(l.id, Number(e.target.value))}
+              className={`${fieldCls} mr-auto text-xs`}
+            >
+              {phaseOptions.map((o) => (
+                <option key={o.pos} value={o.pos}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          )}
+          <span className="mono-label">{hourly ? "Hours" : "Qty"}</span>
+          <input
+            type="number"
+            step="any"
+            value={l.quantity}
+            disabled={!editable}
+            onChange={(e) => onUpdate(l.id, { quantity: Number(e.target.value) })}
+            className={`${fieldCls} w-16 text-right`}
+          />
+          {hourly &&
+            lineAmount(l) >= 0 &&
+            (custom ? (
+              <>
+                <span className="mono-label">Rate</span>
+                <input
+                  type="number"
+                  step="any"
+                  value={l.unit_amount}
+                  disabled={!editable}
+                  onChange={(e) =>
+                    onUpdate(l.id, { unit_amount: Number(e.target.value) })
+                  }
+                  className={`${fieldCls} w-20 text-right`}
+                />
+                {editable && (
+                  <button
+                    type="button"
+                    onClick={() => onClearCustom(l.id)}
+                    className="text-[11px] text-pulse-text-mute underline hover:text-pulse-text"
+                  >
+                    standard
+                  </button>
+                )}
+              </>
+            ) : (
+              <button
+                type="button"
+                disabled={!editable}
+                onClick={() => onMarkCustom(l.id)}
+                title="Bill this line at a different rate"
+                className="data-mono rounded-[var(--radius-input)] border border-dashed border-pulse-border px-2 py-1 text-xs text-pulse-text-mute hover:text-pulse-text disabled:opacity-60"
+              >
+                {formatMoney(Number(hourlyRate) || 0)}/hr
+              </button>
+            ))}
+          {(!hourly || lineAmount(l) < 0) && (
+            <>
+              <span className="mono-label">{hourly ? "Amount" : "Unit"}</span>
+              <input
+                type="number"
+                step="any"
+                value={l.unit_amount}
+                disabled={!editable}
+                onChange={(e) =>
+                  onUpdate(l.id, { unit_amount: Number(e.target.value) })
+                }
+                className={`${fieldCls} w-24 text-right`}
+              />
+            </>
+          )}
+          <span className="data-mono w-24 text-right text-sm text-pulse-text">
+            {formatMoney(lineAmount(l))}
+          </span>
+          {editable && (
+            <button
+              type="button"
+              onClick={() => onRemove(l.id)}
+              aria-label="Remove line"
+              className="text-pulse-text-mute hover:text-pulse-danger"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 const STATUS_TONE: Record<InvoiceStatus, "neutral" | "gold" | "success" | "danger"> = {
@@ -372,6 +604,74 @@ export function InvoiceBuilder({
     });
     touch();
   }
+  // A short distance before a drag starts, so a click on the handle is still a
+  // click and does not have to be perfectly still.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const [activeLineId, setActiveLineId] = useState<string | null>(null);
+  const activeLine = activeLineId
+    ? (lines.find((l) => l.id === activeLineId) ?? null)
+    : null;
+
+  /**
+   * Drop a line into its new place, in whichever phase it landed in.
+   *
+   * `lines` is the document order and phases are contiguous runs of it, so a
+   * move is one splice: lift the line out, work out the index it was dropped
+   * at, and put it back carrying the heading of whatever run it now belongs to.
+   * Dropping on the phase itself, rather than on one of its lines, appends -
+   * which is the only way to drag a line past the end of a phase.
+   */
+  function handleLineDragEnd(e: DragEndEvent) {
+    setActiveLineId(null);
+    const { active, over } = e;
+    if (!over) return;
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    if (activeId === overId) return;
+    const moving = lines.find((l) => l.id === activeId);
+    if (!moving) return;
+
+    setLines((p) => {
+      const rest = p.filter((l) => l.id !== activeId);
+      let targetPos: number | null;
+      let at: number;
+      if (overId.startsWith("phase:")) {
+        const raw = overId.slice("phase:".length);
+        targetPos = raw === "none" ? null : Number(raw);
+        let last = -1;
+        rest.forEach((l, i) => {
+          if ((l.phase_position ?? null) === targetPos) last = i;
+        });
+        at = last < 0 ? rest.length : last + 1;
+      } else {
+        const i = rest.findIndex((l) => l.id === overId);
+        if (i < 0) return p;
+        targetPos = rest[i].phase_position;
+        at = i;
+      }
+      // The heading is denormalised onto every line of a phase, so a line
+      // arriving in one has to be given that phase's heading or it would start a
+      // second run under the old title.
+      const head =
+        targetPos === null
+          ? undefined
+          : rest.find((l) => l.phase_position === targetPos);
+      const moved: LineDraft = {
+        ...moving,
+        phase_position: targetPos,
+        phase_title:
+          targetPos === null ? "" : (head?.phase_title ?? moving.phase_title),
+        phase_note:
+          targetPos === null ? "" : (head?.phase_note ?? moving.phase_note),
+      };
+      return [...rest.slice(0, at), moved, ...rest.slice(at)];
+    });
+    touch();
+  }
+
   function moveLineToPhase(id: string, pos: number) {
     setLines((p) => {
       const line = p.find((l) => l.id === id);
@@ -400,120 +700,21 @@ export function InvoiceBuilder({
   // which reads to the admin as the field simply refusing to accept 2.5.
   function lineCard(l: LineDraft) {
     return (
-      <div
+      <SortableLine
         key={l.id}
-        className="space-y-2 rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2/30 p-2"
-      >
-        <input
-          value={l.title}
-          disabled={!editable}
-          onChange={(e) => updateLine(l.id, { title: e.target.value })}
-          placeholder="Title — e.g. Custom website design & build"
-          className={`${fieldCls} w-full font-medium`}
-        />
-        <textarea
-          value={l.description}
-          disabled={!editable}
-          onChange={(e) => updateLine(l.id, { description: e.target.value })}
-          placeholder="Description (optional) — what they're getting and why it's worth it. Shows beneath the title."
-          rows={2}
-          className={`${fieldCls} w-full resize-y`}
-        />
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          {editable && phaseOptions.length > 1 && l.phase_position !== null && (
-            <select
-              value={l.phase_position}
-              aria-label="Phase"
-              onChange={(e) => moveLineToPhase(l.id, Number(e.target.value))}
-              className={`${fieldCls} mr-auto text-xs`}
-            >
-              {phaseOptions.map((o) => (
-                <option key={o.pos} value={o.pos}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          )}
-          <span className="mono-label">{hourly ? "Hours" : "Qty"}</span>
-          <input
-            type="number"
-            step="any"
-            value={l.quantity}
-            disabled={!editable}
-            onChange={(e) => updateLine(l.id, { quantity: Number(e.target.value) })}
-            className={`${fieldCls} w-16 text-right`}
-          />
-          {/* In hourly mode the rate is set once for the whole invoice, so the
-              per-line box would just be the same number repeated. The rate is
-              shown as a button instead: press it to bill this one line at
-              something else. A discount line keeps its own box, because its
-              amount is not a rate. */}
-          {hourly &&
-            lineAmount(l) >= 0 &&
-            (customIds.has(l.id) ? (
-              <>
-                <span className="mono-label">Rate</span>
-                <input
-                  type="number"
-                  step="any"
-                  value={l.unit_amount}
-                  disabled={!editable}
-                  onChange={(e) =>
-                    updateLine(l.id, { unit_amount: Number(e.target.value) })
-                  }
-                  className={`${fieldCls} w-20 text-right`}
-                />
-                {editable && (
-                  <button
-                    type="button"
-                    onClick={() => clearCustom(l.id)}
-                    className="text-[11px] text-pulse-text-mute underline hover:text-pulse-text"
-                  >
-                    standard
-                  </button>
-                )}
-              </>
-            ) : (
-              <button
-                type="button"
-                disabled={!editable}
-                onClick={() => markCustom(l.id)}
-                title="Bill this line at a different rate"
-                className="data-mono rounded-[var(--radius-input)] border border-dashed border-pulse-border px-2 py-1 text-xs text-pulse-text-mute hover:text-pulse-text disabled:opacity-60"
-              >
-                {formatMoney(Number(hourlyRate) || 0)}/hr
-              </button>
-            ))}
-          {(!hourly || lineAmount(l) < 0) && (
-            <>
-              <span className="mono-label">{hourly ? "Amount" : "Unit"}</span>
-              <input
-                type="number"
-                step="any"
-                value={l.unit_amount}
-                disabled={!editable}
-                onChange={(e) =>
-                  updateLine(l.id, { unit_amount: Number(e.target.value) })
-                }
-                className={`${fieldCls} w-24 text-right`}
-              />
-            </>
-          )}
-          <span className="data-mono w-24 text-right text-sm text-pulse-text">
-            {formatMoney(lineAmount(l))}
-          </span>
-          {editable && (
-            <button
-              type="button"
-              onClick={() => removeLine(l.id)}
-              aria-label="Remove line"
-              className="text-pulse-text-mute hover:text-pulse-danger"
-            >
-              <Trash2 size={14} />
-            </button>
-          )}
-        </div>
-      </div>
+        line={l}
+        editable={editable}
+        hourly={hourly}
+        hourlyRate={hourlyRate}
+        fieldCls={fieldCls}
+        phaseOptions={phaseOptions}
+        custom={customIds.has(l.id)}
+        onUpdate={updateLine}
+        onRemove={removeLine}
+        onMovePhase={moveLineToPhase}
+        onMarkCustom={markCustom}
+        onClearCustom={clearCustom}
+      />
     );
   }
 
@@ -1059,6 +1260,13 @@ export function InvoiceBuilder({
               )}
             </div>
 
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCorners}
+              onDragStart={(e: DragStartEvent) => setActiveLineId(String(e.active.id))}
+              onDragCancel={() => setActiveLineId(null)}
+              onDragEnd={handleLineDragEnd}
+            >
             {phased ? (
               <div className="space-y-3">
                 {groups.map((g) => {
@@ -1067,9 +1275,14 @@ export function InvoiceBuilder({
                   // phase is still visible and editable rather than vanishing.
                   if (pos === null) {
                     return (
-                      <div key={g.key} className="space-y-2">
-                        {g.lines.map(lineCard)}
-                      </div>
+                      <DropZone key={g.key} id="phase:none" className="space-y-2">
+                        <SortableContext
+                          items={g.lines.map((l) => l.id)}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          {g.lines.map(lineCard)}
+                        </SortableContext>
+                      </DropZone>
                     );
                   }
                   return (
@@ -1109,7 +1322,14 @@ export function InvoiceBuilder({
                           </button>
                         )}
                       </div>
-                      <div className="space-y-2">{g.lines.map(lineCard)}</div>
+                      <DropZone id={`phase:${pos}`} className="space-y-2">
+                        <SortableContext
+                          items={g.lines.map((l) => l.id)}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          {g.lines.map(lineCard)}
+                        </SortableContext>
+                      </DropZone>
                       <div className="mt-2 flex items-center justify-between gap-2">
                         {editable ? (
                           <button
@@ -1134,8 +1354,30 @@ export function InvoiceBuilder({
                 })}
               </div>
             ) : (
-              <div className="space-y-2">{lines.map(lineCard)}</div>
+              <SortableContext
+                items={lines.map((l) => l.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="space-y-2">{lines.map(lineCard)}</div>
+              </SortableContext>
             )}
+            {/* The lifted card follows the cursor while the row it came from
+                stays faded in place, so it is always clear what is being moved
+                and where it started. */}
+            <DragOverlay>
+              {activeLine ? (
+                <div className="flex items-center gap-3 rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface px-3 py-2 text-sm text-pulse-text shadow-lg">
+                  <GripVertical size={14} className="text-pulse-text-mute" />
+                  <span className="truncate">
+                    {activeLine.title || "Untitled line"}
+                  </span>
+                  <span className="data-mono ml-auto text-pulse-text-mute">
+                    {formatMoney(lineAmount(activeLine))}
+                  </span>
+                </div>
+              ) : null}
+            </DragOverlay>
+            </DndContext>
 
             {editable && (
               <div className="mt-3 flex flex-wrap items-center gap-2">
