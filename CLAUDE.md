@@ -21,8 +21,15 @@ Live at https://portal.hartwelldigital.com
   working secrets, which are not in git and cannot be recovered from disk. Full
   command:
   `robocopy "<drive>" "<clone>" /E /XD node_modules .next .git /XF .env.local`
-  If it is clobbered anyway, restore with `vercel env pull .env.local` from the
-  clone; Vercel is the only complete copy of the production values.
+  If it is clobbered anyway it CANNOT be fully restored. Vercel marks these
+  variables Sensitive, which is write-only: `vercel env pull` returns
+  `[SENSITIVE]` placeholders, not values. Each secret has to be re-copied from
+  its own dashboard — Supabase URL, anon key and service_role key from Supabase
+  Project Settings > API; `CLERK_SECRET_KEY` from Clerk API keys; the Clerk and
+  Resend webhook secrets from their webhook endpoints. `RESEND_API_KEY` cannot be
+  recovered at all: Resend shows a key once at creation, so it must be reissued
+  and updated in Vercel too. Losing this file costs an hour; the `/XF` above is
+  what prevents it.
 - Paths on Kyle's machine: Drive is `H:\My Drive\Website Code\hartwell-pulse`
   (the same Google Drive is also mounted as `D:`), clone is
   `C:\Users\Kyle\pulse-verify`. The Ironpeak working folder, which holds
