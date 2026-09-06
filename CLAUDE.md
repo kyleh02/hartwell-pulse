@@ -15,6 +15,14 @@ Live at https://portal.hartwelldigital.com
 - **Build + deploy copy:** a local git clone. Sync Drive → clone with robocopy
   (`/E`, never `/MIR`), then `npm --prefix <clone> run build`, then commit and
   push from the clone.
+- **ALWAYS exclude `.env.local` from that sync** — `/XF .env.local`, alongside
+  `/XD node_modules .next .git`. The Drive copy's `.env.local` still carries the
+  blanked values from the dead PC, and a plain `/E` copies it over the clone's
+  working secrets, which are not in git and cannot be recovered from disk. Full
+  command:
+  `robocopy "<drive>" "<clone>" /E /XD node_modules .next .git /XF .env.local`
+  If it is clobbered anyway, restore with `vercel env pull .env.local` from the
+  clone; Vercel is the only complete copy of the production values.
 - Paths on Kyle's machine: Drive is `H:\My Drive\Website Code\hartwell-pulse`
   (the same Google Drive is also mounted as `D:`), clone is
   `C:\Users\Kyle\pulse-verify`. The Ironpeak working folder, which holds
