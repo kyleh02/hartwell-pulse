@@ -28,6 +28,7 @@ import {
   lineAmount,
   formatMoney,
   groupByPhase,
+  hourlySummary,
   DEFAULT_INVOICE_EMAIL,
 } from "@/lib/invoices-shared";
 import {
@@ -97,22 +98,38 @@ export function InvoiceBuilder({
   // The rate is a property of the invoice, not of each line: it is typed once
   // here and written down onto every charge line, which is what lets the
   // document drop the per-line Rate column.
+  // The standard rate, resolved once and shared by the rate box and the
+  // override seeding below so they can never disagree about what "standard"
+  // means.
+  //
+  // Invoices built before the rate was stored on the invoice have it only on
+  // their lines, which is where it used to live. Reading the column alone left
+  // those showing a blank rate box and a $0.00/hr button on every line, and
+  // pressing "standard" then zeroed the line, because nothing is what it
+  // thought the standard was. Fall back to the lines, and the next save writes
+  // it to the column for good.
+  const resolvedRate =
+    invoice.hourly_rate !== null && invoice.hourly_rate !== undefined
+      ? Number(invoice.hourly_rate)
+      : hourlySummary(
+          bundle.lines.map((l) => ({
+            quantity: Number(l.quantity),
+            unit_amount: Number(l.unit_amount),
+          })),
+        ).rate;
   const [hourlyRate, setHourlyRate] = useState(
-    invoice.hourly_rate === null || invoice.hourly_rate === undefined
-      ? ""
-      : String(Number(invoice.hourly_rate)),
+    resolvedRate === null ? "" : String(resolvedRate),
   );
   // Lines billed at something other than the standard rate. Held in the UI
   // rather than the database: a line IS overridden exactly when its rate differs
   // from the invoice's, so reopening the invoice reconstructs this from the
   // figures themselves and there is no flag to fall out of step with them.
   const [customIds, setCustomIds] = useState<Set<string>>(() => {
-    const base = invoice.hourly_rate;
-    if (base === null || base === undefined) return new Set();
+    if (resolvedRate === null) return new Set();
     return new Set(
       bundle.lines
         .filter(
-          (l) => Number(l.unit_amount) > 0 && Number(l.unit_amount) !== Number(base),
+          (l) => Number(l.unit_amount) > 0 && Number(l.unit_amount) !== resolvedRate,
         )
         .map((l) => l.id),
     );
@@ -182,8 +199,12 @@ export function InvoiceBuilder({
       next.delete(id);
       return next;
     });
+    // With no standard rate set there is nothing to go back TO, and writing the
+    // 0 that an empty box parses to would wipe a real figure. Just stop treating
+    // the line as an override.
+    if (hourlyRate === "") return;
     setLines((p) =>
-      p.map((l) => (l.id === id ? { ...l, unit_amount: Number(hourlyRate) || 0 } : l)),
+      p.map((l) => (l.id === id ? { ...l, unit_amount: Number(hourlyRate) } : l)),
     );
     touch();
   }
