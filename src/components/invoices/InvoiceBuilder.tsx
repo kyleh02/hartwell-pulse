@@ -160,25 +160,38 @@ function SortableLine({
   };
 
   return (
+    // The listeners sit on the whole card, not just the grip. A drag handle the
+    // size of an icon is easy to miss and easy to miss AIMING at, and the first
+    // thing anyone tries is to grab the card itself.
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-start gap-2 rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2/30 p-2"
+      {...listeners}
+      className={cn(
+        "flex items-start gap-2 rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2/30 p-2",
+        // touch-none stops the browser scrolling the page instead of dragging.
+        editable && "touch-none cursor-grab active:cursor-grabbing",
+        isDragging && "z-10",
+      )}
     >
       {editable && (
-        <button
-          type="button"
+        <span
           ref={setActivatorNodeRef}
           {...attributes}
-          {...listeners}
           aria-label="Drag to reorder"
-          // touch-none stops the browser scrolling the page instead of dragging.
-          className="mt-2 cursor-grab touch-none text-pulse-text-mute hover:text-pulse-text active:cursor-grabbing"
+          className="mt-2 text-pulse-text-mute"
         >
           <GripVertical size={14} />
-        </button>
+        </span>
       )}
-      <div className="min-w-0 flex-1 space-y-2">
+      <div
+        className="min-w-0 flex-1 space-y-2"
+        // The fields are inside the draggable card, so their events have to be
+        // kept out of it: without this a click into a box would start a drag,
+        // and a space typed into the title would be read as "pick this up".
+        onPointerDown={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
         <input
           value={l.title}
           disabled={!editable}
