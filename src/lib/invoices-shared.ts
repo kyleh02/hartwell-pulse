@@ -123,6 +123,38 @@ export function computeTotals(
   return { subtotal, discount: disc, gst: 0, total: net };
 }
 
+export interface HourlySummary {
+  /** Hours across the charge lines. Discount lines are not hours. */
+  hours: number;
+  /**
+   * The single rate every charge line is at, or null if they disagree. Null is
+   * what makes the per-line Rate column come back: an invoice must never state
+   * one rate at the bottom while its lines were billed at another.
+   */
+  rate: number | null;
+}
+
+/**
+ * Read the hourly shape of a set of lines.
+ *
+ * On an hourly invoice the rate is the same on every line, so repeating it down
+ * the page is noise; it belongs once, next to the totals. This works out whether
+ * that collapse is honest.
+ */
+export function hourlySummary(
+  lines: { quantity: number; unit_amount: number }[],
+): HourlySummary {
+  let hours = 0;
+  const rates = new Set<number>();
+  for (const l of lines) {
+    // A discount is a negative line, not an hour worked.
+    if (lineAmount(l) <= 0) continue;
+    hours = round(hours + (Number(l.quantity) || 0));
+    rates.add(Number(l.unit_amount));
+  }
+  return { hours, rate: rates.size === 1 ? [...rates][0] : null };
+}
+
 export function formatMoney(n: number): string {
   return (n ?? 0).toLocaleString("en-AU", {
     style: "currency",

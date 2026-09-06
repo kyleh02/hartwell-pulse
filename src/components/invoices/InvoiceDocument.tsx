@@ -1,7 +1,12 @@
 import { Fragment } from "react";
 import type { BusinessSettings } from "@/lib/types/database";
 import type { InvoiceBundle } from "@/lib/invoices-shared";
-import { formatMoney, gstLabel, groupByPhase } from "@/lib/invoices-shared";
+import {
+  formatMoney,
+  gstLabel,
+  groupByPhase,
+  hourlySummary,
+} from "@/lib/invoices-shared";
 import { Wordmark } from "@/components/brand/Wordmark";
 import { IronpeakWordmark } from "@/components/brand/IronpeakMark";
 import { IRONPEAK, IRONPEAK_DOC_CLASS } from "@/lib/brand";
@@ -27,13 +32,20 @@ export function InvoiceDocument({
   const ironpeak = invoice.brand === "ironpeak";
   // What is left to pay once a deposit already received is credited.
   const amountDue = invoice.total - Number(invoice.deposit_amount ?? 0);
+  const hourly = invoice.rate_mode === "hourly";
+  const hours = hourly ? hourlySummary(lines) : null;
   // Flat-fee work is almost always qty 1, where Unit == Amount — so show the
   // Qty/Unit columns only when a line actually has a quantity other than 1.
-  // An hourly invoice must always show its working: the client is paying for
-  // hours at a rate, and a bare Amount hides both.
-  const hourly = invoice.rate_mode === "hourly";
-  const showRate = hourly || lines.some((l) => Number(l.quantity) !== 1);
-  const cols = showRate ? 4 : 2;
+  //
+  // An hourly invoice always shows its hours, but NOT the rate on every line:
+  // the rate is the same all the way down, so it reads as clutter and belongs
+  // once beside the totals. The only exception is lines that disagree about the
+  // rate, where a single figure at the bottom would be a false statement — then
+  // the column comes back.
+  const varied = lines.some((l) => Number(l.quantity) !== 1);
+  const showQty = hourly || varied;
+  const showUnit = hourly ? hours?.rate === null : varied;
+  const cols = 2 + (showQty ? 1 : 0) + (showUnit ? 1 : 0);
   // Phases are a presentation of the same lines: each group gets a heading and
   // its own subtotal, and the totals underneath are untouched. An invoice with
   // no phases produces exactly one group with a null title, which renders as a
@@ -118,15 +130,15 @@ export function InvoiceDocument({
         <thead>
           <tr className="mono-label border-b border-pulse-border text-left">
             <th className="w-full py-2 pr-4 font-medium">Description</th>
-            {showRate && (
-              <>
-                <th className="whitespace-nowrap py-2 pl-4 text-right font-medium">
-                  {hourly ? "Hours" : "Qty"}
-                </th>
-                <th className="whitespace-nowrap py-2 pl-4 text-right font-medium">
-                  {hourly ? "Rate/hr" : "Unit"}
-                </th>
-              </>
+            {showQty && (
+              <th className="whitespace-nowrap py-2 pl-4 text-right font-medium">
+                {hourly ? "Hours" : "Qty"}
+              </th>
+            )}
+            {showUnit && (
+              <th className="whitespace-nowrap py-2 pl-4 text-right font-medium">
+                {hourly ? "Rate/hr" : "Unit"}
+              </th>
             )}
             <th className="whitespace-nowrap py-2 pl-4 text-right font-medium">
               Amount
@@ -178,15 +190,15 @@ export function InvoiceDocument({
                       )}
                       {!l.title && !l.description && <span>—</span>}
                     </td>
-                    {showRate && (
-                      <>
-                        <td className="data-mono whitespace-nowrap py-2.5 pl-4 text-right align-top text-pulse-text-dim">
-                          {l.quantity}
-                        </td>
-                        <td className="data-mono whitespace-nowrap py-2.5 pl-4 text-right align-top text-pulse-text-dim">
-                          {formatMoney(l.unit_amount)}
-                        </td>
-                      </>
+                    {showQty && (
+                      <td className="data-mono whitespace-nowrap py-2.5 pl-4 text-right align-top text-pulse-text-dim">
+                        {l.quantity}
+                      </td>
+                    )}
+                    {showUnit && (
+                      <td className="data-mono whitespace-nowrap py-2.5 pl-4 text-right align-top text-pulse-text-dim">
+                        {formatMoney(l.unit_amount)}
+                      </td>
                     )}
                     <td
                       className={`data-mono whitespace-nowrap py-2.5 pl-4 text-right align-top ${l.amount < 0 ? "text-pulse-text-mute" : "text-pulse-text"}`}
@@ -220,6 +232,20 @@ export function InvoiceDocument({
 
       <div className="mt-4 flex justify-end">
         <div className="w-full max-w-[14rem] space-y-1.5 text-sm">
+          {hours && (
+            <>
+              <div className="flex justify-between text-pulse-text-dim">
+                <span>Total hours</span>
+                <span className="data-mono">{hours.hours}</span>
+              </div>
+              {hours.rate !== null && (
+                <div className="flex justify-between border-b border-pulse-border pb-1.5 text-pulse-text-dim">
+                  <span>Rate</span>
+                  <span className="data-mono">{formatMoney(hours.rate)}/hr</span>
+                </div>
+              )}
+            </>
+          )}
           <div className="flex justify-between text-pulse-text-dim">
             <span>Subtotal</span>
             <span className="data-mono">{formatMoney(invoice.subtotal)}</span>

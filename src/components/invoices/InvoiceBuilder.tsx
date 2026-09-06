@@ -28,6 +28,7 @@ import {
   lineAmount,
   formatMoney,
   groupByPhase,
+  hourlySummary,
   DEFAULT_INVOICE_EMAIL,
 } from "@/lib/invoices-shared";
 import {
@@ -94,6 +95,18 @@ export function InvoiceBuilder({
   const [dueDate, setDueDate] = useState(invoice.due_date.slice(0, 10));
   const [gstMode, setGstMode] = useState<GstMode>(invoice.gst_mode);
   const [rateMode, setRateMode] = useState<RateMode>(invoice.rate_mode ?? "fixed");
+  // The rate is a property of the invoice, not of each line: it is typed once
+  // here and written down onto every charge line, which is what lets the
+  // document drop the per-line Rate column.
+  const [hourlyRate, setHourlyRate] = useState(() => {
+    const r = hourlySummary(
+      bundle.lines.map((l) => ({
+        quantity: Number(l.quantity),
+        unit_amount: Number(l.unit_amount),
+      })),
+    ).rate;
+    return r === null ? "" : String(r);
+  });
   const [brand, setBrand] = useState(invoice.brand ?? "hartwell");
   const [deposit, setDeposit] = useState(String(invoice.deposit_amount ?? 0));
   const [depositLabel, setDepositLabel] = useState(invoice.deposit_label ?? "");
@@ -128,6 +141,19 @@ export function InvoiceBuilder({
   const isDraft = status === "draft";
   const totals = computeTotals(lines, gstMode);
   const hourly = rateMode === "hourly";
+  /** A new line starts at the invoice rate when billing hourly. */
+  function defaultUnit() {
+    return hourly ? Number(hourlyRate) || 0 : 0;
+  }
+  /** Retype the rate onto every charge line. Discount lines keep their amount. */
+  function applyHourlyRate(next: string) {
+    setHourlyRate(next);
+    const n = Number(next) || 0;
+    setLines((p) =>
+      p.map((l) => (lineAmount(l) < 0 ? l : { ...l, unit_amount: n })),
+    );
+    touch();
+  }
   // Phasing is not a separate flag: an invoice is phased when its lines carry a
   // phase. One source of truth means the toggle can never disagree with the
   // document.
@@ -159,7 +185,7 @@ export function InvoiceBuilder({
         title: "",
         description: "",
         quantity: 1,
-        unit_amount: 0,
+        unit_amount: defaultUnit(),
         ...tailPhase(p),
       },
     ]);
@@ -216,7 +242,7 @@ export function InvoiceBuilder({
       title: "",
       description: "",
       quantity: 1,
-      unit_amount: 0,
+      unit_amount: defaultUnit(),
       phase_position: pos,
       phase_title: title,
       phase_note: note,
@@ -363,15 +389,24 @@ export function InvoiceBuilder({
             onChange={(e) => updateLine(l.id, { quantity: Number(e.target.value) })}
             className={`${fieldCls} w-16 text-right`}
           />
-          <span className="mono-label">{hourly ? "Rate" : "Unit"}</span>
-          <input
-            type="number"
-            step="any"
-            value={l.unit_amount}
-            disabled={!editable}
-            onChange={(e) => updateLine(l.id, { unit_amount: Number(e.target.value) })}
-            className={`${fieldCls} w-24 text-right`}
-          />
+          {/* In hourly mode the rate is set once for the whole invoice, so the
+              per-line box would just be the same number repeated. A discount
+              line keeps its own box: its amount is not the rate. */}
+          {(!hourly || lineAmount(l) < 0) && (
+            <>
+              <span className="mono-label">{hourly ? "Amount" : "Unit"}</span>
+              <input
+                type="number"
+                step="any"
+                value={l.unit_amount}
+                disabled={!editable}
+                onChange={(e) =>
+                  updateLine(l.id, { unit_amount: Number(e.target.value) })
+                }
+                className={`${fieldCls} w-24 text-right`}
+              />
+            </>
+          )}
           <span className="data-mono w-24 text-right text-sm text-pulse-text">
             {formatMoney(lineAmount(l))}
           </span>
@@ -827,11 +862,29 @@ export function InvoiceBuilder({
             <span>
               Bill by the hour
               <span className="mt-0.5 block text-[11px] text-pulse-text-mute">
-                Each line becomes hours at an hourly rate, and the invoice shows
-                the Hours and Rate columns instead of a single amount.
+                Each line becomes hours at one rate. The invoice lists the hours
+                and shows the rate once, beside the totals.
               </span>
             </span>
           </label>
+
+          {hourly && (
+            <label className="flex items-center gap-2 text-sm text-pulse-text-dim">
+              <span className="mono-label">Hourly rate</span>
+              <input
+                type="number"
+                step="any"
+                value={hourlyRate}
+                disabled={!editable}
+                onChange={(e) => applyHourlyRate(e.target.value)}
+                placeholder="95"
+                className={`${fieldCls} w-24 text-right`}
+              />
+              <span className="text-[11px] text-pulse-text-mute">
+                applied to every line
+              </span>
+            </label>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <label className="flex items-center gap-2 text-sm text-pulse-text-dim">
