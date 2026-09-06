@@ -569,6 +569,12 @@ export interface Invoice {
    * maths is quantity * unit_amount either way. See migration 0047.
    */
   rate_mode: RateMode;
+  /**
+   * The standard rate an hourly invoice bills at. Each line's unit_amount is
+   * that line's own rate; this is the one the unoverridden lines follow, and
+   * what the rate box is restored from. See migration 0048.
+   */
+  hourly_rate: number | null;
   subtotal: number;
   discount: number;
   discount_label: string | null;

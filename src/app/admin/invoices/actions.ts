@@ -80,6 +80,7 @@ export interface SaveInvoiceInput {
   due_date: string;
   brand: string;
   rate_mode: string;
+  hourly_rate: number | null;
   deposit_amount: number;
   deposit_label: string;
   gst_mode: GstMode;
@@ -147,6 +148,7 @@ export async function saveInvoice(invoiceId: string, input: SaveInvoiceInput) {
       due_date: input.due_date,
       brand: input.brand,
       rate_mode: input.rate_mode,
+      hourly_rate: input.hourly_rate,
       deposit_amount: input.deposit_amount,
       deposit_label: input.deposit_label || null,
       gst_mode: input.gst_mode,

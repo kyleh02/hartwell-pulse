@@ -28,7 +28,6 @@ import {
   lineAmount,
   formatMoney,
   groupByPhase,
-  hourlySummary,
   DEFAULT_INVOICE_EMAIL,
 } from "@/lib/invoices-shared";
 import {
@@ -98,14 +97,25 @@ export function InvoiceBuilder({
   // The rate is a property of the invoice, not of each line: it is typed once
   // here and written down onto every charge line, which is what lets the
   // document drop the per-line Rate column.
-  const [hourlyRate, setHourlyRate] = useState(() => {
-    const r = hourlySummary(
-      bundle.lines.map((l) => ({
-        quantity: Number(l.quantity),
-        unit_amount: Number(l.unit_amount),
-      })),
-    ).rate;
-    return r === null ? "" : String(r);
+  const [hourlyRate, setHourlyRate] = useState(
+    invoice.hourly_rate === null || invoice.hourly_rate === undefined
+      ? ""
+      : String(Number(invoice.hourly_rate)),
+  );
+  // Lines billed at something other than the standard rate. Held in the UI
+  // rather than the database: a line IS overridden exactly when its rate differs
+  // from the invoice's, so reopening the invoice reconstructs this from the
+  // figures themselves and there is no flag to fall out of step with them.
+  const [customIds, setCustomIds] = useState<Set<string>>(() => {
+    const base = invoice.hourly_rate;
+    if (base === null || base === undefined) return new Set();
+    return new Set(
+      bundle.lines
+        .filter(
+          (l) => Number(l.unit_amount) > 0 && Number(l.unit_amount) !== Number(base),
+        )
+        .map((l) => l.id),
+    );
   });
   const [brand, setBrand] = useState(invoice.brand ?? "hartwell");
   const [deposit, setDeposit] = useState(String(invoice.deposit_amount ?? 0));
@@ -145,12 +155,35 @@ export function InvoiceBuilder({
   function defaultUnit() {
     return hourly ? Number(hourlyRate) || 0 : 0;
   }
-  /** Retype the rate onto every charge line. Discount lines keep their amount. */
+  /**
+   * Retype the standard rate onto the lines that follow it.
+   *
+   * Overridden lines and discount lines are left alone: the whole point of an
+   * override is that changing the standard does not disturb it.
+   */
   function applyHourlyRate(next: string) {
     setHourlyRate(next);
     const n = Number(next) || 0;
     setLines((p) =>
-      p.map((l) => (lineAmount(l) < 0 ? l : { ...l, unit_amount: n })),
+      p.map((l) =>
+        lineAmount(l) < 0 || customIds.has(l.id) ? l : { ...l, unit_amount: n },
+      ),
+    );
+    touch();
+  }
+  /** Let this line be billed at its own rate, starting from the standard one. */
+  function markCustom(id: string) {
+    setCustomIds((p) => new Set(p).add(id));
+  }
+  /** Put the line back on the standard rate. */
+  function clearCustom(id: string) {
+    setCustomIds((p) => {
+      const next = new Set(p);
+      next.delete(id);
+      return next;
+    });
+    setLines((p) =>
+      p.map((l) => (l.id === id ? { ...l, unit_amount: Number(hourlyRate) || 0 } : l)),
     );
     touch();
   }
@@ -390,8 +423,46 @@ export function InvoiceBuilder({
             className={`${fieldCls} w-16 text-right`}
           />
           {/* In hourly mode the rate is set once for the whole invoice, so the
-              per-line box would just be the same number repeated. A discount
-              line keeps its own box: its amount is not the rate. */}
+              per-line box would just be the same number repeated. The rate is
+              shown as a button instead: press it to bill this one line at
+              something else. A discount line keeps its own box, because its
+              amount is not a rate. */}
+          {hourly &&
+            lineAmount(l) >= 0 &&
+            (customIds.has(l.id) ? (
+              <>
+                <span className="mono-label">Rate</span>
+                <input
+                  type="number"
+                  step="any"
+                  value={l.unit_amount}
+                  disabled={!editable}
+                  onChange={(e) =>
+                    updateLine(l.id, { unit_amount: Number(e.target.value) })
+                  }
+                  className={`${fieldCls} w-20 text-right`}
+                />
+                {editable && (
+                  <button
+                    type="button"
+                    onClick={() => clearCustom(l.id)}
+                    className="text-[11px] text-pulse-text-mute underline hover:text-pulse-text"
+                  >
+                    standard
+                  </button>
+                )}
+              </>
+            ) : (
+              <button
+                type="button"
+                disabled={!editable}
+                onClick={() => markCustom(l.id)}
+                title="Bill this line at a different rate"
+                className="data-mono rounded-[var(--radius-input)] border border-dashed border-pulse-border px-2 py-1 text-xs text-pulse-text-mute hover:text-pulse-text disabled:opacity-60"
+              >
+                {formatMoney(Number(hourlyRate) || 0)}/hr
+              </button>
+            ))}
           {(!hourly || lineAmount(l) < 0) && (
             <>
               <span className="mono-label">{hourly ? "Amount" : "Unit"}</span>
@@ -431,6 +502,7 @@ export function InvoiceBuilder({
       due_date: dueDate,
       brand,
       rate_mode: rateMode,
+      hourly_rate: hourly && hourlyRate !== "" ? Number(hourlyRate) : null,
       deposit_amount: Number(deposit) || 0,
       deposit_label: depositLabel,
       gst_mode: gstMode,
@@ -601,6 +673,7 @@ export function InvoiceBuilder({
       due_date: dueDate,
       brand,
       rate_mode: rateMode,
+      hourly_rate: hourly && hourlyRate !== "" ? Number(hourlyRate) : null,
       deposit_amount: Number(deposit) || 0,
       deposit_label: depositLabel,
       gst_mode: gstMode,
@@ -881,7 +954,8 @@ export function InvoiceBuilder({
                 className={`${fieldCls} w-24 text-right`}
               />
               <span className="text-[11px] text-pulse-text-mute">
-                applied to every line
+                the standard rate. Press the rate on any line to bill that one
+                differently.
               </span>
             </label>
           )}
