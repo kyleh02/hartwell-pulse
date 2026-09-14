@@ -1,6 +1,11 @@
 import "server-only";
 import webpush from "web-push";
 import { createAdminSupabase } from "@/lib/supabase/admin";
+import {
+  normaliseVapidKey,
+  VAPID_PRIVATE_BYTES,
+  VAPID_PUBLIC_BYTES,
+} from "@/lib/vapid";
 
 /**
  * Web push delivery. Subscriptions are send-credentials, so every read and
@@ -8,27 +13,60 @@ import { createAdminSupabase } from "@/lib/supabase/admin";
  */
 
 let configured = false;
+let reported = false;
 
-/** Are the VAPID keys present on the server? Exposed so callers can tell
- *  "nobody has subscribed" apart from "push isn't switched on yet". */
+/** The VAPID keys, cleaned into the form web-push accepts. See lib/vapid.ts. */
+function vapidKeys() {
+  return {
+    pub: normaliseVapidKey(
+      process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+      VAPID_PUBLIC_BYTES,
+    ),
+    priv: normaliseVapidKey(process.env.VAPID_PRIVATE_KEY, VAPID_PRIVATE_BYTES),
+  };
+}
+
+/** Are usable VAPID keys on the server? Exposed so callers can tell
+ *  "nobody has subscribed" apart from "push isn't switched on yet". A key that
+ *  is present but unusable counts as not configured, so the test button says
+ *  so rather than reporting that nothing was delivered. */
 export function pushConfigured(): boolean {
-  return !!(
-    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY
-  );
+  const { pub, priv } = vapidKeys();
+  return !!(pub.key && priv.key);
 }
 
 function ready(): boolean {
-  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  const privateKey = process.env.VAPID_PRIVATE_KEY;
-  if (!publicKey || !privateKey) return false;
-  if (!configured) {
-    webpush.setVapidDetails(
-      process.env.VAPID_SUBJECT || "mailto:admin@hartwelldigital.com",
-      publicKey,
-      privateKey,
-    );
-    configured = true;
+  if (configured) return true;
+  const { pub, priv } = vapidKeys();
+
+  // Say once per server instance what was wrong with the stored keys. They are
+  // write-only in Vercel, so this log line is the only place anyone can read it.
+  if (!reported) {
+    reported = true;
+    if (pub.changes.length > 0)
+      console.warn(`[push] VAPID public key cleaned: ${pub.changes.join(", ")}`);
+    if (priv.changes.length > 0)
+      console.warn(`[push] VAPID private key cleaned: ${priv.changes.join(", ")}`);
+    if (pub.problem) console.error(`[push] VAPID public key unusable: ${pub.problem}`);
+    if (priv.problem) console.error(`[push] VAPID private key unusable: ${priv.problem}`);
   }
+  if (!pub.key || !priv.key) return false;
+
+  try {
+    webpush.setVapidDetails(
+      (process.env.VAPID_SUBJECT || "mailto:admin@hartwelldigital.com").trim(),
+      pub.key,
+      priv.key,
+    );
+  } catch (e) {
+    // This used to throw straight out of every message send. A notification is
+    // never worth failing the action that triggered it.
+    console.error(
+      `[push] VAPID keys rejected: ${e instanceof Error ? e.message : String(e)}`,
+    );
+    return false;
+  }
+  configured = true;
   return true;
 }
 

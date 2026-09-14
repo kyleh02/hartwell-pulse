@@ -7,6 +7,7 @@ import {
   removePushSubscription,
   sendTestPush,
 } from "@/lib/actions/push";
+import { normaliseVapidKey, VAPID_PUBLIC_BYTES } from "@/lib/vapid";
 import { cn } from "@/lib/utils/cn";
 
 type State = "loading" | "unsupported" | "ios-needs-install" | "off" | "on" | "blocked";
@@ -89,9 +90,18 @@ export function PushToggle() {
       }
       const reg = await navigator.serviceWorker.register("/sw.js");
       await navigator.serviceWorker.ready;
-      const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      // Cleaned exactly as the server cleans it, so the key this device
+      // subscribes with is the same one notifications are signed with.
+      const { key, problem } = normaliseVapidKey(
+        process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+        VAPID_PUBLIC_BYTES,
+      );
       if (!key) {
-        setNote("Push isn't configured on the server yet.");
+        setNote(
+          problem === "not set"
+            ? "Push isn't configured on the server yet."
+            : `Push is misconfigured on the server: the public key ${problem}.`,
+        );
         return;
       }
       const sub = await reg.pushManager.subscribe({
