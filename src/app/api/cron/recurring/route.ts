@@ -167,6 +167,10 @@ export async function GET(req: NextRequest) {
           status: "draft",
           issue_date: issueStr,
           due_date: fmt(due),
+          // Which business the invoice comes from. Without this an Ironpeak
+          // retainer billed itself as Hartwell every month, on a brand whose
+          // whole rule is that the two are never shown together.
+          brand: t.brand,
           gst_mode: t.gst_mode,
           rate_mode: t.rate_mode,
           hourly_rate: t.hourly_rate,
@@ -184,6 +188,10 @@ export async function GET(req: NextRequest) {
           recipient_user_ids: t.recipient_user_ids ?? [],
           recurring_source_id: t.id,
           recurring_period: period,
+          // deposit_amount and deposit_label are deliberately NOT copied. A
+          // deposit is money already received against one job, so carrying it
+          // onto the next month would credit the same payment again, every
+          // month, for as long as the retainer runs.
         })
         .select("id")
         .single();

@@ -14,9 +14,19 @@ const nextConfig = {
   //
   // Scoped to the one route that needs it. Applied broadly it would add tens
   // of megabytes to every function in the deployment.
+  //
+  // EVERY route that renders a PDF has to be named here, not just the reports
+  // ones. renderAndAttach imports the browser dynamically, so a route missing
+  // from this list deploys happily and then cannot find the binary at runtime.
+  // The recurring cron is the dangerous one: it renders with nobody watching
+  // and is built to send anyway rather than fail, so a missing binary there
+  // costs a silently unattached PDF on every monthly invoice.
   outputFileTracingIncludes: {
     "/api/reports/[reportId]/pdf": ["./node_modules/@sparticuz/chromium/**/*"],
     "/api/reports/**": ["./node_modules/@sparticuz/chromium/**/*"],
+    "/api/invoices/[invoiceId]/pdf": ["./node_modules/@sparticuz/chromium/**/*"],
+    "/api/invoices/**": ["./node_modules/@sparticuz/chromium/**/*"],
+    "/api/cron/recurring": ["./node_modules/@sparticuz/chromium/**/*"],
   },
   images: {
     remotePatterns: [
