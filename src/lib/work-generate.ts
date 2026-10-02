@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { businessToday } from "@/lib/business-time";
 
 /**
  * Turning what the portal already knows into work.
@@ -254,7 +255,7 @@ export async function generateWorkItems(
   supabase: SupabaseClient,
   now = new Date(),
 ): Promise<GenerateResult> {
-  const today = now.toISOString().slice(0, 10);
+  const today = businessToday(now);
 
   const groups: [string, NewItem[]][] = [
     ["invoice", await fromInvoices(supabase, today)],

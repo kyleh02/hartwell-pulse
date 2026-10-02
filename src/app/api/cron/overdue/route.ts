@@ -5,6 +5,7 @@ import { sendEmail, emailLayout } from "@/lib/email";
 import { formatMoney } from "@/lib/invoices-shared";
 import { invoiceRecipients } from "@/lib/invoices-send";
 import type { Invoice } from "@/lib/types/database";
+import { businessToday } from "@/lib/business-time";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = createAdminSupabase();
-  const today = fmt(new Date());
+  const today = businessToday();
   const weekAgo = new Date();
   weekAgo.setDate(weekAgo.getDate() - 7);
 

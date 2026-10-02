@@ -3,6 +3,7 @@ import { CalendarClock } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { formatMoney } from "@/lib/invoices-shared";
 import type { AdminInvoiceRow } from "@/lib/invoices";
+import { BUSINESS_TZ } from "@/lib/business-time";
 
 /**
  * What is queued to bill itself, and when.
@@ -15,7 +16,7 @@ import type { AdminInvoiceRow } from "@/lib/invoices";
 function nextIssue(anchor: number): Date {
   // Brisbane, matching the cron that actually does the billing.
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Australia/Brisbane",
+    timeZone: BUSINESS_TZ,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

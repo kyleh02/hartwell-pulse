@@ -4,8 +4,9 @@ import Link from "next/link";
 import { Check, Clock, Send, XCircle } from "lucide-react";
 import type { PlanRow } from "@/components/crm/SendPlan";
 import { cn } from "@/lib/utils/cn";
+import { BUSINESS_TZ } from "@/lib/business-time";
 
-const TZ = "Australia/Brisbane";
+const TZ = BUSINESS_TZ;
 
 /**
  * Every scheduled email in one list, in the order it goes out.

@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { WorkItem, WorkRow, WorkStep } from "@/lib/work-shared";
+import { businessToday } from "@/lib/business-time";
 
 /**
  * Reading the work list.
@@ -72,7 +73,7 @@ export async function getWorkStrip(
   supabase: SupabaseClient,
   now = new Date(),
 ): Promise<WorkStrip> {
-  const today = now.toISOString().slice(0, 10);
+  const today = businessToday(now);
   const weekEnd = new Date(now);
   weekEnd.setDate(weekEnd.getDate() + 7);
 

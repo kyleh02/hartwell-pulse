@@ -9,6 +9,7 @@ import type { ActivityDay, DueTask } from "@/lib/crm";
 import { currentStreak } from "@/lib/crm";
 import { GoalRing } from "@/components/crm/GoalRing";
 import { cn } from "@/lib/utils/cn";
+import { businessToday } from "@/lib/business-time";
 
 /**
  * The campaign's vital signs. Opt-outs sit first and stay first: it is the
@@ -161,7 +162,7 @@ export function CrmHealth({
 
 function TaskRow({ task }: { task: DueTask }) {
   const [pending, startTransition] = useTransition();
-  const overdue = task.due_on < new Date().toISOString().slice(0, 10);
+  const overdue = task.due_on < businessToday();
   return (
     <li className="flex items-start gap-2 text-sm">
       <button

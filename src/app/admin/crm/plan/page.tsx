@@ -6,6 +6,7 @@ import { SendPlan, type PlanRow } from "@/components/crm/SendPlan";
 import { ScheduleTable } from "@/components/crm/ScheduleTable";
 import { AutoSchedule } from "@/components/crm/AutoSchedule";
 import { unresolvedDrafts } from "@/lib/crm-unresolved";
+import { BUSINESS_TZ } from "@/lib/business-time";
 
 export const metadata = { title: "Send plan" };
 
@@ -120,7 +121,7 @@ export default async function SendPlanPage() {
                 {u.company}
                 {" · drafted "}
                 {new Date(u.draft.drafted).toLocaleString("en-AU", {
-                  timeZone: "Australia/Brisbane",
+                  timeZone: BUSINESS_TZ,
                   weekday: "short",
                   day: "numeric",
                   month: "short",

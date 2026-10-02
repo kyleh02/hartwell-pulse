@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Wordmark } from "@/components/brand/Wordmark";
 import { cn } from "@/lib/utils/cn";
+import { BUSINESS_TZ } from "@/lib/business-time";
 
 /**
  * A brief hello when someone arrives.
@@ -26,7 +27,7 @@ function greeting(): string {
     new Intl.DateTimeFormat("en-AU", {
       hour: "numeric",
       hour12: false,
-      timeZone: "Australia/Brisbane",
+      timeZone: BUSINESS_TZ,
     }).format(new Date()),
   );
   if (hour < 12) return "Good morning";

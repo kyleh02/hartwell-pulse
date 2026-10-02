@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CalendarRange } from "lucide-react";
 import { autoSchedule } from "@/app/admin/crm/actions";
 import { buttonClasses } from "@/components/ui/Button";
+import { BUSINESS_TZ } from "@/lib/business-time";
 
 /**
  * Lay the queue out across the coming weekdays in one press.
@@ -33,7 +34,7 @@ export function AutoSchedule() {
         setNote(
           r.scheduled === 0
             ? "Nothing left to schedule."
-            : `${r.scheduled} scheduled, starting ${new Date(r.firstDay!).toLocaleString("en-AU", { timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}.`,
+            : `${r.scheduled} scheduled, starting ${new Date(r.firstDay!).toLocaleString("en-AU", { timeZone: BUSINESS_TZ, weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}.`,
         );
         router.refresh();
       } catch (e) {

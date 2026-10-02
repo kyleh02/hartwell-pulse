@@ -1,5 +1,6 @@
 // Client-safe work item types and pure helpers. No server-only imports, so the
 // Today list (a client component) and the server data layer can both use them.
+import { BUSINESS_TZ } from "@/lib/business-time";
 
 export type WorkSourceKind =
   | "manual"
@@ -52,7 +53,8 @@ export interface WorkRow extends WorkItem {
   steps: WorkStep[];
 }
 
-export const TZ = "Australia/Brisbane";
+// Kept as TZ because plenty of files already import it by that name.
+export const TZ = BUSINESS_TZ;
 
 /**
  * Where a row belongs on the Today page.

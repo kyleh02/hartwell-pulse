@@ -17,6 +17,7 @@ import {
 import { setScheduled, draftNow, markSent } from "@/app/admin/crm/actions";
 import { Reschedule } from "@/components/crm/Reschedule";
 import { cn } from "@/lib/utils/cn";
+import { BUSINESS_TZ } from "@/lib/business-time";
 
 interface Contact {
   first_name: string | null;
@@ -61,8 +62,8 @@ export interface PlanRow {
   contact?: Contact | null;
 }
 
-/** Australia/Brisbane, which is where Kyle works from. */
-const TZ = "Australia/Brisbane";
+/** Where the business is. See lib/business-time.ts. */
+const TZ = BUSINESS_TZ;
 
 function dayKey(iso: string): string {
   return new Date(iso).toLocaleDateString("en-AU", {

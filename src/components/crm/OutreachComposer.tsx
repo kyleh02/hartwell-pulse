@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils/cn";
 import { PRESEND_CHECKS } from "@/lib/crm-presend";
+import { BUSINESS_TZ } from "@/lib/business-time";
 
 /**
  * The nine checks, ticked at approval rather than at send.
@@ -62,7 +63,7 @@ export function OutreachComposer({
 
   const when = scheduledSendAt
     ? new Date(scheduledSendAt).toLocaleString("en-AU", {
-        timeZone: "Australia/Brisbane",
+        timeZone: BUSINESS_TZ,
         weekday: "long",
         day: "numeric",
         month: "long",
@@ -139,7 +140,7 @@ export function OutreachComposer({
           <p className="mt-1 pl-[19px]">
             A finished draft was put in your Outlook Drafts folder on{" "}
             {new Date(unresolvedDraft.drafted).toLocaleString("en-AU", {
-              timeZone: "Australia/Brisbane",
+              timeZone: BUSINESS_TZ,
               weekday: "long",
               day: "numeric",
               month: "long",

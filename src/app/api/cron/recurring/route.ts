@@ -4,6 +4,7 @@ import { cronAuthorized } from "@/lib/cron-auth";
 import { sendInvoiceWith } from "@/lib/invoices-send";
 import { renderInvoicePdf } from "@/lib/invoice-pdf";
 import type { Invoice, InvoiceLineItem } from "@/lib/types/database";
+import { businessDateParts } from "@/lib/business-time";
 
 export const dynamic = "force-dynamic";
 // A route handler, so it may take a minute. That is what lets it render the
@@ -70,18 +71,6 @@ function fill(text: string | null, vars: Record<string, string>): string | null 
   return text.replace(/\{(service_start|service_end|service_period)\}/g, (_, k) => vars[k] ?? "");
 }
 
-// Today's calendar date in the business timezone (QLD — no daylight saving), so a
-// billing day matches what the admin set regardless of the cron's UTC runtime.
-function businessToday(): { y: number; m: number; d: number } {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Australia/Brisbane",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
-  return { y: get("year"), m: get("month"), d: get("day") };
-}
 
 // Daily reconciliation: for every ACTIVE recurring template that is DUE this month
 // and not yet billed, materialise this month's invoice and AUTO-SEND it. "Due" =
@@ -98,7 +87,7 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = createAdminSupabase();
-  const { y, m, d } = businessToday();
+  const { y, m, d } = businessDateParts();
   const today = d;
   const period = fmt(new Date(y, m - 1, 1)); // 1st of this month
   const issueStr = fmt(new Date(y, m - 1, d));
