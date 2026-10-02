@@ -953,6 +953,13 @@ export function InvoiceBuilder({
       phase_title: l.phase_position === null ? null : l.phase_title || null,
       phase_note: l.phase_position === null ? null : l.phase_note || null,
     })) as InvoiceLineItem[],
+    // Carried through from the loaded bundle. The preview is rebuilt from the
+    // form on every keystroke so the document updates as you type, and
+    // rebuilding it dropped these, which made the whole instalment panel
+    // invisible on the admin page while the client view and the PDF showed it.
+    parent: bundle.parent,
+    siblings: bundle.siblings,
+    parentLines: bundle.parentLines,
   };
 
   const fieldCls =

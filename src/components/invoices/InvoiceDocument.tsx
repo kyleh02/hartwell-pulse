@@ -183,10 +183,19 @@ export function InvoiceDocument({
               {/* Listed without amounts, deliberately. Repricing each line to
                   its share would put rounding on every one of them and would
                   read as the whole job charged again at half price. */}
-              <ul className="space-y-0.5 text-xs text-pulse-text-dim">
+              {/* Title then description, the same shape the original invoice
+                  renders its lines in, so the two documents read alike. */}
+              <ul className="space-y-1.5 text-xs">
                 {(bundle.parentLines ?? []).map((l) => (
                   <li key={l.id}>
-                    {l.title || l.description || "Work supplied"}
+                    <span className="block text-pulse-text-dim">
+                      {l.title || l.description || "Work supplied"}
+                    </span>
+                    {l.title && l.description && (
+                      <span className="block whitespace-pre-wrap text-pulse-text-mute">
+                        {l.description}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
