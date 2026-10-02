@@ -4,7 +4,7 @@ import { Receipt } from "lucide-react";
 import { getPulseSession } from "@/lib/auth/session";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { listClientInvoices } from "@/lib/invoices";
-import { formatMoney } from "@/lib/invoices-shared";
+import { formatMoney, isSuperseded } from "@/lib/invoices-shared";
 import type { InvoiceStatus } from "@/lib/types/database";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -59,14 +59,20 @@ export default async function ClientInvoicesPage() {
                     {inv.invoice_number}
                   </p>
                   <p className="data-mono mt-0.5 text-xs text-pulse-text-mute">
-                    Due {pretty(inv.due_date)}
+                    {isSuperseded(inv)
+                      ? "Split into instalments"
+                      : `Due ${pretty(inv.due_date)}`}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
                   <span className="data-mono text-sm text-pulse-text">
                     {formatMoney(inv.total)}
                   </span>
-                  <Badge tone={TONE[inv.status]}>{inv.status}</Badge>
+                  {isSuperseded(inv) ? (
+                    <Badge tone="neutral">split</Badge>
+                  ) : (
+                    <Badge tone={TONE[inv.status]}>{inv.status}</Badge>
+                  )}
                 </div>
               </Card>
             </Link>

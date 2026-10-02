@@ -1059,7 +1059,62 @@ export function InvoiceBuilder({
 
       {/* This invoice is already in somebody's inbox. Say so before anything
           gets changed, not after. */}
-      {status === "sent" && (
+      {/* What became of a split invoice, on the invoice itself. Without this the
+          parent just sits there looking unpaid. */}
+      {invoice.split_at && (
+        <div className="no-print -mt-3 mb-6 rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface-2/40 px-4 py-3 text-sm">
+          <p className="text-pulse-text">
+            Split into {bundle.siblings?.length ?? 0} instalments. This invoice
+            stays on the record and is no longer chased or counted towards what
+            is outstanding.
+          </p>
+          {invoice.split_note && (
+            <p className="mt-1 text-xs text-pulse-text-dim">
+              {invoice.split_note}
+            </p>
+          )}
+          <div className="mt-2 flex flex-wrap gap-2">
+            {(bundle.siblings ?? []).map((part) => (
+              <Link
+                key={part.id}
+                href={`/admin/invoices/${part.id}`}
+                className="data-mono rounded-[var(--radius-input)] border border-pulse-border px-2 py-1 text-xs text-pulse-text-dim hover:text-pulse-text"
+              >
+                {part.invoice_number} · {formatMoney(Number(part.total))} ·{" "}
+                {part.status}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {invoice.parent_invoice_id && bundle.parent && (
+        <p className="no-print -mt-3 mb-6 rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface-2/40 px-4 py-3 text-sm text-pulse-text-dim">
+          Part {invoice.instalment_number} of {invoice.instalment_count} of{" "}
+          <Link
+            href={`/admin/invoices/${bundle.parent.id}`}
+            className="data-mono text-pulse-text underline"
+          >
+            {bundle.parent.invoice_number}
+          </Link>
+          {invoice.scheduled_send_at && status === "draft" && (
+            <>
+              {" "}
+              Scheduled to issue and email itself on{" "}
+              {new Date(
+                `${invoice.scheduled_send_at}T00:00:00`,
+              ).toLocaleDateString("en-AU", {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              })}
+              .
+            </>
+          )}
+        </p>
+      )}
+
+      {status === "sent" && !invoice.split_at && (
         <p className="no-print -mt-3 mb-6 rounded-[var(--radius-card)] border border-pulse-gold/30 bg-pulse-gold/10 px-4 py-3 text-sm text-pulse-gold">
           Already sent{invoice.last_sent_at ? " and in their inbox" : ""}. You
           can correct it and Resend under the same number, which is the right

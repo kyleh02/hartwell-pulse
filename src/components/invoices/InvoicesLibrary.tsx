@@ -59,8 +59,10 @@ export function InvoicesLibrary({
     });
   }
 
+  // A split invoice cannot be overdue. The money moved to its instalments, each
+  // with its own date, and chasing the parent would be chasing it twice.
   const isOverdue = (inv: AdminInvoiceRow) =>
-    inv.status === "sent" && inv.due_date.slice(0, 10) < today;
+    inv.status === "sent" && !isSuperseded(inv) && inv.due_date.slice(0, 10) < today;
   const thisMonth = today.slice(0, 7);
 
   // A split invoice is represented by its instalments. Counting it here as well
@@ -155,14 +157,25 @@ export function InvoicesLibrary({
                         )}
                       </p>
                       <p className="data-mono mt-0.5 truncate text-xs text-pulse-text-mute">
-                        {inv.invoice_number} · due {pretty(inv.due_date)}
+                        {inv.invoice_number}
+                        {isSuperseded(inv)
+                          ? " · replaced by instalments"
+                          : ` · due ${pretty(inv.due_date)}`}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
-                      <span className="data-mono text-sm text-pulse-text">
+                      <span
+                        className={`data-mono text-sm ${
+                          isSuperseded(inv)
+                            ? "text-pulse-text-mute line-through"
+                            : "text-pulse-text"
+                        }`}
+                      >
                         {formatMoney(inv.total)}
                       </span>
-                      {overdue ? (
+                      {isSuperseded(inv) ? (
+                        <Badge tone="neutral">split</Badge>
+                      ) : overdue ? (
                         <Badge tone="danger">overdue</Badge>
                       ) : (
                         <Badge tone={TONE[inv.status]}>{inv.status}</Badge>
@@ -216,7 +229,10 @@ export function InvoicesLibrary({
                         {inv.client_name}
                       </p>
                       <p className="data-mono mt-0.5 truncate text-xs text-pulse-text-mute">
-                        {inv.invoice_number} · due {pretty(inv.due_date)}
+                        {inv.invoice_number}
+                        {isSuperseded(inv)
+                          ? " · replaced by instalments"
+                          : ` · due ${pretty(inv.due_date)}`}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-3">

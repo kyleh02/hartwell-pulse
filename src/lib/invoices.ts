@@ -36,6 +36,16 @@ export async function getInvoiceBundle(
   // money and reasonably asks whether they now owe one and a half times the job.
   let parent: Invoice | null = null;
   let siblings: Invoice[] = [];
+  if (invoice.split_at) {
+    // Looking at the parent: carry its instalments so the page can say what
+    // became of it and link to them.
+    const { data: kids } = await supabase
+      .from("invoices")
+      .select("*")
+      .eq("parent_invoice_id", invoice.id)
+      .order("instalment_number", { ascending: true });
+    siblings = (kids as Invoice[] | null) ?? [];
+  }
   if (invoice.parent_invoice_id) {
     const [{ data: p }, { data: sibs }] = await Promise.all([
       supabase
