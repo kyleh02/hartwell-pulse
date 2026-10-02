@@ -6,6 +6,7 @@ import { formatMoney } from "@/lib/invoices-shared";
 import { invoiceRecipients } from "@/lib/invoices-send";
 import type { Invoice } from "@/lib/types/database";
 import { businessToday } from "@/lib/business-time";
+import { outstandingOf } from "@/lib/invoices-shared";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +68,9 @@ export async function GET(req: NextRequest) {
       .from("invoices")
       .select("*")
       .eq("status", "sent")
+      // Never chase an invoice that has been split. Its instalments do the
+      // chasing now, each for its own amount and its own date.
+      .is("split_at", null)
       .is("pre_reminder_sent_at", null)
       .gte("due_date", today)
       .lte("due_date", fmt(horizon));
@@ -86,7 +90,7 @@ export async function GET(req: NextRequest) {
           client_id: inv.client_id,
           type: "invoice",
           title,
-          body: `${formatMoney(inv.total)} due shortly.`,
+          body: `${formatMoney(outstandingOf(inv))} due shortly.`,
           link: `/invoices/${inv.id}`,
           channel: "instant",
           emailed_at: now,
@@ -94,7 +98,7 @@ export async function GET(req: NextRequest) {
         if (u.email) {
           const html = emailLayout(
             "Coming up",
-            `<p>Hi,</p><p>A heads-up that invoice <strong>${inv.invoice_number}</strong> for ${formatMoney(inv.total)} is due on ${prettyDate(inv.due_date)}. Nothing is late, this is just so it does not sneak up on you.</p>`,
+            `<p>Hi,</p><p>A heads-up that invoice <strong>${inv.invoice_number}</strong> for ${formatMoney(outstandingOf(inv))} is due on ${prettyDate(inv.due_date)}. Nothing is late, this is just so it does not sneak up on you.</p>`,
             "View invoice",
             `/invoices/${inv.id}`,
           );
@@ -113,6 +117,7 @@ export async function GET(req: NextRequest) {
     .from("invoices")
     .select("*")
     .eq("status", "sent")
+    .is("split_at", null)
     .lt("due_date", today);
   const overdue = (data as Invoice[] | null) ?? [];
 
@@ -124,7 +129,7 @@ export async function GET(req: NextRequest) {
     if (users.length === 0) continue;
 
     const title = `Reminder: invoice ${inv.invoice_number} is overdue`;
-    const body = `${formatMoney(inv.total)} was due ${prettyDate(inv.due_date)}.`;
+    const body = `${formatMoney(outstandingOf(inv))} was due ${prettyDate(inv.due_date)}.`;
     const now = new Date().toISOString();
 
     for (const u of users) {
@@ -141,7 +146,7 @@ export async function GET(req: NextRequest) {
       if (u.email) {
         const html = emailLayout(
           "A quick reminder",
-          `<p>Hi,</p><p>Just a gentle nudge that invoice <strong>${inv.invoice_number}</strong> for ${formatMoney(inv.total)} was due on ${prettyDate(inv.due_date)}. You can view and pay it in your portal.</p>`,
+          `<p>Hi,</p><p>Just a gentle nudge that invoice <strong>${inv.invoice_number}</strong> for ${formatMoney(outstandingOf(inv))} was due on ${prettyDate(inv.due_date)}. You can view and pay it in your portal.</p>`,
           "View invoice",
           `/invoices/${inv.id}`,
         );
@@ -158,7 +163,7 @@ export async function GET(req: NextRequest) {
           client_id: inv.client_id,
           type: "invoice",
           title: `${inv.invoice_number} is now overdue`,
-          body: `${formatMoney(inv.total)}, due ${prettyDate(inv.due_date)}. The client has been reminded.`,
+          body: `${formatMoney(outstandingOf(inv))}, due ${prettyDate(inv.due_date)}. The client has been reminded.`,
           link: `/admin/invoices/${inv.id}`,
           channel: "in_portal",
         });

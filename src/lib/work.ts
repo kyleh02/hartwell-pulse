@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { WorkItem, WorkRow, WorkStep } from "@/lib/work-shared";
 import { businessToday } from "@/lib/business-time";
+import { isSuperseded, outstandingOf } from "@/lib/invoices-shared";
 
 /**
  * Reading the work list.
@@ -78,7 +79,10 @@ export async function getWorkStrip(
   weekEnd.setDate(weekEnd.getDate() + 7);
 
   const [invoices, sends, reports, items] = await Promise.all([
-    supabase.from("invoices").select("total, due_date, status").eq("status", "sent"),
+    supabase
+      .from("invoices")
+      .select("total, due_date, status, deposit_amount, split_at")
+      .eq("status", "sent"),
     supabase
       .from("crm_organisations")
       .select("id")
@@ -90,15 +94,23 @@ export async function getWorkStrip(
     supabase.from("work_items").select("state, snoozed_until").eq("state", "open"),
   ]);
 
-  const inv =
-    ((invoices.data as { total: number; due_date: string }[] | null) ?? []);
+  const inv = (
+    (invoices.data as
+      | {
+          total: number;
+          due_date: string;
+          deposit_amount: number | null;
+          split_at: string | null;
+        }[]
+      | null) ?? []
+  ).filter((i) => !isSuperseded(i));
   const open = ((items.data as { snoozed_until: string | null }[] | null) ?? []);
 
   return {
-    owed: inv.reduce((sum, i) => sum + Number(i.total ?? 0), 0),
+    owed: inv.reduce((sum, i) => sum + outstandingOf(i), 0),
     overdue: inv
       .filter((i) => i.due_date && i.due_date < today)
-      .reduce((sum, i) => sum + Number(i.total ?? 0), 0),
+      .reduce((sum, i) => sum + outstandingOf(i), 0),
     sendsThisWeek: (sends.data as unknown[] | null)?.length ?? 0,
     reportsDue: (reports.data as unknown[] | null)?.length ?? 0,
     snoozed: open.filter(

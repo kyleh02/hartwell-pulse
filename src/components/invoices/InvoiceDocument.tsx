@@ -28,6 +28,19 @@ export function InvoiceDocument({
   business: BusinessSettings | null;
 }) {
   const { invoice, client, lines } = bundle;
+  // Everything an instalment has to state to be read as half of something
+  // already agreed rather than as a fresh charge.
+  const parent = bundle.parent ?? null;
+  const siblings = bundle.siblings ?? [];
+  const isInstalment = !!invoice.parent_invoice_id && !!parent;
+  const paidParts = siblings.filter((s) => s.status === "paid");
+  const paidSoFar = paidParts.reduce((t, s) => t + Number(s.total), 0);
+  // What is left once this one is settled too, so the client can see the end of
+  // it rather than having to work it out.
+  const settled = siblings
+    .filter((s) => s.status === "paid" || s.id === invoice.id)
+    .reduce((t, s) => t + Number(s.total), 0);
+  const remainingAfter = parent ? Number(parent.total) - settled : 0;
   const isTaxInvoice = invoice.gst_mode !== "none";
   const ironpeak = invoice.brand === "ironpeak";
   // What is left to pay once a deposit already received is credited.
@@ -115,6 +128,61 @@ export function InvoiceDocument({
           </p>
         </div>
       </div>
+
+      {isInstalment && parent && (
+        <div className="mt-5 rounded-[var(--radius-card)] border border-pulse-gold/30 bg-pulse-gold/5 p-4">
+          <p className="mono-label text-pulse-gold">
+            Part {invoice.instalment_number} of {invoice.instalment_count} of
+            invoice {parent.invoice_number}
+          </p>
+          <div className="mt-2 space-y-1 text-xs text-pulse-text-dim">
+            <p>
+              Original invoice {parent.invoice_number}, issued{" "}
+              {pretty(parent.issue_date)}, for{" "}
+              <span className="data-mono text-pulse-text">
+                {formatMoney(Number(parent.total))}
+              </span>
+              .
+            </p>
+            {paidParts.length > 0 ? (
+              <p>
+                Paid so far:{" "}
+                <span className="data-mono text-pulse-text">
+                  {formatMoney(paidSoFar)}
+                </span>{" "}
+                (
+                {paidParts
+                  .map(
+                    (s) =>
+                      `part ${s.instalment_number}${s.paid_at ? ", " + pretty(s.paid_at) : ""}`,
+                  )
+                  .join("; ")}
+                ).
+              </p>
+            ) : (
+              <p>Nothing paid against it yet.</p>
+            )}
+            <p>
+              This instalment:{" "}
+              <span className="data-mono text-pulse-text">
+                {formatMoney(Number(invoice.total))}
+              </span>
+              , due {pretty(invoice.due_date)}.
+            </p>
+            <p>
+              Remaining after this:{" "}
+              <span className="data-mono text-pulse-text">
+                {formatMoney(remainingAfter)}
+              </span>
+              .
+            </p>
+          </div>
+          <p className="mt-3 text-xs text-pulse-text-mute">
+            This is an agreed instalment of invoice {parent.invoice_number}, not
+            an additional charge.
+          </p>
+        </div>
+      )}
 
       <div className="py-5">
         <p className="mono-label">Bill to</p>

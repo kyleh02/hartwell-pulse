@@ -31,10 +31,34 @@ export async function getInvoiceBundle(
   ]);
   if (!client) return null;
 
+  // An instalment has to be able to say what it is part of, what has been paid
+  // already and what is left, or the client reads a second document for half the
+  // money and reasonably asks whether they now owe one and a half times the job.
+  let parent: Invoice | null = null;
+  let siblings: Invoice[] = [];
+  if (invoice.parent_invoice_id) {
+    const [{ data: p }, { data: sibs }] = await Promise.all([
+      supabase
+        .from("invoices")
+        .select("*")
+        .eq("id", invoice.parent_invoice_id)
+        .maybeSingle(),
+      supabase
+        .from("invoices")
+        .select("*")
+        .eq("parent_invoice_id", invoice.parent_invoice_id)
+        .order("instalment_number", { ascending: true }),
+    ]);
+    parent = (p as Invoice | null) ?? null;
+    siblings = (sibs as Invoice[] | null) ?? [];
+  }
+
   return {
     invoice,
     client: client as Client,
     lines: (lines as InvoiceLineItem[] | null) ?? [],
+    parent,
+    siblings,
   };
 }
 

@@ -10,6 +10,7 @@ import { deleteInvoice } from "@/app/admin/invoices/actions";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils/cn";
+import { isSuperseded, outstandingOf } from "@/lib/invoices-shared";
 
 const TONE: Record<InvoiceStatus, "neutral" | "gold" | "success" | "danger"> = {
   draft: "neutral",
@@ -62,11 +63,18 @@ export function InvoicesLibrary({
     inv.status === "sent" && inv.due_date.slice(0, 10) < today;
   const thisMonth = today.slice(0, 7);
 
+  // A split invoice is represented by its instalments. Counting it here as well
+  // would show the same money twice.
   const outstanding = invoices
-    .filter((i) => i.status === "sent")
-    .reduce((s, i) => s + Number(i.total), 0);
+    .filter((i) => i.status === "sent" && !isSuperseded(i))
+    .reduce((s, i) => s + outstandingOf(i), 0);
   const paidThisMonth = invoices
-    .filter((i) => i.status === "paid" && i.paid_at?.slice(0, 7) === thisMonth)
+    .filter(
+      (i) =>
+        i.status === "paid" &&
+        !isSuperseded(i) &&
+        i.paid_at?.slice(0, 7) === thisMonth,
+    )
     .reduce((s, i) => s + Number(i.total), 0);
   const overdueCount = invoices.filter(isOverdue).length;
 

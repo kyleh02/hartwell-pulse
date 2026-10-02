@@ -210,6 +210,35 @@ export function hourlySummary(
   return { hours, rate: rates.size === 1 ? [...rates][0] : null };
 }
 
+/**
+ * What is actually still owed on an invoice.
+ *
+ * The total less any deposit already credited. The document has always shown
+ * this as "Amount due", but every aggregation in the app summed the raw total,
+ * so a deposit made the dashboard, the work list and the reminder emails all
+ * overstate. A reminder quoting more than is owed is the kind of thing a client
+ * notices.
+ */
+export function outstandingOf(inv: {
+  total: number | string;
+  deposit_amount?: number | string | null;
+}): number {
+  return round(Number(inv.total ?? 0) - Number(inv.deposit_amount ?? 0));
+}
+
+/**
+ * Has this invoice been replaced by its instalments?
+ *
+ * A split invoice is still a record of what was agreed, and the client keeps
+ * seeing it, but the money it names now lives on its instalments. Counting both
+ * is the one mistake this feature could make that would show up as a wrong
+ * figure in front of a client, so it is one predicate used everywhere rather
+ * than a filter remembered in each place.
+ */
+export function isSuperseded(inv: { split_at?: string | null }): boolean {
+  return !!inv.split_at;
+}
+
 export function formatMoney(n: number): string {
   return (n ?? 0).toLocaleString("en-AU", {
     style: "currency",
@@ -227,4 +256,8 @@ export interface InvoiceBundle {
   invoice: Invoice;
   client: Client;
   lines: InvoiceLineItem[];
+  /** On an instalment: the invoice it was split out of. */
+  parent?: Invoice | null;
+  /** On an instalment: every part of the split, this one included, in order. */
+  siblings?: Invoice[];
 }

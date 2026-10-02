@@ -6,7 +6,14 @@ import { getPulseSession } from "@/lib/auth/session";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { computeTotals, lineAmount } from "@/lib/invoices-shared";
 import { sendInvoiceWith, invoiceRecipients } from "@/lib/invoices-send";
-import type { GstMode, InvoiceStatus } from "@/lib/types/database";
+import {
+  planInstalments,
+  toCents,
+  toDollars,
+  type Money,
+} from "@/lib/instalments";
+import { businessToday } from "@/lib/business-time";
+import type { GstMode, Invoice, InvoiceStatus } from "@/lib/types/database";
 
 async function adminSupabase() {
   const session = await getPulseSession();
@@ -272,11 +279,37 @@ export async function resendInvoice(
   };
 }
 
-export async function setInvoiceStatus(invoiceId: string, status: InvoiceStatus) {
+/**
+ * Move an invoice between states.
+ *
+ * `paidOn` is the day the money actually landed, as YYYY-MM-DD. Money rarely
+ * arrives on the day anyone gets around to recording it, and stamping now() for
+ * a payment that came in last week puts the wrong date on the financial record
+ * and on anything that reports by month.
+ *
+ * The write is checked. It used to be ignored, which meant a rejected update
+ * left an invoice looking paid on screen until the page was reloaded.
+ */
+export async function setInvoiceStatus(
+  invoiceId: string,
+  status: InvoiceStatus,
+  paidOn?: string | null,
+) {
   const { supabase } = await adminSupabase();
   const patch: Record<string, unknown> = { status };
-  if (status === "paid") patch.paid_at = new Date().toISOString();
-  await supabase.from("invoices").update(patch).eq("id", invoiceId);
+  if (status === "paid") {
+    // Midday local, so the stored instant lands on the intended calendar day
+    // whichever side of midnight it is read back in.
+    patch.paid_at = paidOn
+      ? new Date(`${paidOn}T12:00:00`).toISOString()
+      : new Date().toISOString();
+  }
+  if (status === "sent") patch.paid_at = null;
+  const { error } = await supabase
+    .from("invoices")
+    .update(patch)
+    .eq("id", invoiceId);
+  if (error) throw new Error(`Could not update the invoice: ${error.message}`);
   revalidatePath("/admin/invoices");
   revalidatePath(`/admin/invoices/${invoiceId}`);
 }
@@ -425,4 +458,165 @@ export async function sendTestInvoice(invoiceId: string): Promise<string> {
 
   await sendInvoiceWith(supabase, invoiceId, { testTo: to });
   return to;
+}
+
+
+export interface SplitPart {
+  /** GST inclusive, in dollars, as typed. */
+  amount: number;
+  due_date: string;
+  /**
+   * The day this part should issue and email itself, as YYYY-MM-DD. Null means
+   * it is not scheduled and goes out by hand, which is the usual choice for the
+   * first part.
+   */
+  send_date: string | null;
+}
+
+/**
+ * Split an issued invoice into instalments.
+ *
+ * Each part becomes a real invoice: its own number, its own amount, its own GST,
+ * its own due date, its own document and its own reminders. The parent is kept
+ * as the record of what was agreed and marked as split, which takes it out of
+ * every balance so the same money is never counted twice.
+ */
+export async function splitInvoice(
+  parentId: string,
+  parts: SplitPart[],
+  note: string,
+) {
+  const { supabase, session } = await adminSupabase();
+
+  const { data: parentRow, error: readErr } = await supabase
+    .from("invoices")
+    .select("*")
+    .eq("id", parentId)
+    .maybeSingle();
+  if (readErr) throw new Error(`Could not read the invoice: ${readErr.message}`);
+  if (!parentRow) throw new Error("Invoice not found");
+  const parent = parentRow as Invoice;
+
+  if (parent.status !== "sent") {
+    throw new Error(
+      "Only an invoice that has been sent can be split. A draft can just be edited, and a paid or void one is a closed record.",
+    );
+  }
+  if (parent.split_at) throw new Error("This invoice has already been split.");
+  if (parent.parent_invoice_id) {
+    throw new Error("An instalment cannot itself be split.");
+  }
+  if (Number(parent.deposit_amount ?? 0) > 0) {
+    throw new Error(
+      "This invoice already credits a deposit, so splitting it would count that payment twice. Clear the deposit first.",
+    );
+  }
+
+  // ex = total - GST holds in every GST mode, including inclusive pricing and a
+  // discounted invoice, which is why it is derived rather than read off
+  // subtotal.
+  const totalCents = toCents(parent.total);
+  const gstCents = toCents(parent.gst);
+  const parentMoney: Money = {
+    exCents: totalCents - gstCents,
+    gstCents,
+    totalCents,
+  };
+
+  const plan = planInstalments(
+    parentMoney,
+    parts.map((p) => toCents(p.amount)),
+  );
+  if (plan.problem) throw new Error(plan.problem);
+
+  const count = parts.length;
+  const inclusive = parent.gst_mode === "inclusive";
+  const today = businessToday();
+  const made: string[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const part = parts[i];
+    const money = plan.parts[i];
+    const n = i + 1;
+    // On an inclusive invoice the line amounts and the subtotal are themselves
+    // GST inclusive, so the line has to be stated the same way the parent was or
+    // the document would contradict its own totals.
+    const lineAmountDollars = toDollars(
+      inclusive ? money.totalCents : money.exCents,
+    );
+
+    const { data: created, error: insErr } = await supabase
+      .from("invoices")
+      .insert({
+        client_id: parent.client_id,
+        // Suffixed rather than taken from the sequence, so the relationship is
+        // legible on the document itself and in a bank statement line.
+        invoice_number: `${parent.invoice_number}-${n}`,
+        status: "draft",
+        issue_date: part.send_date ?? today,
+        due_date: part.due_date,
+        brand: parent.brand,
+        gst_mode: parent.gst_mode,
+        rate_mode: "fixed",
+        subtotal: lineAmountDollars,
+        discount: 0,
+        gst: toDollars(money.gstCents),
+        total: toDollars(money.totalCents),
+        recipient_user_ids: parent.recipient_user_ids ?? [],
+        parent_invoice_id: parent.id,
+        instalment_number: n,
+        instalment_count: count,
+        scheduled_send_at: part.send_date,
+        // Written now rather than at send time, so what the client will receive
+        // is visible on the invoice before it goes anywhere. It has to read as
+        // the arranged part of something already agreed: he has seen an invoice
+        // for the whole amount, and a second document for half of it with no
+        // context invites the question of whether he now owes one and a half
+        // times the job.
+        email_message:
+          `Hi {client},
+
+` +
+          `As agreed, here is part ${n} of ${count} of invoice ${parent.invoice_number}, for {amount}, due {due date}.
+
+` +
+          `This is the agreed instalment of that invoice, not a new charge on top of it. The breakdown is on the invoice itself.
+
+` +
+          `Thanks,
+Kyle`,
+        created_by: session.clerkUserId,
+      })
+      .select("id")
+      .single();
+    if (insErr) throw new Error(`Could not create instalment ${n}: ${insErr.message}`);
+    const id = (created as { id: string }).id;
+    made.push(id);
+
+    const { error: lineErr } = await supabase.from("invoice_line_items").insert({
+      invoice_id: id,
+      client_id: parent.client_id,
+      title: `Instalment ${n} of ${count} of invoice ${parent.invoice_number}`,
+      description: `Agreed split of invoice ${parent.invoice_number}. This is part ${n} of ${count}, not an additional charge.`,
+      quantity: 1,
+      unit_amount: lineAmountDollars,
+      amount: lineAmountDollars,
+      position: 0,
+    });
+    if (lineErr) throw new Error(`Could not write instalment ${n}: ${lineErr.message}`);
+  }
+
+  const { error: markErr } = await supabase
+    .from("invoices")
+    .update({
+      split_at: new Date().toISOString(),
+      split_note: note.trim() || null,
+      split_by: session.clerkUserId,
+    })
+    .eq("id", parentId);
+  if (markErr) throw new Error(`Could not mark the invoice as split: ${markErr.message}`);
+
+  revalidatePath("/admin/invoices");
+  revalidatePath(`/admin/invoices/${parentId}`);
+  return made;
 }

@@ -69,10 +69,12 @@ import {
   type InvoicePerson,
 } from "@/components/invoices/RecipientPicker";
 import { PrintButton } from "@/components/invoices/PrintButton";
+import { SplitInvoiceDialog } from "@/components/invoices/SplitInvoiceDialog";
 import { SendHistory } from "@/components/invoices/SendHistory";
 import { LastSent } from "@/components/invoices/LastSent";
 import { Button } from "@/components/ui/Button";
 import { celebrate } from "@/lib/celebrate";
+import { businessToday } from "@/lib/business-time";
 import { requestDocumentPdf } from "@/lib/pdf-client";
 import { Badge } from "@/components/ui/Badge";
 
@@ -446,6 +448,7 @@ export function InvoiceBuilder({
     String(invoice.recurring_terms_days ?? ""),
   );
   const [status, setStatus] = useState<InvoiceStatus>(invoice.status);
+  const [paidOn, setPaidOn] = useState(() => businessToday());
   const [saved, setSaved] = useState(true);
   const [testNote, setTestNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -888,7 +891,9 @@ export function InvoiceBuilder({
 
   function mark(s: InvoiceStatus) {
     startTransition(async () => {
-      await setInvoiceStatus(invoice.id, s);
+      // The day the money landed, which is routinely not the day anyone gets
+      // around to recording it.
+      await setInvoiceStatus(invoice.id, s, s === "paid" ? paidOn : null);
       setStatus(s);
       // Getting paid is the only invoice state worth cheering. Sending one is
       // just work.
@@ -1016,6 +1021,21 @@ export function InvoiceBuilder({
           )}
           {status === "sent" && (
             <>
+              {/* Splitting is only offered on an invoice that can be split: not
+                  on one already split, and not on an instalment of one. */}
+              {!invoice.split_at && !invoice.parent_invoice_id && (
+                <SplitInvoiceDialog
+                  invoice={invoice}
+                  terms={business?.payment_terms_days ?? 14}
+                />
+              )}
+              <input
+                type="date"
+                value={paidOn}
+                onChange={(e) => setPaidOn(e.target.value)}
+                aria-label="Date the payment landed"
+                className={`${fieldCls} text-xs`}
+              />
               <Button
                 variant="secondary"
                 size="sm"

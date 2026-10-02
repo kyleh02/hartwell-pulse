@@ -594,6 +594,21 @@ export interface Invoice {
   recurring_anchor_day: number | null;
   recurring_terms_days: number | null; // null = use the business default
   recurring_source_id: string | null;
+  /**
+   * Instalments. Set on a CHILD: the invoice it was split out of, which part it
+   * is, how many parts there are, and the day it should issue and email itself.
+   */
+  parent_invoice_id: string | null;
+  instalment_number: number | null;
+  instalment_count: number | null;
+  scheduled_send_at: string | null;
+  /**
+   * Set on the PARENT when it is split. Non-null means superseded by its
+   * instalments: excluded from every balance, and never chased.
+   */
+  split_at: string | null;
+  split_note: string | null;
+  split_by: string | null;
   recurring_period: string | null;
   created_at: string;
   updated_at: string;

@@ -127,7 +127,13 @@ export async function sendInvoiceWith(
   }
 
   const amended = (invoice.revision ?? 0) > 0;
-  const noun = amended ? "Updated invoice" : "New invoice";
+  // An instalment announces itself as one. "New invoice" on the second half of
+  // an agreed split is exactly the wrong words on exactly the wrong document.
+  const noun = invoice.instalment_number
+    ? `Instalment ${invoice.instalment_number} of ${invoice.instalment_count}`
+    : amended
+      ? "Updated invoice"
+      : "New invoice";
   const subject = opts.testTo
     ? `[Test] ${noun} ${invoice.invoice_number}`
     : `${noun} ${invoice.invoice_number}`;

@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { businessToday } from "@/lib/business-time";
+import { isSuperseded } from "@/lib/invoices-shared";
 
 /**
  * Turning what the portal already knows into work.
@@ -71,7 +72,7 @@ function atNine(date: string): string {
 async function fromInvoices(supabase: SupabaseClient, today: string) {
   const { data } = await supabase
     .from("invoices")
-    .select("id, invoice_number, client_id, due_date, total, status, clients(business_name)")
+    .select("id, invoice_number, client_id, due_date, total, status, deposit_amount, split_at, clients(business_name)")
     .eq("status", "sent");
   const rows =
     (data as
@@ -81,6 +82,8 @@ async function fromInvoices(supabase: SupabaseClient, today: string) {
           client_id: string;
           due_date: string | null;
           total: number;
+          deposit_amount: number | null;
+          split_at: string | null;
           clients: { business_name: string } | { business_name: string }[] | null;
         }[]
       | null) ?? [];
@@ -88,6 +91,9 @@ async function fromInvoices(supabase: SupabaseClient, today: string) {
   const items: NewItem[] = [];
   for (const inv of rows) {
     if (!inv.due_date) continue;
+    // A split invoice is chased through its instalments, which are invoices in
+    // their own right and generate their own items.
+    if (isSuperseded(inv)) continue;
     const client = Array.isArray(inv.clients) ? inv.clients[0] : inv.clients;
     const name = client?.business_name ?? "a client";
     const days = Math.round(
