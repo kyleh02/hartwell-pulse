@@ -177,6 +177,26 @@ export function InvoiceDocument({
               .
             </p>
           </div>
+          {(bundle.parentLines ?? []).length > 0 && (
+            <div className="mt-3 border-t border-pulse-gold/20 pt-3">
+              <p className="mono-label mb-1">What this covers</p>
+              {/* Listed without amounts, deliberately. Repricing each line to
+                  its share would put rounding on every one of them and would
+                  read as the whole job charged again at half price. */}
+              <ul className="space-y-0.5 text-xs text-pulse-text-dim">
+                {(bundle.parentLines ?? []).map((l) => (
+                  <li key={l.id}>
+                    {l.title || l.description || "Work supplied"}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-xs text-pulse-text-mute">
+                Charged in full on invoice {parent.invoice_number}. This document
+                covers part {invoice.instalment_number} of that amount only.
+              </p>
+            </div>
+          )}
+
           <p className="mt-3 text-xs text-pulse-text-mute">
             This is an agreed instalment of invoice {parent.invoice_number}, not
             an additional charge.

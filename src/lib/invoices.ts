@@ -36,6 +36,7 @@ export async function getInvoiceBundle(
   // money and reasonably asks whether they now owe one and a half times the job.
   let parent: Invoice | null = null;
   let siblings: Invoice[] = [];
+  let parentLines: InvoiceLineItem[] = [];
   if (invoice.split_at) {
     // Looking at the parent: carry its instalments so the page can say what
     // became of it and link to them.
@@ -47,7 +48,7 @@ export async function getInvoiceBundle(
     siblings = (kids as Invoice[] | null) ?? [];
   }
   if (invoice.parent_invoice_id) {
-    const [{ data: p }, { data: sibs }] = await Promise.all([
+    const [{ data: p }, { data: sibs }, { data: pLines }] = await Promise.all([
       supabase
         .from("invoices")
         .select("*")
@@ -58,9 +59,18 @@ export async function getInvoiceBundle(
         .select("*")
         .eq("parent_invoice_id", invoice.parent_invoice_id)
         .order("instalment_number", { ascending: true }),
+      // Read at render rather than copied at split, so instalments created
+      // before this existed gain it too, and so the scope on a part can never
+      // drift from the invoice it is part of.
+      supabase
+        .from("invoice_line_items")
+        .select("*")
+        .eq("invoice_id", invoice.parent_invoice_id)
+        .order("position", { ascending: true }),
     ]);
     parent = (p as Invoice | null) ?? null;
     siblings = (sibs as Invoice[] | null) ?? [];
+    parentLines = (pLines as InvoiceLineItem[] | null) ?? [];
   }
 
   return {
@@ -69,6 +79,7 @@ export async function getInvoiceBundle(
     lines: (lines as InvoiceLineItem[] | null) ?? [],
     parent,
     siblings,
+    parentLines,
   };
 }
 

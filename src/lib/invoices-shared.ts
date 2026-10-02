@@ -260,4 +260,9 @@ export interface InvoiceBundle {
   parent?: Invoice | null;
   /** On an instalment: every part of the split, this one included, in order. */
   siblings?: Invoice[];
+  /**
+   * On an instalment: the original invoice's line items, so the document can
+   * say what the money is for without repricing any of it.
+   */
+  parentLines?: InvoiceLineItem[];
 }
