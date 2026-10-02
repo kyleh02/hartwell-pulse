@@ -39,6 +39,17 @@ export function SplitInvoiceDialog({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  // The terms THIS invoice was issued on, which is what its instalments should
+  // inherit. Reading the business default instead worked 16 October back to the
+  // 2nd on an invoice that was written on seven day terms, and quietly proposed
+  // sending the second half on the day the split was made.
+  const invoiceTerms = (() => {
+    const issued = Date.parse(`${invoice.issue_date.slice(0, 10)}T00:00:00Z`);
+    const due = Date.parse(`${invoice.due_date.slice(0, 10)}T00:00:00Z`);
+    const days = Math.round((due - issued) / 86_400_000);
+    return days > 0 ? days : terms;
+  })();
+
   const totalCents = toCents(invoice.total);
   const gstCents = toCents(invoice.gst);
   const parent: Money = {
@@ -59,7 +70,7 @@ export function SplitInvoiceDialog({
         due,
         // Nothing is scheduled for the first part, because it is usually sent
         // by hand on the day the split is agreed.
-        send: i === 0 ? "" : sendDateFor(due, terms),
+        send: i === 0 ? "" : sendDateFor(due, invoiceTerms),
       };
     });
   }
@@ -80,7 +91,7 @@ export function SplitInvoiceDialog({
         const next = { ...p, ...patch };
         // Moving a due date moves its send date with it, unless that part is
         // not scheduled at all.
-        if (patch.due && p.send) next.send = sendDateFor(patch.due, terms);
+        if (patch.due && p.send) next.send = sendDateFor(patch.due, invoiceTerms);
         return next;
       }),
     );
@@ -203,13 +214,13 @@ export function SplitInvoiceDialog({
                       </label>
                     </div>
                     {plan.parts[i] && (
-                      <p className="data-mono mt-2 text-[11px] text-pulse-text-mute">
+                      <p className="data-mono mt-2 text-xs text-pulse-text-dim">
                         {formatMoney(toDollars(plan.parts[i].exCents))} ex GST
                         plus {formatMoney(toDollars(plan.parts[i].gstCents))} GST
                       </p>
                     )}
                     {!p.send && (
-                      <p className="mt-1 text-[11px] text-pulse-text-mute">
+                      <p className="mt-1 text-xs text-pulse-text-dim">
                         Not scheduled. Created as a draft for you to send when
                         you are ready.
                       </p>
@@ -227,7 +238,7 @@ export function SplitInvoiceDialog({
                   placeholder="Agreed by text on 2 October: half now, half on the 16th."
                   className={`${field} w-full resize-y`}
                 />
-                <span className="text-[11px] text-pulse-text-mute">
+                <span className="text-xs text-pulse-text-dim">
                   Kept on the record, because an agreement made by message has
                   no other home.
                 </span>

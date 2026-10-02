@@ -124,7 +124,32 @@ Live at https://portal.hartwelldigital.com
   negative line items, netted into a Discount row in the totals.
 - Recurring billing: template invoices with `recurring_active`; the daily cron
   materialises + auto-sends one invoice per template per month (unique index
-  dedup), evaluated in Australia/Brisbane time.
+  dedup).
+- **Dates are Australia/MELBOURNE, from `src/lib/business-time.ts`.** Kyle moved
+  there in 2026 and Melbourne observes daylight saving where Queensland does
+  not, so the offset is no longer a constant. One constant, imported; never
+  hardcode a zone again. And never read a date off `toISOString()`, which is
+  UTC: between local midnight and 10 or 11am it is still on YESTERDAY. Four
+  places did, so the dashboard, the work generator, the overdue chase and the
+  CRM health check each spent a third of every day a day behind, and an invoice
+  due today read as overdue.
+- **An invoice may be SPLIT into instalments** (0050), each a row in `invoices`
+  with `parent_invoice_id`, so each one inherits the PDF, the print route, the
+  send, the client view and the reminders rather than reimplementing them.
+  `split_at` on the parent is the single rule for not counting money twice:
+  superseded, excluded from every balance, never chased. The instalment maths is
+  in `src/lib/instalments.ts` in INTEGER CENTS, not the floats the rest of the
+  invoice maths uses, because a split has to reconcile exactly against its
+  parent. The last instalment is never calculated: it is the remainder of the
+  parent, which is where rounding lands.
+- **Every balance is `outstandingOf()`, total less deposit.** The document always
+  showed amount due that way and every aggregation summed the raw total, so any
+  invoice carrying a deposit overstated on the dashboard, in the work list and
+  in reminder emails to clients.
+- The scheduled instalment send CLAIMS before it sends, by inserting an
+  `invoice_sends` row with `kind = 'scheduled'` against a unique index. A
+  timestamp comparison leaves a gap between read and write that two runs can
+  both pass through, and an email cannot be taken back.
 
 ## Documents (invoices and reports)
 - Both carry a `brand` column, `hartwell` or `ironpeak`, and both dress in
