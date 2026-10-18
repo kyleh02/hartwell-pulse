@@ -1,7 +1,14 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { formatMoney, DEFAULT_INVOICE_EMAIL } from "@/lib/invoices-shared";
-import { sendEmail, emailLayout, renderMessage, type EmailAttachment } from "@/lib/email";
+import {
+  sendEmail,
+  emailLayout,
+  renderMessage,
+  escapeHtml,
+  type EmailAttachment,
+} from "@/lib/email";
+import { collectExtraAttachments } from "@/lib/invoice-attachments-send";
 import { resolveRecipients, type Recipient } from "@/lib/recipients";
 import type { Invoice } from "@/lib/types/database";
 
@@ -48,7 +55,7 @@ export async function sendInvoiceWith(
   supabase: SupabaseClient,
   invoiceId: string,
   opts: { adminNotice?: boolean; testTo?: string; resend?: boolean } = {},
-): Promise<void> {
+): Promise<{ attached: string[] }> {
   const { data: inv } = await supabase
     .from("invoices")
     .select("*")
@@ -126,6 +133,26 @@ export async function sendInvoiceWith(
     }
   }
 
+  // Whether the invoice's OWN PDF made it, captured before anything else joins
+  // the list. The email says "the invoice is attached" on the strength of this,
+  // and saying so because some other document is attached would be untrue.
+  const pdfFileName = attachments?.[0]?.filename ?? null;
+
+  // ---- the documents sent alongside it ----
+  //
+  // Read BEFORE any email goes out, so a hand send that cannot read one stops
+  // here with nothing sent, naming the file. An unattended send carries on
+  // without it and says what was left off in the admin heads-up below.
+  // adminNotice is set only by the scheduled jobs, which is what makes it the
+  // test for whether anyone is watching.
+  const extras = await collectExtraAttachments(supabase, invoiceId, {
+    unattended: !!opts.adminNotice,
+  });
+  if (extras.files.length > 0) {
+    attachments = [...(attachments ?? []), ...extras.files];
+  }
+  const sentFileNames = [...(pdfFileName ? [pdfFileName] : []), ...extras.names];
+
   const amended = (invoice.revision ?? 0) > 0;
   // An instalment announces itself as one. "New invoice" on the second half of
   // an agreed split is exactly the wrong words on exactly the wrong document.
@@ -139,9 +166,17 @@ export async function sendInvoiceWith(
     : `${noun} ${invoice.invoice_number}`;
   // Said by the sender rather than written into the template, because whether
   // there is a PDF is a fact about this send and the template is Kyle's words.
-  const attachedLine = attachments
-    ? `<p style="margin:0 0 16px">The invoice is attached to this email, so you can pay it without signing in.</p>`
-    : "";
+  //
+  // Names are escaped: they are typed by a person and land in HTML.
+  const attachedLine =
+    (pdfFileName
+      ? `<p style="margin:0 0 16px">The invoice is attached to this email, so you can pay it without signing in.</p>`
+      : "") +
+    (extras.names.length > 0
+      ? `<p style="margin:0 0 16px">${pdfFileName ? "Also attached" : "Attached"}: ${extras.names
+          .map((n) => escapeHtml(n))
+          .join(", ")}.</p>`
+      : "");
   const notifTitle = `${noun} ${invoice.invoice_number} for ${formatMoney(invoice.total)}`;
   const notifBody = `Due ${prettyDate(invoice.due_date)}.`;
   const now = new Date().toISOString();
@@ -162,7 +197,10 @@ export async function sendInvoiceWith(
       ref: { kind: "invoice", id: invoiceId },
       attachments,
     });
-    return; // A proof changes nothing: no notification, no status, no record.
+    // A proof changes nothing: no notification, no status, no record. It does
+    // report what it carried, because "did both documents go" is the question a
+    // test exists to answer and the inbox is not the only place to answer it.
+    return { attached: sentFileNames };
   }
 
   // Stop rather than report a send that reached nobody. This only happens when
@@ -209,7 +247,7 @@ export async function sendInvoiceWith(
   // send that half-succeeds still leaves evidence of what reached an inbox.
   // Snapshotted rather than joined: a later correction is exactly the thing
   // that would otherwise rewrite this history.
-  await supabase.from("invoice_sends").insert({
+  const sendRecord = {
     invoice_id: invoiceId,
     client_id: invoice.client_id,
     revision: invoice.revision ?? 0,
@@ -217,7 +255,26 @@ export async function sendInvoiceWith(
     due_date: invoice.due_date,
     sent_to: delivered,
     kind: opts.resend ? "resend" : "send",
-  });
+  };
+  const { error: recordErr } = await supabase
+    .from("invoice_sends")
+    .insert({ ...sendRecord, attachment_names: sentFileNames });
+  if (recordErr) {
+    // Before migration 0051 the column does not exist and the whole insert is
+    // refused, which would lose the record of this send entirely rather than
+    // just the file names. The emails have already gone, so keep the record.
+    const code = (recordErr as { code?: string }).code;
+    if (code === "PGRST204" || code === "42703") {
+      const { error: retryErr } = await supabase
+        .from("invoice_sends")
+        .insert(sendRecord);
+      if (retryErr) {
+        console.error(`[invoice ${invoiceId}] send not recorded: ${retryErr.message}`);
+      }
+    } else {
+      console.error(`[invoice ${invoiceId}] send not recorded: ${recordErr.message}`);
+    }
+  }
 
   if (opts.adminNotice) {
     const { data: admins } = await supabase
@@ -230,7 +287,13 @@ export async function sendInvoiceWith(
         client_id: invoice.client_id,
         type: "invoice",
         title: `Auto-sent ${invoice.invoice_number} to ${clientName}`,
-        body: `${formatMoney(invoice.total)} · due ${prettyDate(invoice.due_date)}`,
+        // Nobody watched this send, so anything left off has to be said here or
+        // it is never found out.
+        body:
+          `${formatMoney(invoice.total)} · due ${prettyDate(invoice.due_date)}` +
+          (extras.skipped.length > 0
+            ? ` · NOT attached, could not be read: ${extras.skipped.join(", ")}`
+            : ""),
         link: `/admin/invoices/${invoiceId}`,
         channel: "in_portal",
       });
@@ -252,4 +315,6 @@ export async function sendInvoiceWith(
       last_sent_at: now,
     })
     .eq("id", invoiceId);
+
+  return { attached: sentFileNames };
 }

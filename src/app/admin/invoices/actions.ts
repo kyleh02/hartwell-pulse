@@ -13,6 +13,12 @@ import {
   type Money,
 } from "@/lib/instalments";
 import { businessToday } from "@/lib/business-time";
+import {
+  attachmentFolder,
+  checkNewAttachment,
+  displayFileName,
+  isAttachmentPathFor,
+} from "@/lib/invoice-attachments";
 import type { GstMode, Invoice, InvoiceStatus } from "@/lib/types/database";
 
 async function adminSupabase() {
@@ -330,9 +336,26 @@ export async function deleteInvoice(invoiceId: string) {
     throw new Error("Only draft invoices can be deleted — sent invoices are kept on record.");
   }
 
+  // The attachment ROWS go with the invoice through the composite foreign key,
+  // but the FILES are storage objects and nothing cascades to those. Noted now,
+  // removed only once the delete has actually succeeded.
+  const { data: attRows } = await supabase
+    .from("invoice_attachments")
+    .select("storage_path")
+    .eq("invoice_id", invoiceId);
+  const attPaths = ((attRows as { storage_path: string }[] | null) ?? []).map(
+    (r) => r.storage_path,
+  );
+
   // Line items are removed by the composite FK's ON DELETE CASCADE.
   const { error } = await supabase.from("invoices").delete().eq("id", invoiceId);
   if (error) throw new Error(error.message);
+  if (attPaths.length > 0) {
+    const { error: rmErr } = await supabase.storage
+      .from("pulse-reports")
+      .remove(attPaths);
+    if (rmErr) console.warn(`[invoice ${invoiceId}] attachments left in storage: ${rmErr.message}`);
+  }
 
   revalidatePath("/admin/invoices");
   redirect("/admin/invoices");
@@ -441,7 +464,9 @@ export async function removeInvoicePdf(
   return { ok: true };
 }
 
-export async function sendTestInvoice(invoiceId: string): Promise<string> {
+export async function sendTestInvoice(
+  invoiceId: string,
+): Promise<{ to: string; attached: string[] }> {
   const { supabase, session } = await adminSupabase();
 
   const { data: me } = await supabase
@@ -456,8 +481,8 @@ export async function sendTestInvoice(invoiceId: string): Promise<string> {
     );
   }
 
-  await sendInvoiceWith(supabase, invoiceId, { testTo: to });
-  return to;
+  const { attached } = await sendInvoiceWith(supabase, invoiceId, { testTo: to });
+  return { to, attached };
 }
 
 
@@ -619,4 +644,138 @@ Kyle`,
   revalidatePath("/admin/invoices");
   revalidatePath(`/admin/invoices/${parentId}`);
   return made;
+}
+
+
+type AttachmentResult = { ok: true } | { ok: false; message: string };
+
+/**
+ * Record a document the browser has just uploaded for this invoice.
+ *
+ * The file goes browser to storage directly and never through this action:
+ * Next caps a server action body at one megabyte and Vercel at four and a half,
+ * and a scope document is routinely bigger than either. So the action receives
+ * only the path and the name, and trusts neither. The path must sit inside this
+ * invoice's own folder, and the size is read back from storage rather than taken
+ * from the browser.
+ */
+export async function addInvoiceAttachment(
+  invoiceId: string,
+  file: { path: string; name: string },
+): Promise<AttachmentResult> {
+  const { supabase, session } = await adminSupabase();
+
+  const { data: inv, error: invErr } = await supabase
+    .from("invoices")
+    .select("id, client_id, status")
+    .eq("id", invoiceId)
+    .maybeSingle();
+  if (invErr) return { ok: false, message: invErr.message };
+  if (!inv) return { ok: false, message: "That invoice no longer exists." };
+  const invoice = inv as { id: string; client_id: string; status: InvoiceStatus };
+
+  // Refused BEFORE anything is removed: a path outside this folder may belong
+  // to someone else, and is not this action's to delete.
+  if (!isAttachmentPathFor(file.path, invoice.client_id, invoiceId)) {
+    return { ok: false, message: "That file was not uploaded for this invoice." };
+  }
+  const discard = () =>
+    supabase.storage.from("pulse-reports").remove([file.path]);
+
+  if (invoice.status === "paid" || invoice.status === "void") {
+    await discard();
+    return {
+      ok: false,
+      message: `A ${invoice.status} invoice is a closed record, so nothing can be added to it.`,
+    };
+  }
+
+  const folder = attachmentFolder(invoice.client_id, invoiceId);
+  const objectName = file.path.slice(folder.length + 1);
+  const { data: listed, error: listErr } = await supabase.storage
+    .from("pulse-reports")
+    .list(folder, { search: objectName, limit: 100 });
+  const stored = (listed ?? []).find((o) => o.name === objectName);
+  if (listErr || !stored) {
+    return { ok: false, message: "The upload did not arrive. Try attaching it again." };
+  }
+  const meta = (stored.metadata ?? {}) as { size?: number; mimetype?: string };
+  const size = Number(meta.size ?? 0);
+  const name = displayFileName(file.name);
+
+  const { data: existingRows, error: exErr } = await supabase
+    .from("invoice_attachments")
+    .select("size_bytes")
+    .eq("invoice_id", invoiceId);
+  if (exErr) {
+    await discard();
+    return { ok: false, message: `Could not check this invoice's documents: ${exErr.message}` };
+  }
+  const existing = (existingRows as { size_bytes: number }[] | null) ?? [];
+  const problem = checkNewAttachment({ name, size }, existing);
+  if (problem) {
+    await discard();
+    return { ok: false, message: problem };
+  }
+
+  const { error: insErr } = await supabase.from("invoice_attachments").insert({
+    invoice_id: invoiceId,
+    client_id: invoice.client_id,
+    storage_path: file.path,
+    file_name: name,
+    mime_type: meta.mimetype ?? null,
+    size_bytes: size,
+    position: existing.length,
+    created_by: session.clerkUserId,
+  });
+  if (insErr) {
+    await discard();
+    return { ok: false, message: `Could not attach it: ${insErr.message}` };
+  }
+
+  revalidatePath(`/admin/invoices/${invoiceId}`);
+  return { ok: true };
+}
+
+/** Take a document off an invoice, and out of storage. */
+export async function removeInvoiceAttachment(
+  attachmentId: string,
+): Promise<AttachmentResult> {
+  const { supabase } = await adminSupabase();
+
+  const { data: row, error } = await supabase
+    .from("invoice_attachments")
+    .select("id, invoice_id, storage_path")
+    .eq("id", attachmentId)
+    .maybeSingle();
+  if (error) return { ok: false, message: error.message };
+  if (!row) return { ok: true };
+  const att = row as { id: string; invoice_id: string; storage_path: string };
+
+  const { data: inv } = await supabase
+    .from("invoices")
+    .select("status")
+    .eq("id", att.invoice_id)
+    .maybeSingle();
+  const status = (inv as { status: InvoiceStatus } | null)?.status;
+  if (status === "paid" || status === "void") {
+    return {
+      ok: false,
+      message: `A ${status} invoice is a closed record, so its documents stay as they were sent.`,
+    };
+  }
+
+  const { error: delErr } = await supabase
+    .from("invoice_attachments")
+    .delete()
+    .eq("id", attachmentId);
+  if (delErr) return { ok: false, message: `Could not remove it: ${delErr.message}` };
+
+  const { error: rmErr } = await supabase.storage
+    .from("pulse-reports")
+    .remove([att.storage_path]);
+  if (rmErr) console.warn(`[attachment ${attachmentId}] file left in storage: ${rmErr.message}`);
+
+  revalidatePath(`/admin/invoices/${att.invoice_id}`);
+  return { ok: true };
 }

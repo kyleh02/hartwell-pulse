@@ -795,8 +795,15 @@ export function InvoiceBuilder({
         // on screen. That distinction is the whole point of a test send.
         await saveInvoice(invoice.id, buildInput());
         setSaved(true);
-        const to = await sendTestInvoice(invoice.id);
-        setTestNote(`Test sent to ${to}. Nothing was recorded and the client got nothing.`);
+        const { to, attached } = await sendTestInvoice(invoice.id);
+        // Named, file by file. "It looked fine" does not answer "did the
+        // attachment go", and a test that leaves the answer to the inbox is half
+        // a test.
+        setTestNote(
+          `Test sent to ${to}, carrying ${
+            attached.length > 0 ? attached.join(", ") : "no attachments at all"
+          }. Nothing was recorded and the client got nothing.`,
+        );
       } catch (e) {
         setError(e instanceof Error ? e.message : "Could not send the test.");
       }

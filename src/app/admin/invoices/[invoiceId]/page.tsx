@@ -7,6 +7,7 @@ import {
 } from "@/lib/invoices";
 import { InvoiceBuilder } from "@/components/invoices/InvoiceBuilder";
 import { DocumentPdf } from "@/components/documents/DocumentPdf";
+import { InvoiceAttachments } from "@/components/invoices/InvoiceAttachments";
 import { printTokenFor } from "@/lib/print-token";
 import type { EmailEvent, InvoiceSend } from "@/lib/types/database";
 
@@ -77,6 +78,16 @@ export default async function EditInvoicePage({
             ? `/print/invoice/${invoiceId}?token=${encodeURIComponent(printToken)}`
             : null
         }
+      />
+      {/* Beside the PDF, because both are decisions about what goes out in the
+          one email. */}
+      <InvoiceAttachments
+        mode="admin"
+        attachments={bundle.attachments ?? []}
+        invoiceId={bundle.invoice.id}
+        clientId={bundle.invoice.client_id}
+        status={bundle.invoice.status}
+        recurring={!!bundle.invoice.recurring_active}
       />
       <InvoiceBuilder
         bundle={bundle}

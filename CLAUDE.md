@@ -240,6 +240,27 @@ Live at https://portal.hartwelldigital.com
   path that does not exist. The route sets `runtime = "nodejs"` and
   `maxDuration = 60`: a server action inherits the page's ten seconds, and a
   cold render does not finish in ten.
+- **An invoice can carry extra documents** (0051, `invoice_attachments`), sent
+  in the same email as its PDF and downloadable from the client's invoice page.
+  Up to 5, 10 MB together: Resend refuses an email over 40 MB AFTER base64,
+  which inflates a file by a third, and the Send button is a server action with
+  ten seconds to fetch every file and hand it over once per recipient. Files sit
+  in `pulse-reports` under `<client_id>/<invoice_id>/attachments/`, so the
+  existing storage policies cover them. A document that cannot be read STOPS a
+  hand send before anything goes, naming it; an unattended send (instalment or
+  recurring cron) goes anyway and says what was left off in the admin
+  notification. Recurring templates do NOT pass them to the monthly invoices,
+  which send the moment they are made. The test send names every file it
+  carried, on screen. `invoice_sends.attachment_names` records what each send
+  carried.
+- **Never upload a file through a server action.** Next caps an action body at
+  1 MB by default and Vercel caps any request at 4.5 MB. Upload browser to
+  storage directly (chat and `InvoiceAttachments` do), then call an action with
+  the path, and have the action check the path belongs to the record and read
+  the real size back from storage rather than trusting the browser. The older
+  manual PDF upload in `DocumentPdf` still goes through an action, so it fails
+  for any PDF over 1 MB. Generated PDFs are far smaller, which is why it has
+  never shown.
 - If a PDF is attached it MUST go: a download failure stops the send with a
   message rather than quietly degrading to a link-only email nobody knows is
   degraded. The test send carries it too, because a proof that leaves out the

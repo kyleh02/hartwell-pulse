@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   Invoice,
+  InvoiceAttachment,
   InvoiceLineItem,
   Client,
   BusinessSettings,
@@ -73,6 +74,16 @@ export async function getInvoiceBundle(
     parentLines = (pLines as InvoiceLineItem[] | null) ?? [];
   }
 
+  // RLS decides who sees them: the admin always, a client only once the invoice
+  // is not a draft. An error is read as none rather than breaking the page,
+  // which is also what keeps invoices opening before migration 0051 is run.
+  const { data: att } = await supabase
+    .from("invoice_attachments")
+    .select("*")
+    .eq("invoice_id", invoiceId)
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: true });
+
   return {
     invoice,
     client: client as Client,
@@ -80,6 +91,7 @@ export async function getInvoiceBundle(
     parent,
     siblings,
     parentLines,
+    attachments: (att as InvoiceAttachment[] | null) ?? [],
   };
 }
 

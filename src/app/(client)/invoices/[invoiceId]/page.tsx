@@ -5,6 +5,7 @@ import { createAdminSupabase } from "@/lib/supabase/admin";
 import { getInvoiceBundle, getBusinessSettings } from "@/lib/invoices";
 import { InvoiceDocument } from "@/components/invoices/InvoiceDocument";
 import { PrintButton } from "@/components/invoices/PrintButton";
+import { InvoiceAttachments } from "@/components/invoices/InvoiceAttachments";
 import { Badge } from "@/components/ui/Badge";
 
 export const metadata = { title: "Invoice" };
@@ -52,6 +53,9 @@ export default async function ClientInvoicePage({
           <PrintButton />
         </div>
       </div>
+      {/* The documents that came in the email are here too, for the person who
+          deleted the email or never got it. */}
+      <InvoiceAttachments mode="client" attachments={bundle.attachments ?? []} />
       <InvoiceDocument bundle={bundle} business={business} />
     </div>
   );

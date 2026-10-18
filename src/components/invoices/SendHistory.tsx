@@ -45,13 +45,23 @@ export function SendHistory({
               <span className="data-mono">{when(s.sent_at)}</span>
               <span className="text-pulse-text-mute">
                 {" "}
-                · {s.kind === "resend" ? "resent" : "sent"}
+                ·{" "}
+                {s.kind === "resend"
+                  ? "resent"
+                  : s.kind === "scheduled"
+                    ? "scheduled send started"
+                    : "sent"}
                 {s.revision > 0 && ` · rev ${s.revision}`}
               </span>
             </p>
             <p className="data-mono text-pulse-text-dim">
               {formatMoney(Number(s.total))}
             </p>
+            {(s.attachment_names ?? []).length > 0 && (
+              <p className="text-[11px] text-pulse-text-mute">
+                with {(s.attachment_names ?? []).join(", ")}
+              </p>
+            )}
             {s.sent_to.length > 0 ? (
               <ul className="mt-0.5 space-y-0.5">
                 {s.sent_to.map((address) => {
@@ -69,7 +79,7 @@ export function SendHistory({
                   );
                 })}
               </ul>
-            ) : (
+            ) : s.kind === "scheduled" ? null : (
               <p className="data-mono text-[11px] text-pulse-text-mute">
                 recipients not recorded
               </p>

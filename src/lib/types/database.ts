@@ -502,9 +502,26 @@ export interface InvoiceSend {
   total: number;
   due_date: string | null;
   sent_to: string[];
-  kind: "send" | "resend";
+  /** "scheduled" is the claim the instalment job makes before it sends (0050). */
+  kind: "send" | "resend" | "scheduled";
   sent_at: string;
   sent_by: string | null;
+  /** Every file the email carried, by name (0051). Empty on older rows. */
+  attachment_names?: string[];
+}
+
+/** A document sent alongside an invoice's own PDF (0051). */
+export interface InvoiceAttachment {
+  id: string;
+  invoice_id: string;
+  client_id: string;
+  storage_path: string;
+  file_name: string;
+  mime_type: string | null;
+  size_bytes: number;
+  position: number;
+  created_at: string;
+  created_by: string | null;
 }
 
 export interface BusinessSettings {

@@ -1,5 +1,11 @@
 // Client-safe invoice helpers (GST maths, money formatting). No server imports.
-import type { GstMode, Invoice, InvoiceLineItem, Client } from "@/lib/types/database";
+import type {
+  GstMode,
+  Invoice,
+  InvoiceAttachment,
+  InvoiceLineItem,
+  Client,
+} from "@/lib/types/database";
 
 // Default body for invoice emails, used until a custom one is set in Settings or
 // on the invoice itself. Placeholders in {braces} are filled in when sent.
@@ -265,4 +271,6 @@ export interface InvoiceBundle {
    * say what the money is for without repricing any of it.
    */
   parentLines?: InvoiceLineItem[];
+  /** Documents sent alongside the invoice's own PDF. */
+  attachments?: InvoiceAttachment[];
 }
