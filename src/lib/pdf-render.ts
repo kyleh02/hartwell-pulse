@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { printTokenFor, type PrintKind } from "@/lib/print-token";
+import { isMissingColumn } from "@/lib/db-errors";
 
 /**
  * Photograph one of the portal's own print pages and attach the result.
@@ -170,6 +171,18 @@ export async function renderAndAttach({
 
   // Only once the row points at the new one. Removing it earlier would mean a
   // failed update leaves the row pointing at a file that is gone.
+  // An invoice PDF made here may be remade by a send; one uploaded by hand is
+  // never touched. Only invoices carry the column.
+  if (table === "invoices") {
+    const { error: srcErr } = await supabase
+      .from("invoices")
+      .update({ pdf_source: "generated" })
+      .eq("id", id);
+    if (srcErr && !isMissingColumn(srcErr)) {
+      console.warn(`[invoice ${id}] pdf_source: ${srcErr.message}`);
+    }
+  }
+
   if (previousPath && previousPath !== path) {
     await supabase.storage.from("pulse-reports").remove([previousPath]);
   }

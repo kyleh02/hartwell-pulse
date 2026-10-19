@@ -11,6 +11,8 @@ import {
 import { collectExtraAttachments } from "@/lib/invoice-attachments-send";
 import { resolveRecipients, type Recipient } from "@/lib/recipients";
 import type { Invoice } from "@/lib/types/database";
+import { billToFromClient, type ClientBilling } from "@/lib/billing";
+import { isMissingColumn } from "@/lib/db-errors";
 
 function prettyDate(iso: string): string {
   return new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString("en-AU", {
@@ -307,6 +309,25 @@ export async function sendInvoiceWith(
   // sent_at is set once and never moved. It is when the invoice was issued, and
   // a correction reissued three days later does not change that. last_sent_at
   // carries the resends.
+  // Freeze the Bill to block as it was issued, so changing the client's profile
+  // later cannot rewrite what this invoice says it was billed to. Read and
+  // written on their own, so a missing column before 0052 costs the snapshot and
+  // never the send.
+  const { data: billRow, error: billReadErr } = await supabase
+    .from("clients")
+    .select("business_name, legal_name, abn, billing_address, billing_attention")
+    .eq("id", invoice.client_id)
+    .maybeSingle();
+  if (!billReadErr && billRow) {
+    const { error: billErr } = await supabase
+      .from("invoices")
+      .update({ bill_to: billToFromClient(billRow as ClientBilling) })
+      .eq("id", invoiceId);
+    if (billErr && !isMissingColumn(billErr)) {
+      console.error(`[invoice ${invoiceId}] Bill to not frozen: ${billErr.message}`);
+    }
+  }
+
   await supabase
     .from("invoices")
     .update({

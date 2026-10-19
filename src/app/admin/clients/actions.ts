@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { clerkClient } from "@clerk/nextjs/server";
 import { getPulseSession } from "@/lib/auth/session";
 import { createAdminSupabase } from "@/lib/supabase/admin";
+import { checkAbn } from "@/lib/billing";
+import { isMissingColumn } from "@/lib/db-errors";
 
 export interface NewClientInput {
   businessName: string;
@@ -401,7 +403,15 @@ export async function restoreClient(clientId: string) {
  */
 export async function updateClient(
   clientId: string,
-  input: { businessName: string; serviceTier: string; status: string },
+  input: {
+    businessName: string;
+    serviceTier: string;
+    status: string;
+    legalName?: string;
+    abn?: string;
+    billingAddress?: string;
+    billingAttention?: string;
+  },
 ): Promise<void> {
   await requireAdmin();
   const businessName = input.businessName.trim();
@@ -418,6 +428,28 @@ export async function updateClient(
     .update({ business_name: businessName, service_tier: serviceTier, status })
     .eq("id", clientId);
   if (error) throw new Error(error.message);
+
+  // Billing details, checked again here because the form is only a convenience.
+  // A wrong ABN on a tax invoice names a different business.
+  const { abn, problem } = checkAbn(input.abn ?? "");
+  if (problem) throw new Error(problem);
+  const blank = (v?: string) => (v ?? "").trim() || null;
+  const { error: billErr } = await supabase
+    .from("clients")
+    .update({
+      legal_name: blank(input.legalName),
+      abn,
+      billing_address: blank(input.billingAddress),
+      billing_attention: blank(input.billingAttention),
+    })
+    .eq("id", clientId);
+  if (billErr) {
+    throw new Error(
+      isMissingColumn(billErr)
+        ? "The name, tier and status saved, but billing details need migration 0052 run in Supabase first."
+        : `The name, tier and status saved, but the billing details did not: ${billErr.message}`,
+    );
+  }
 
   revalidatePath("/admin/clients");
   revalidatePath("/admin");

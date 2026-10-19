@@ -12,6 +12,7 @@ import { ClientActions } from "@/components/admin/ClientActions";
 import { EditClientForm } from "@/components/admin/EditClientForm";
 import { ClientUsersDialog } from "@/components/admin/ClientUsersDialog";
 import { ClientPreviewsDialog } from "@/components/admin/ClientPreviewsDialog";
+import { formatAbn } from "@/lib/billing";
 
 export const metadata = { title: "Clients" };
 
@@ -151,6 +152,9 @@ function ClientCard({ client: c, section }: { client: Client; section: Section }
         )}
       </div>
       <p className="data-mono mt-1 text-xs text-pulse-text-mute">{c.service_tier}</p>
+      {c.abn && (
+        <p className="data-mono text-xs text-pulse-text-mute">ABN {formatAbn(c.abn)}</p>
+      )}
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {section !== "deleted" && (
           <>
@@ -165,6 +169,10 @@ function ClientCard({ client: c, section }: { client: Client; section: Section }
               businessName={c.business_name}
               serviceTier={c.service_tier}
               status={c.status}
+              legalName={c.legal_name}
+              abn={c.abn}
+              billingAddress={c.billing_address}
+              billingAttention={c.billing_attention}
             />
             <ClientUsersDialog clientId={c.id} clientName={c.business_name} />
             <ClientPreviewsDialog clientId={c.id} clientName={c.business_name} />

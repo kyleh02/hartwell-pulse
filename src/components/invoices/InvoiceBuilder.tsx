@@ -795,6 +795,11 @@ export function InvoiceBuilder({
         // on screen. That distinction is the whole point of a test send.
         await saveInvoice(invoice.id, buildInput());
         setSaved(true);
+        // The same PDF rule as Send, or the proof would carry an older PDF than
+        // the real thing and stop being a proof of it.
+        if (!invoice.pdf_path || invoice.pdf_source !== "uploaded") {
+          await requestDocumentPdf("invoice", invoice.id);
+        }
         const { to, attached } = await sendTestInvoice(invoice.id);
         // Named, file by file. "It looked fine" does not answer "did the
         // attachment go", and a test that leaves the answer to the inbox is half
@@ -843,7 +848,12 @@ export function InvoiceBuilder({
         // ten. Failure here is deliberately ignored. The invoice still goes,
         // carrying a link instead of an attachment, because an invoice that
         // does not arrive is worse than one that arrives without its PDF.
-        if (!invoice.pdf_path) {
+        //
+        // And make it FRESH, not merely present. This used to render only when
+        // there was no PDF at all, so a draft edited after its PDF was made went
+        // out carrying the old figures while the screen showed the new ones. A
+        // PDF uploaded by hand is a deliberate override and is left alone.
+        if (!invoice.pdf_path || invoice.pdf_source !== "uploaded") {
           await requestDocumentPdf("invoice", invoice.id);
         }
         await sendInvoice(invoice.id);
@@ -880,6 +890,12 @@ export function InvoiceBuilder({
       try {
         await saveInvoice(invoice.id, buildInput());
         setSaved(true);
+        // A resend is a correction going out, and it never made a PDF at all, so
+        // the client got the corrected email with the uncorrected attachment.
+        // Same rule as Send: fresh unless uploaded by hand.
+        if (!invoice.pdf_path || invoice.pdf_source !== "uploaded") {
+          await requestDocumentPdf("invoice", invoice.id);
+        }
         const res = await resendInvoice(invoice.id);
         if (!res.ok) {
           setError(res.message);

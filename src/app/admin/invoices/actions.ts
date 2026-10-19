@@ -20,6 +20,8 @@ import {
   isAttachmentPathFor,
 } from "@/lib/invoice-attachments";
 import type { GstMode, Invoice, InvoiceStatus } from "@/lib/types/database";
+import { billToFromClient, type ClientBilling } from "@/lib/billing";
+import { isMissingColumn } from "@/lib/db-errors";
 
 async function adminSupabase() {
   const session = await getPulseSession();
@@ -209,6 +211,32 @@ export async function saveInvoice(invoiceId: string, input: SaveInvoiceInput) {
     }));
     const { error } = await supabase.from("invoice_line_items").insert(rows);
     if (error) throw new Error(error.message);
+  }
+
+  // Saving a SENT invoice is a correction about to be reissued, so it re-reads
+  // the client's billing details along with everything else. A draft is left
+  // alone: it has no bill_to yet and shows the profile live until it is sent.
+  // In its own update, so a missing column before 0052 cannot touch the save
+  // above, and checked otherwise, because this is the money path.
+  if (current.status === "sent") {
+    const { data: billRow, error: billReadErr } = await supabase
+      .from("clients")
+      .select("business_name, legal_name, abn, billing_address, billing_attention")
+      .eq("id", clientId)
+      .maybeSingle();
+    if (!billReadErr && billRow) {
+      const { error: billErr } = await supabase
+        .from("invoices")
+        .update({ bill_to: billToFromClient(billRow as ClientBilling) })
+        .eq("id", invoiceId);
+      if (billErr && !isMissingColumn(billErr)) {
+        throw new Error(`Saved, but the Bill to details did not update: ${billErr.message}`);
+      }
+    } else if (billReadErr && !isMissingColumn(billReadErr)) {
+      throw new Error(
+        `Saved, but the client's billing details could not be read: ${billReadErr.message}`,
+      );
+    }
   }
   revalidatePath(`/admin/invoices/${invoiceId}`);
 }
@@ -431,6 +459,16 @@ export async function uploadInvoicePdf(
     return { ok: false, message: updErr.message };
   }
 
+  // Marked as uploaded, so a send leaves it alone instead of regenerating over
+  // a file that was put there on purpose. Separate and tolerant: see db-errors.
+  const { error: srcErr } = await supabase
+    .from("invoices")
+    .update({ pdf_source: "uploaded" })
+    .eq("id", invoiceId);
+  if (srcErr && !isMissingColumn(srcErr)) {
+    console.warn(`[invoice ${invoiceId}] pdf_source: ${srcErr.message}`);
+  }
+
   if (oldPath && oldPath !== path) {
     await supabase.storage.from("pulse-reports").remove([oldPath]);
   }
@@ -456,6 +494,15 @@ export async function removeInvoicePdf(
     .update({ pdf_path: null, pdf_name: null, pdf_uploaded_at: null })
     .eq("id", invoiceId);
   if (error) return { ok: false, message: error.message };
+  // With the file gone, so is the override. Left set, it would stop the next
+  // send from making a PDF at all.
+  const { error: srcErr } = await supabase
+    .from("invoices")
+    .update({ pdf_source: null })
+    .eq("id", invoiceId);
+  if (srcErr && !isMissingColumn(srcErr)) {
+    console.warn(`[invoice ${invoiceId}] pdf_source: ${srcErr.message}`);
+  }
 
   const path = (row as { pdf_path: string | null }).pdf_path;
   if (path) await supabase.storage.from("pulse-reports").remove([path]);

@@ -57,6 +57,12 @@ export interface Client {
   created_at: string;
   deleted_at: string | null;
   purged_at: string | null;
+  /** Billing details for the Bill to block (0052). Optional until it is run. */
+  legal_name?: string | null;
+  /** Eleven digits, no spaces. */
+  abn?: string | null;
+  billing_address?: string | null;
+  billing_attention?: string | null;
 }
 
 export interface ClientUser {
@@ -588,6 +594,10 @@ export interface Invoice {
    * maths is quantity * unit_amount either way. See migration 0047.
    */
   rate_mode: RateMode;
+  /** The Bill to block as issued (0052). Null on a draft, which shows the profile live. */
+  bill_to?: unknown;
+  /** Whether the PDF was made by the portal or uploaded by hand (0052). */
+  pdf_source?: "generated" | "uploaded" | null;
   /**
    * The standard rate an hourly invoice bills at. Each line's unit_amount is
    * that line's own rate; this is the one the unoverridden lines follow, and

@@ -11,6 +11,7 @@ import { Wordmark } from "@/components/brand/Wordmark";
 import { IronpeakWordmark } from "@/components/brand/IronpeakMark";
 import { IRONPEAK, IRONPEAK_DOC_CLASS } from "@/lib/brand";
 import { cn } from "@/lib/utils/cn";
+import { formatAbn, resolveBillTo } from "@/lib/billing";
 
 function pretty(iso: string): string {
   return new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString("en-AU", {
@@ -28,6 +29,9 @@ export function InvoiceDocument({
   business: BusinessSettings | null;
 }) {
   const { invoice, client, lines } = bundle;
+  // What it was issued with once sent, the client's profile while a draft. See
+  // lib/billing.ts.
+  const billTo = resolveBillTo(invoice, client);
   // Everything an instalment has to state to be read as half of something
   // already agreed rather than as a fresh charge.
   const parent = bundle.parent ?? null;
@@ -215,9 +219,25 @@ export function InvoiceDocument({
 
       <div className="py-5">
         <p className="mono-label">Bill to</p>
-        <p className="mt-1 text-sm font-medium text-pulse-text">
-          {client.business_name}
-        </p>
+        <p className="mt-1 text-sm font-medium text-pulse-text">{billTo.name}</p>
+        {billTo.legal_name && billTo.legal_name !== billTo.name && (
+          <p className="text-xs text-pulse-text-dim">{billTo.legal_name}</p>
+        )}
+        {billTo.abn && (
+          <p className="data-mono mt-0.5 text-xs text-pulse-text-mute">
+            ABN {formatAbn(billTo.abn)}
+          </p>
+        )}
+        {billTo.address && (
+          <p className="mt-1 whitespace-pre-line text-xs text-pulse-text-dim">
+            {billTo.address}
+          </p>
+        )}
+        {billTo.attention && (
+          <p className="mt-1 text-xs text-pulse-text-dim">
+            Attention: {billTo.attention}
+          </p>
+        )}
       </div>
 
       {/* The money columns can't wrap, so on a phone the table scrolls inside

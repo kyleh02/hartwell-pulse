@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { updateClient } from "@/app/admin/clients/actions";
+import { checkAbn, formatAbn } from "@/lib/billing";
 
 const fieldCls =
   "w-full rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 px-3 py-2 text-sm text-pulse-text focus:border-pulse-border-strong focus:outline-none";
@@ -14,26 +15,52 @@ export function EditClientForm({
   businessName,
   serviceTier,
   status,
+  legalName = null,
+  abn = null,
+  billingAddress = null,
+  billingAttention = null,
 }: {
   clientId: string;
   businessName: string;
   serviceTier: string;
   status: string;
+  legalName?: string | null;
+  abn?: string | null;
+  billingAddress?: string | null;
+  billingAttention?: string | null;
 }) {
   const router = useRouter();
+  const initial = {
+    businessName,
+    serviceTier,
+    status,
+    legalName: legalName ?? "",
+    // Shown the way it is written on paper, stored as plain digits.
+    abn: abn ? formatAbn(abn) : "",
+    billingAddress: billingAddress ?? "",
+    billingAttention: billingAttention ?? "",
+  };
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ businessName, serviceTier, status });
+  const [form, setForm] = useState(initial);
+
+  // Checked as it is typed, so a mistyped digit is caught here rather than
+  // printed on a tax invoice, where it would name a different business.
+  const abnCheck = checkAbn(form.abn);
 
   function close() {
     setOpen(false);
     setError(null);
-    setForm({ businessName, serviceTier, status });
+    setForm(initial);
   }
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (abnCheck.problem) {
+      setError(abnCheck.problem);
+      return;
+    }
     setError(null);
     startTransition(async () => {
       try {
@@ -111,9 +138,69 @@ export function EditClientForm({
                 </select>
               </label>
 
+              <div className="border-t border-pulse-border pt-4">
+                <p className="mono-label">Billing details</p>
+                <p className="mt-1 text-xs text-pulse-text-dim">
+                  Printed in the Bill to block of their invoices. All optional.
+                </p>
+              </div>
+
+              <label className="flex flex-col gap-1">
+                <span className="mono-label">Legal entity name</span>
+                <input
+                  value={form.legalName}
+                  onChange={(e) => setForm({ ...form, legalName: e.target.value })}
+                  className={fieldCls}
+                  placeholder="Only if it differs, e.g. Deesha Global Pty Ltd"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="mono-label">ABN</span>
+                <input
+                  value={form.abn}
+                  onChange={(e) => setForm({ ...form, abn: e.target.value })}
+                  inputMode="numeric"
+                  className={`${fieldCls} data-mono`}
+                  placeholder="11 digits"
+                />
+                {form.abn.trim() !== "" &&
+                  (abnCheck.problem ? (
+                    <span className="text-xs text-pulse-danger">{abnCheck.problem}</span>
+                  ) : (
+                    <span className="text-xs text-pulse-success">
+                      Valid ABN, prints as {formatAbn(abnCheck.abn ?? "")}
+                    </span>
+                  ))}
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="mono-label">Billing address</span>
+                <textarea
+                  rows={3}
+                  value={form.billingAddress}
+                  onChange={(e) =>
+                    setForm({ ...form, billingAddress: e.target.value })
+                  }
+                  className={`${fieldCls} resize-y`}
+                  placeholder={"Street\nSuburb State Postcode"}
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="mono-label">Attention</span>
+                <input
+                  value={form.billingAttention}
+                  onChange={(e) =>
+                    setForm({ ...form, billingAttention: e.target.value })
+                  }
+                  className={fieldCls}
+                  placeholder="Who the invoice is for, e.g. Accounts"
+                />
+              </label>
+
               <p className="text-xs text-pulse-text-mute">
-                Renaming updates this client everywhere — invoices, assets and
-                dashboards all follow.
+                Changes show straight away across the portal and on draft
+                invoices. An invoice that has already been sent keeps the name
+                and details it was issued with, so it always matches the PDF the
+                client received. Correct and Resend it to update one.
               </p>
 
               {error && (
@@ -132,8 +219,12 @@ export function EditClientForm({
                 >
                   Cancel
                 </Button>
-                <Button type="submit" size="sm" disabled={pending}>
-                  {pending ? "Saving…" : "Save changes"}
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={pending || abnCheck.problem !== null}
+                >
+                  {pending ? "Saving..." : "Save changes"}
                 </Button>
               </div>
             </form>

@@ -253,6 +253,28 @@ Live at https://portal.hartwelldigital.com
   which send the moment they are made. The test send names every file it
   carried, on screen. `invoice_sends.attachment_names` records what each send
   carried.
+- **Client billing details** (0052): legal name, ABN, billing address and an
+  attention-to name on the client's profile (the Edit dialog on /admin/clients),
+  printed in the invoice's Bill to block. The ABN is stored as 11 bare digits
+  and checked against the ATO checksum in the form AND the action, because a
+  wrong ABN on a tax invoice names a different business. All in
+  `src/lib/billing.ts`.
+- **An invoice keeps the details it was ISSUED with.** A draft shows the profile
+  live; every real send freezes it onto `invoices.bill_to`; saving a SENT invoice
+  (a correction about to be reissued) refreshes it. So editing a client never
+  rewrites what an invoice already in their inbox says, and the portal keeps
+  matching the PDF they hold. 0052 froze every pre-existing sent invoice as the
+  business name alone, which is all it ever showed. Renaming a client therefore
+  no longer reaches sent invoices, deliberately.
+- **Send, Resend and Test to me all make a FRESH PDF** unless the attached one
+  was uploaded by hand (`pdf_source = 'uploaded'`, a deliberate override). They
+  used to render only when no PDF existed and resend never rendered, so a draft
+  edited after its PDF was made went out with the old figures while the screen
+  showed the new ones. The crons already rendered every time.
+- **New columns go in their own update, tolerant of `isMissingColumn`**
+  (`src/lib/db-errors.ts`), never added to an existing write. Code ships before
+  Kyle runs the SQL, and one refused combined update is how a client was once
+  emailed a $0.00 invoice.
 - **Never upload a file through a server action.** Next caps an action body at
   1 MB by default and Vercel caps any request at 4.5 MB. Upload browser to
   storage directly (chat and `InvoiceAttachments` do), then call an action with
