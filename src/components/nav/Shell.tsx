@@ -259,7 +259,10 @@ export function Shell({
 
       {/* ---------- client bottom tab bar (mobile only) ---------- */}
       {variant === "client" && (
-        <nav className="no-print fixed inset-x-0 bottom-0 z-30 flex border-t border-pulse-border bg-pulse-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
+        <nav
+          data-tabbar
+          className="no-print fixed inset-x-0 bottom-0 z-30 flex border-t border-pulse-border bg-pulse-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
+        >
           {items.map((item) => {
             const active = isNavActive(pathname, item.href);
             const Icon = item.icon;

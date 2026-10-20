@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { useFitToScreen } from "@/lib/use-fit-to-screen";
 import {
   Paperclip,
   Send,
@@ -159,6 +160,10 @@ export function ChatThread({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
+  // On a phone the thread ends at the bottom of the screen rather than at a
+  // fixed 70% of it. See lib/use-fit-to-screen.ts.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useFitToScreen(rootRef);
   // Pinned to the newest message until the user scrolls up to read history.
   const stickRef = useRef(true);
 
@@ -708,8 +713,9 @@ export function ChatThread({
 
   return (
     <div
+      ref={rootRef}
       onPaste={onPaste}
-      className="relative flex h-[70dvh] flex-col overflow-hidden rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface lg:h-[72vh]"
+      className="relative flex h-[70dvh] min-w-0 flex-col overflow-hidden rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface lg:h-[72vh]"
     >
       {searchOpen ? (
         <div className="flex items-center gap-2 border-b border-pulse-border px-3 py-2">
@@ -864,7 +870,12 @@ export function ChatThread({
                       </div>
                     ) : (
                       m.body && (
-                        <p className="whitespace-pre-wrap break-words">
+                        // anywhere, not just break-word. Both wrap a long link
+                        // on screen, but break-word still counts the whole link
+                        // as the narrowest the message can be, so one pasted URL
+                        // made the admin page wider than the phone and Safari
+                        // zoomed everything out to fit it.
+                        <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
                           {q.length >= 2
                             ? renderHighlighted(m.body, q)
                             : renderLinks(m.body, m.id)}

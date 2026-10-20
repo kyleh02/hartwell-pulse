@@ -144,13 +144,21 @@
   }
 
   /* iOS zooms the whole page when you focus a control smaller than 16px, and
-     never zooms back out. Bump every form control on small screens so tapping
-     a field can't throw the layout sideways. */
-  @media (max-width: 640px) {
+     never zooms back out. Every form control on a phone is therefore 16px.
+
+     Two corrections to the first version of this rule, both found because the
+     chat's search box still zoomed. It was 14px from a text-sm class, and a
+     Tailwind utility beats anything in the base layer, so the rule lost to the
+     very controls it was written for: hence !important, which inside a cascade
+     layer runs the other way and lets base win over utilities. And it applied
+     only under 640px wide, so an iPhone held sideways, at up to 932px, had no
+     protection at all: hence a coarse pointer, which is a finger in either
+     orientation. */
+  @media (max-width: 640px), (pointer: coarse) {
     input,
     select,
     textarea {
-      font-size: 16px;
+      font-size: 16px !important;
     }
   }
 

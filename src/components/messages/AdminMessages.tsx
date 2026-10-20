@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Users,
   X,
+  ArrowLeft,
 } from "lucide-react";
 import { useSupabaseClient } from "@/lib/supabase/client";
 import {
@@ -75,6 +76,13 @@ export function AdminMessages({
   const [selected, setSelected] = useState<string | null>(
     active[0]?.id ?? null,
   );
+  // On a phone the list and the chat take turns. Stacked, the list pushed the
+  // chat below the fold, so the thing being read always started off the screen.
+  // Opening a conversation shows it; the back button shows the list.
+  const [listOnPhone, setListOnPhone] = useState(false);
+  useEffect(() => {
+    setListOnPhone(false);
+  }, [selected]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [groupFor, setGroupFor] = useState<GroupableClient | null>(null);
   const [groupTitle, setGroupTitle] = useState("");
@@ -179,8 +187,16 @@ export function AdminMessages({
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
-      <aside className="h-fit rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-2">
+    // minmax(0, 1fr), not 1fr. A plain 1fr column will not shrink below the
+    // widest unbreakable thing inside it, so one long link in a message made
+    // the column, and the page, wider than the phone.
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+      <aside
+        className={cn(
+          "h-fit rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-2",
+          current && !listOnPhone && "hidden lg:block",
+        )}
+      >
         <button
           type="button"
           onClick={() => (pickerOpen ? closePicker() : setPickerOpen(true))}
@@ -295,7 +311,12 @@ export function AdminMessages({
             >
               <button
                 type="button"
-                onClick={() => setSelected(c.id)}
+                onClick={() => {
+                  setSelected(c.id);
+                  // Also when it is already the selected one, where the effect
+                  // above would not fire because nothing changed.
+                  setListOnPhone(false);
+                }}
                 className={cn(
                   "flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-sm",
                   selected === c.id
@@ -380,7 +401,16 @@ export function AdminMessages({
         )}
       </aside>
 
-      <div>
+      <div className={cn("min-w-0", (!current || listOnPhone) && "hidden lg:block")}>
+        {current && (
+          <button
+            type="button"
+            onClick={() => setListOnPhone(true)}
+            className="mb-2 inline-flex items-center gap-1.5 text-sm text-pulse-text-dim hover:text-pulse-text lg:hidden"
+          >
+            <ArrowLeft size={15} /> All conversations
+          </button>
+        )}
         {current ? (
           <ChatThread
             key={current.id}
