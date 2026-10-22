@@ -11,7 +11,14 @@ import { useSupabaseClient } from "@/lib/supabase/client";
  * counts a teammate's private thread. Realtime pushes it up instantly; a poll
  * reconciles throttled tabs.
  */
-export function UnreadMessagesBadge({ dot = false }: { dot?: boolean }) {
+export function UnreadMessagesBadge({
+  dot = false,
+  bubble = false,
+}: {
+  dot?: boolean;
+  /** On the gold chat bubble, where a gold pill would disappear. */
+  bubble?: boolean;
+}) {
   const supabase = useSupabaseClient();
   const { userId } = useAuth();
   const [count, setCount] = useState(0);
@@ -65,6 +72,17 @@ export function UnreadMessagesBadge({ dot = false }: { dot?: boolean }) {
   }, [supabase, userId, load]);
 
   if (count === 0) return null;
+
+  if (bubble) {
+    return (
+      <span
+        aria-label={`${count} unread message${count === 1 ? "" : "s"}`}
+        className="data-mono flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-pulse-bg bg-pulse-danger px-1 text-[11px] font-semibold leading-none text-white"
+      >
+        {count > 9 ? "9+" : count}
+      </span>
+    );
+  }
 
   if (dot) {
     return (

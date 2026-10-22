@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { getPulseSession } from "@/lib/auth/session";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { Shell } from "@/components/nav/Shell";
+import type { Conversation } from "@/lib/types/database";
+import type { ClientConversationRow } from "@/components/messages/ClientMessages";
 import { Wordmark } from "@/components/brand/Wordmark";
 
 export default async function ClientLayout({
@@ -42,10 +44,24 @@ export default async function ClientLayout({
   }
 
   // RLS keeps this to their own visible previews, so the tab appears exactly
-  // when there is something behind it.
-  const { count: previewCount } = await supabase
-    .from("client_previews")
-    .select("id", { count: "exact", head: true });
+  // when there is something behind it. The threads are for the chat bubble,
+  // and RLS returns only the ones this user is a member of, exactly as on the
+  // Messages page.
+  const [{ count: previewCount }, { data: convoRows }] = await Promise.all([
+    supabase.from("client_previews").select("id", { count: "exact", head: true }),
+    supabase
+      .from("conversations")
+      .select("id, kind, title")
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true }),
+  ]);
+  const conversations: ClientConversationRow[] = (
+    (convoRows as Pick<Conversation, "id" | "kind" | "title">[] | null) ?? []
+  ).map((c) => ({
+    id: c.id,
+    kind: c.kind,
+    label: c.kind === "group" ? (c.title ?? "Team chat") : "Kyle",
+  }));
 
   const name =
     session.profile?.full_name ?? session.profile?.email ?? "Client";
@@ -57,6 +73,8 @@ export default async function ClientLayout({
       clientName={client?.business_name ?? null}
       clientLogoUrl={client?.logo_url ?? null}
       hasPreview={(previewCount ?? 0) > 0}
+      conversations={conversations}
+      clientId={session.clientId}
     >
       {children}
     </Shell>

@@ -15,6 +15,8 @@ import { TabUnreadBadge } from "@/components/notifications/TabUnreadBadge";
 import { WelcomeFlash } from "@/components/ui/WelcomeFlash";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { UnreadMessagesBadge } from "@/components/messages/UnreadMessagesBadge";
+import { ChatLauncher } from "@/components/messages/ChatLauncher";
+import type { ClientConversationRow } from "@/components/messages/ClientMessages";
 import { clientNav, adminNav, isNavActive, type NavItem } from "@/lib/nav";
 import { cn } from "@/lib/utils/cn";
 import { NavIcon } from "@/components/nav/NavIcon";
@@ -31,6 +33,9 @@ interface ShellProps {
   clientLogoUrl?: string | null;
   /** Hide the Website tab when this client has nothing to preview. */
   hasPreview?: boolean;
+  /** The client's threads, for the chat bubble. Client variant only. */
+  conversations?: ClientConversationRow[];
+  clientId?: string | null;
   children: React.ReactNode;
 }
 
@@ -117,9 +122,17 @@ export function Shell({
   clientName,
   clientLogoUrl,
   hasPreview = false,
+  conversations = [],
+  clientId = null,
   children,
 }: ShellProps) {
   const pathname = usePathname();
+  // Everywhere but Messages itself, which already is the chat.
+  const showChat =
+    variant === "client" &&
+    !!clientId &&
+    pathname !== "/messages" &&
+    !pathname.startsWith("/messages/");
   // A tab that is always empty is noise, and on a six-item nav it is a
   // sizeable fraction of the noise.
   const items = (variant === "admin" ? adminNav : clientNav).filter(
@@ -252,11 +265,18 @@ export function Shell({
             // indicator) on mobile
             variant === "client" &&
               "pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-8",
+            // and for the chat bubble, so the end of a page can be scrolled
+            // clear of it rather than read underneath it
+            showChat && "pb-[calc(10rem+env(safe-area-inset-bottom))] lg:pb-24",
           )}
         >
           {children}
         </main>
       </div>
+
+      {showChat && clientId && (
+        <ChatLauncher conversations={conversations} clientId={clientId} />
+      )}
 
       {/* ---------- client bottom tab bar (mobile only) ---------- */}
       {variant === "client" && (

@@ -3,8 +3,10 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Eye } from "lucide-react";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getClientDashboardData } from "@/lib/dashboard";
+import { getClientHome } from "@/lib/client-home";
 import type { Client } from "@/lib/types/database";
 import { DashboardView } from "@/components/dashboard/DashboardView";
+import { ClientHome } from "@/components/home/ClientHome";
 
 export const metadata = { title: "Client preview" };
 
@@ -25,7 +27,22 @@ export default async function ClientPreviewPage({
   if (!client) notFound();
   const c = client as Client;
 
-  const data = await getClientDashboardData(supabase, clientId);
+  // Greeted as the first person on the account, which for most clients is the
+  // only one.
+  const { data: firstUser } = await supabase
+    .from("client_users")
+    .select("full_name")
+    .eq("client_id", clientId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  const [home, data] = await Promise.all([
+    getClientHome(supabase, clientId, {
+      firstName: (firstUser as { full_name: string | null } | null)?.full_name,
+    }),
+    getClientDashboardData(supabase, clientId),
+  ]);
 
   return (
     <div>
@@ -39,16 +56,19 @@ export default async function ClientPreviewPage({
 
       <div className="mb-6 flex items-center gap-2 rounded-[var(--radius-input)] border border-pulse-gold/30 bg-pulse-gold/10 px-4 py-2.5 text-sm text-pulse-gold">
         <Eye size={15} strokeWidth={1.75} />
-        Previewing {c.business_name} — this is the dashboard the client sees.
+        Previewing {c.business_name}. This is the Home the client sees when they
+        sign in. Links and chat are switched off here.
       </div>
 
-      <h1 className="mb-1 text-2xl font-semibold tracking-tight text-pulse-text">
-        {c.business_name}
-      </h1>
+      {home && <ClientHome data={home} preview />}
+
+      <h2 className="mt-10 mb-1 text-lg font-semibold tracking-tight text-pulse-text">
+        Performance
+      </h2>
       <p className="mb-6 text-sm text-pulse-text-dim">
         {data.currentMonthLabel
-          ? `This month (${data.currentMonthLabel}), next to last month.`
-          : "Month on month."}
+          ? `The page behind Full performance. This month (${data.currentMonthLabel}), next to last month.`
+          : "The page behind Full performance, month on month."}
       </p>
 
       <DashboardView data={data} />

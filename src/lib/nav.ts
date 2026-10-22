@@ -1,6 +1,6 @@
 import {
   Globe,
-  LayoutDashboard,
+  House,
   FileText,
   FolderOpen,
   MessageSquare,
@@ -22,7 +22,7 @@ export interface NavItem {
 }
 
 export const clientNav: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Home", href: "/dashboard", icon: House },
   { label: "Reports", href: "/reports", icon: FileText },
   { label: "Assets", href: "/assets", icon: FolderOpen },
   { label: "Copy", href: "/copy", icon: PenLine },
@@ -44,8 +44,12 @@ export const adminNav: NavItem[] = [
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
 
-/** Exact match for index routes, prefix match for the rest. */
+/**
+ * Exact match for the admin index, prefix match for the rest. The client Home
+ * is a prefix match because its performance page lives under it and is reached
+ * from it, so Home stays lit there.
+ */
 export function isNavActive(pathname: string, href: string): boolean {
-  if (href === "/admin" || href === "/dashboard") return pathname === href;
+  if (href === "/admin") return pathname === href;
   return pathname === href || pathname.startsWith(href + "/");
 }

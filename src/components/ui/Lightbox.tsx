@@ -23,7 +23,11 @@ export function Lightbox({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        // Handled, so a chat panel the image was opened from stays open.
+        e.preventDefault();
+        onClose();
+      }
     };
     window.addEventListener("keydown", onKey);
     const previous = document.body.style.overflow;

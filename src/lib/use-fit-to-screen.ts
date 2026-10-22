@@ -21,11 +21,17 @@ import { useEffect, type RefObject } from "react";
  * sideways, or the page above changing, re-measures; typing does not.
  *
  * Desktop keeps the class-based height untouched.
+ *
+ * `enabled` false leaves the element alone, for a chat that already sits in a
+ * container sized to the screen: the panel the chat bubble opens.
  */
-export function useFitToScreen(ref: RefObject<HTMLElement | null>) {
+export function useFitToScreen(
+  ref: RefObject<HTMLElement | null>,
+  enabled = true,
+) {
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el || !enabled) return;
     const wide = window.matchMedia("(min-width: 1024px)");
 
     function fit() {
@@ -61,5 +67,5 @@ export function useFitToScreen(ref: RefObject<HTMLElement | null>) {
       wide.removeEventListener("change", fit);
       el.style.height = "";
     };
-  }, [ref]);
+  }, [ref, enabled]);
 }

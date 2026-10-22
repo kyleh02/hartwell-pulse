@@ -1,31 +1,20 @@
 import { redirect } from "next/navigation";
 import { getPulseSession } from "@/lib/auth/session";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { getClientDashboardData } from "@/lib/dashboard";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { DashboardView } from "@/components/dashboard/DashboardView";
+import { getClientHome } from "@/lib/client-home";
+import { ClientHome } from "@/components/home/ClientHome";
 
-export const metadata = { title: "Dashboard" };
+export const metadata = { title: "Home" };
 
-export default async function DashboardPage() {
+export default async function HomePage() {
   const session = await getPulseSession();
   if (!session?.clientId) redirect("/");
 
   const supabase = await createServerSupabase();
-  const data = await getClientDashboardData(supabase, session.clientId);
+  const data = await getClientHome(supabase, session.clientId, {
+    firstName: session.profile?.full_name,
+  });
+  if (!data) redirect("/");
 
-  return (
-    <div>
-      <PageHeader
-        label={["Overview"]}
-        title="Dashboard"
-        description={
-          data.currentMonthLabel
-            ? `How your marketing is going this month (${data.currentMonthLabel}), next to last month.`
-            : "How your marketing is going, month on month."
-        }
-      />
-      <DashboardView data={data} />
-    </div>
-  );
+  return <ClientHome data={data} />;
 }

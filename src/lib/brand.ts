@@ -21,7 +21,10 @@ export const IRONPEAK = {
 
 export const HARTWELL = {
   name: "Hartwell Digital",
-  email: "kyle@hartwelldigital.com",
+  /** Who a client is dealing with: the contact card and chat on their Home. */
+  person: "Kyle Andruszkiewicz",
+  personFirst: "Kyle",
+  email: "admin@hartwelldigital.com",
   site: "portal.hartwelldigital.com",
 } as const;
 

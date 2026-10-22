@@ -129,12 +129,19 @@ export function ChatThread({
   kind,
   role,
   peerName,
+  fill = false,
 }: {
   conversationId: string;
   clientId: string;
   kind: ConversationKind;
   role: "client" | "admin";
   peerName: string;
+  /**
+   * Fill the parent instead of sizing itself, with no frame of its own. For the
+   * panel the chat bubble opens, which is already the right size and already
+   * the card.
+   */
+  fill?: boolean;
 }) {
   const supabase = useSupabaseClient();
   const { userId } = useAuth();
@@ -163,7 +170,7 @@ export function ChatThread({
   // On a phone the thread ends at the bottom of the screen rather than at a
   // fixed 70% of it. See lib/use-fit-to-screen.ts.
   const rootRef = useRef<HTMLDivElement>(null);
-  useFitToScreen(rootRef);
+  useFitToScreen(rootRef, !fill);
   // Pinned to the newest message until the user scrolls up to read history.
   const stickRef = useRef(true);
 
@@ -715,7 +722,12 @@ export function ChatThread({
     <div
       ref={rootRef}
       onPaste={onPaste}
-      className="relative flex h-[70dvh] min-w-0 flex-col overflow-hidden rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface lg:h-[72vh]"
+      className={cn(
+        "relative flex min-w-0 flex-col overflow-hidden bg-pulse-surface",
+        fill
+          ? "h-full"
+          : "h-[70dvh] rounded-[var(--radius-card)] border border-pulse-border lg:h-[72vh]",
+      )}
     >
       {searchOpen ? (
         <div className="flex items-center gap-2 border-b border-pulse-border px-3 py-2">
@@ -729,7 +741,11 @@ export function ChatThread({
             }}
             onKeyDown={(e) => {
               if (e.nativeEvent.isComposing) return;
-              if (e.key === "Escape") closeSearch();
+              if (e.key === "Escape") {
+                // Handled here, so the chat panel around it stays open.
+                e.preventDefault();
+                closeSearch();
+              }
               else if (e.key === "Enter") {
                 e.preventDefault();
                 stepMatch(e.shiftKey ? 1 : -1);
@@ -844,6 +860,7 @@ export function ChatThread({
                               e.preventDefault();
                               void saveEdit();
                             } else if (e.key === "Escape") {
+                              e.preventDefault();
                               setEditingId(null);
                             }
                           }}

@@ -340,6 +340,43 @@ Live at https://portal.hartwelldigital.com
   `javascript:` in something that renders as clickable is not a place to be
   permissive.
 
+## Client Home and the chat bubble
+- **A client lands on Home (`/dashboard`, labelled Home in the nav), not an
+  analytics page.** The old page was a heading over an empty box for every new
+  client, so the first screen of the relationship was an absence. Home greets
+  them ("Welcome to your portal" while getting started, "Welcome back" after),
+  counts days with Hartwell Digital from `clients.created_at` in business time,
+  and gives every part of the portal a tile carrying its real state. The
+  analytics moved to `/dashboard/performance`, linked from the Home metrics
+  strip, which is why Home is a PREFIX match in `isNavActive`.
+- All of it loads in `getClientHome()` (`src/lib/client-home.ts`). Every query
+  filters by client_id explicitly even though RLS already scopes a client: the
+  admin preview reads with admin RLS, and the filter is what pins it to one
+  client. The invoices tile uses `isSuperseded` and `outstandingOf`, like
+  every other balance.
+- **Getting started ticks itself from what happened**, never from a click: said
+  hello = any message with `sender_role = 'client'`, shared files = any asset
+  with `uploader_role = 'client'`. When both are done the card goes and the
+  greeting changes. No column, no migration.
+- The admin preview (`/admin/clients/[id]/preview`) renders the same
+  `ClientHome` with `preview`: tiles do not link and the chat buttons are inert,
+  then the performance view underneath.
+- **The chat bubble (`ChatLauncher`) is on every client page except Messages**,
+  mounted by `Shell` from conversations the client layout fetches once. It is
+  the same `ChatThread` as the Messages tab with `fill`, so there is one chat
+  with two ways in. The thread mounts ONLY while the panel is open, because
+  ChatThread marks messages read as it shows them and a hidden one would tell
+  Kyle a message had been seen. Below 640px it is full screen; up to lg it sits
+  above the tab bar; `main` gets extra bottom padding so a page's end scrolls
+  clear of the bubble. `openChat()` opens it from anywhere.
+- **Escape inside the panel belongs to the innermost thing.** The chat search,
+  the message edit box and the image lightbox call `preventDefault` on Escape,
+  and the panel closes only on an Escape nobody claimed. A new Escape handler
+  inside the chat must do the same, or one key press closes two things.
+- Kyle's contact details on Home come from `HARTWELL` in `src/lib/brand.ts`
+  (`person`, `email` = admin@hartwelldigital.com). Never retype them in a
+  component.
+
 ## Portal shell
 - **Cmd+K** opens `CommandPalette`, mounted in `Shell` for both variants. With
   no query it lists the nav; typing hits `searchEverything()`. That action is a
