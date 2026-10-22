@@ -17,6 +17,7 @@ import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { UnreadMessagesBadge } from "@/components/messages/UnreadMessagesBadge";
 import { clientNav, adminNav, isNavActive, type NavItem } from "@/lib/nav";
 import { cn } from "@/lib/utils/cn";
+import { NavIcon } from "@/components/nav/NavIcon";
 
 interface ShellUser {
   name: string;
@@ -54,7 +55,7 @@ function NavLinks({
             onClick={onNavigate}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "group flex items-center gap-3 rounded-[var(--radius-input)] px-3 py-2 text-sm transition-colors",
+              "group flex items-center gap-3 rounded-[var(--radius-input)] px-3 py-2.5 text-[15px] transition-colors",
               active
                 ? "bg-pulse-surface-2 text-pulse-text"
                 : "text-pulse-text-dim hover:bg-pulse-surface-2/60 hover:text-pulse-text",
@@ -62,13 +63,13 @@ function NavLinks({
           >
             <span
               className={cn(
-                "flex h-5 w-5 items-center justify-center transition-colors",
+                "flex h-6 w-6 items-center justify-center transition-colors",
                 active
                   ? "text-pulse-gold"
                   : "text-pulse-text-mute group-hover:text-pulse-text-dim",
               )}
             >
-              <Icon size={18} strokeWidth={1.75} />
+              <NavIcon icon={Icon} size={21} />
             </span>
             {item.label}
             {item.badge === "messages" && <UnreadMessagesBadge />}
@@ -144,7 +145,7 @@ export function Shell({
   const userBlock = (
     <div className="flex items-center gap-3">
       <UserButton
-        appearance={{ elements: { avatarBox: "h-8 w-8" } }}
+        appearance={{ elements: { avatarBox: "h-9 w-9" } }}
       />
       <div className="min-w-0">
         <p className="truncate text-sm text-pulse-text">{user.name}</p>
@@ -161,7 +162,7 @@ export function Shell({
       <WelcomeFlash name={user.name} />
       <CommandPalette variant={variant} />
       {/* ---------- desktop sidebar ---------- */}
-      <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-pulse-border bg-pulse-bg bg-grid pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] lg:flex">
+      <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-pulse-border bg-pulse-bg pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] lg:flex">
         <div className="flex h-16 items-center border-b border-pulse-border px-5">
           <Wordmark size="md" />
         </div>
@@ -179,15 +180,15 @@ export function Shell({
             className="absolute inset-0 bg-black/60"
             onClick={() => setDrawerOpen(false)}
           />
-          <div className="absolute inset-y-0 left-0 flex w-72 flex-col border-r border-pulse-border bg-pulse-bg bg-grid pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+          <div className="absolute inset-y-0 left-0 flex w-72 flex-col border-r border-pulse-border bg-pulse-bg pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
             <div className="flex h-16 items-center justify-between border-b border-pulse-border px-5">
               <Wordmark size="md" />
               <button
                 aria-label="Close menu"
                 onClick={() => setDrawerOpen(false)}
-                className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-input)] text-pulse-text-dim hover:bg-pulse-surface-2 hover:text-pulse-text"
+                className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-input)] text-pulse-text-dim hover:bg-pulse-surface-2 hover:text-pulse-text"
               >
-                <X size={18} />
+                <X size={21} />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto px-3 py-5">
@@ -210,9 +211,9 @@ export function Shell({
             <button
               aria-label="Open menu"
               onClick={() => setDrawerOpen(true)}
-              className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-input)] text-pulse-text-dim hover:bg-pulse-surface-2 hover:text-pulse-text lg:hidden"
+              className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-input)] text-pulse-text-dim hover:bg-pulse-surface-2 hover:text-pulse-text lg:hidden"
             >
-              <Menu size={18} />
+              <Menu size={21} />
             </button>
             <div className="lg:hidden">
               <Wordmark size="sm" />
@@ -223,9 +224,9 @@ export function Shell({
             <button
               type="button"
               onClick={openPalette}
-              className="flex h-9 items-center gap-2 rounded-[var(--radius-input)] border border-pulse-border px-3 text-pulse-text-mute transition-colors hover:border-pulse-border-strong hover:text-pulse-text"
+              className="flex h-10 items-center gap-2 rounded-[var(--radius-input)] border border-pulse-border px-3 text-pulse-text-mute transition-colors hover:border-pulse-border-strong hover:text-pulse-text"
             >
-              <SearchIcon size={15} />
+              <SearchIcon size={18} />
               <span className="hidden text-sm sm:inline">Search</span>
               <span className="data-mono hidden text-[11px] text-pulse-text-mute lg:inline">
                 ⌘K
@@ -272,12 +273,12 @@ export function Shell({
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px]",
+                  "flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px]",
                   active ? "text-pulse-gold" : "text-pulse-text-mute",
                 )}
               >
                 <span className="relative">
-                  <Icon size={20} strokeWidth={1.75} />
+                  <NavIcon icon={Icon} size={23} />
                   {item.badge === "messages" && <UnreadMessagesBadge dot />}
                 </span>
                 {item.label}

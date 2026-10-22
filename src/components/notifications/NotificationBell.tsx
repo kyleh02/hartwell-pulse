@@ -227,9 +227,9 @@ export function NotificationBell() {
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-label="Notifications"
-        className="relative flex h-9 w-9 items-center justify-center rounded-[var(--radius-input)] text-pulse-text-dim transition-colors hover:bg-pulse-surface-2 hover:text-pulse-text"
+        className="relative flex h-10 w-10 items-center justify-center rounded-[var(--radius-input)] text-pulse-text-dim transition-colors hover:bg-pulse-surface-2 hover:text-pulse-text"
       >
-        <Bell size={18} strokeWidth={1.75} />
+        <Bell size={21} strokeWidth={1.75} />
         {unread > 0 && (
           <span className="absolute right-1 top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-pulse-gold px-1 text-[9px] font-semibold text-pulse-bg">
             {unread > 9 ? "9+" : unread}

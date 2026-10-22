@@ -288,6 +288,63 @@
     }
   }
 
+  /* ---- loading --------------------------------------------------------- */
+
+  /* Placeholder blocks in the shape of the page on its way. A tint of the
+     text colour rather than a surface colour: the surfaces are tuned for dark,
+     and in light mode a surface-2 block on a white card all but vanished, so
+     the page looked empty rather than loading. The text colour flips with the
+     theme, so the tint reads in both. */
+  .skeleton {
+    border-radius: 6px;
+    background-color: color-mix(in srgb, var(--pulse-text) 10%, transparent);
+    animation: pulse-skeleton 1.4s ease-in-out infinite;
+  }
+
+  /* Held back a beat, so a page that loads almost at once does not flash a
+     placeholder on its way past. Fill mode both keeps it hidden during the
+     delay and shown after, including when reduced motion cuts it short. */
+  .page-loading {
+    animation: pulse-fade-in 0.2s ease-out 0.1s both;
+  }
+
+  /* The bar across the top of the screen while a page loads. The track is
+     drawn faintly with the moving segment on top, so when reduced motion
+     stops the slide a still bar remains to say something is happening. */
+  .pulse-progress {
+    position: fixed;
+    inset-inline: 0;
+    top: env(safe-area-inset-top);
+    z-index: 60;
+    height: 2px;
+    overflow: hidden;
+    pointer-events: none;
+    background: color-mix(in srgb, var(--pulse-gold) 22%, transparent);
+    animation: pulse-fade-in 0.2s ease-out 0.1s both;
+  }
+  .pulse-progress::after {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    width: 40%;
+    background: var(--pulse-gold);
+    animation: pulse-progress-slide 1.1s ease-in-out infinite;
+  }
+
+  /* The ring round a nav icon whose page is on its way. */
+  .nav-pending-ring {
+    position: absolute;
+    inset: -5px;
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    border-top-color: var(--pulse-gold);
+    border-right-color: var(--pulse-gold);
+    animation:
+      pulse-spin 0.7s linear infinite,
+      pulse-fade-in 0.15s ease-out 0.12s both;
+  }
+
   /* Monospace small-caps section header, e.g. PERFORMANCE / GOOGLE ADS */
   .mono-label {
     font-family: var(--font-mono);
@@ -494,5 +551,37 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Prefixed so they cannot collide with Tailwind's own pulse and spin. */
+@keyframes pulse-skeleton {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+@keyframes pulse-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes pulse-progress-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+@keyframes pulse-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
