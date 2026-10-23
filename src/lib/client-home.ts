@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getClientDashboardData, type DashMetric } from "@/lib/dashboard";
 import { formatMoney, isSuperseded, outstandingOf } from "@/lib/invoices-shared";
 import { businessToday } from "@/lib/business-time";
+import { drivePagePath } from "@/lib/drive-shared";
 
 /**
  * Everything the client's Home shows, in one load.
@@ -110,6 +111,7 @@ export async function getClientHome(
     clientMessagesRes,
     lastMessageRes,
     conversationsRes,
+    driveRes,
     dash,
   ] = await Promise.all([
     supabase
@@ -171,6 +173,13 @@ export async function getClientHome(
       .select("id", { count: "exact", head: true })
       .eq("client_id", clientId)
       .is("deleted_at", null),
+    // Shared Drive folders. Missing until migration 0053 runs, which reads as none.
+    supabase
+      .from("drive_links")
+      .select("id, title")
+      .eq("client_id", clientId)
+      .order("position")
+      .limit(3),
     getClientDashboardData(supabase, clientId),
   ]);
 
@@ -259,7 +268,20 @@ export async function getClientHome(
   // ---- assets -------------------------------------------------------------------
   const assetCount = assetsAllRes.count ?? 0;
   const addedThisWeek = assetsWeekRes.count ?? 0;
-  tiles.push({
+  // A folder Kyle has shared from Drive is the thing to open, so it takes the
+  // tile when there is one.
+  const shared = (driveRes.data as { id: string; title: string }[] | null) ?? [];
+  if (shared.length > 0) {
+    tiles.push({
+      key: "assets",
+      title: "Assets",
+      line: shared.length === 1 ? `${shared[0].title} from Kyle` : `${shared.length} folders from Kyle`,
+      sub: assetCount > 0 ? `Plus ${plural(assetCount, "file")} of your own` : "Open, download, or drop files in",
+      cta: "Open",
+      href: shared.length === 1 ? drivePagePath(shared[0].id) : "/assets",
+      tone: "neutral",
+    });
+  } else tiles.push({
     key: "assets",
     title: "Assets",
     line: assetCount > 0 ? plural(assetCount, "file") : "Nothing uploaded yet",

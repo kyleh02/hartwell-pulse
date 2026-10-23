@@ -383,6 +383,63 @@ Live at https://portal.hartwelldigital.com
   (`person`, `email` = admin@hartwelldigital.com). Never retype them in a
   component.
 
+## Google Drive folders in the portal (0053)
+- **Clients see folders from Kyle's Google Drive inside Assets**, in the
+  portal's own design, without anything being shared in Google. Kyle makes a
+  `Client Shared (Portal)` subfolder in each client's Drive folder, links it on
+  the client's card (Clients, Drive button), and copies or emails the link.
+  Claude and Kyle keep saving to Drive as before; files appear in the portal
+  on the next look, and a client's uploads land in that Drive folder.
+- **One connection, Kyle's.** He connects once in Settings (OAuth, Internal
+  app on the Workspace, scope `drive`). The refresh token is AES-256-GCM sealed
+  with a key derived from `GOOGLE_CLIENT_SECRET` and stored in
+  `google_drive_connection`, which has RLS on, no policies and no grants:
+  service role only. It opens his entire Drive, so it never leaves the server.
+  Env: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`; redirect URI is
+  `${NEXT_PUBLIC_APP_URL}/api/google/callback`.
+- **Nothing from the browser is trusted as a Drive id.** A request names a
+  `drive_links` row (read through RLS, client_id rechecked) and a path of ids
+  down from it, and `resolvePath()` checks every step's Drive `parents` before
+  listing or uploading. A shortcut counts only where it sits, and is then
+  followed to its target, which is how a folder from another drive or a shared
+  drive appears: Kyle putting the shortcut there is the grant. Never add a
+  route that takes a bare file id.
+- **Bytes go out through `/api/drive/raw/<token>/<name>` only**, public in
+  middleware like the print routes, because `<img>`, `<video>` and PDF frames
+  are fetched by the browser itself. The token is an HMAC (CRON_SECRET, signed
+  with a `drive.` prefix) over link, file, mime and name, minted only while
+  listing a folder that was just checked, expiry rounded to a half hour so the
+  same thumbnail keeps the same URL and caches. The link row is rechecked on
+  every request, so unlinking cuts access at once. No Google URL or credential
+  ever reaches the browser.
+- **Everything served is someone's upload on the portal's origin**, so: nosniff
+  always; a `sandbox` CSP on anything inline except PDFs (Chrome refuses to
+  draw a PDF in a sandboxed document); and only images a browser shows, PDF,
+  video and audio are ever inline. Everything else, HTML and SVG-as-download
+  included, is `application/octet-stream` attachment. Loosening this is an XSS
+  on the portal.
+- **Uploads go browser to Google**, through a resumable session the server
+  opens with the destination fixed and the browser's `Origin` passed (which is
+  what lets Google take the cross-site PUT). Through Vercel they would cap at
+  4.5 MB. Two checks: the link's `allow_uploads` and Kyle's own Drive
+  permission on the folder (`canAddChildren`). A finished client batch posts
+  to `/api/drive/uploaded`, which confirms the files really are in the folder
+  before writing an `asset_uploaded` notification for Kyle (`in_portal`, so the
+  30-minute email nudge covers it).
+- Google Docs, Sheets and Slides preview as a PDF export and download as PDF or
+  the Office format. HEIC and other images a browser cannot draw preview
+  through Drive's large thumbnail. Clients cannot delete; that is done in
+  Drive.
+- `DriveBrowser` caches listings for the visit, preloads a folder on hover, and
+  refreshes on tab focus (which is how a file Claude just saved shows up).
+  Listings older than 20 minutes are never shown, because their signed URLs
+  last about an hour. Thumbnails and the viewer must not reset their "loaded"
+  state in an effect: a cached image fires its load before the effect runs and
+  stays invisible. Tested against a fake Drive in the session scratchpad
+  (`test-drive.cjs`, and a browser harness for the component).
+- Code tolerates 0053 not being run: a missing table reads as no folders, and
+  Settings says what to do.
+
 ## Portal shell
 - **Cmd+K** opens `CommandPalette`, mounted in `Shell` for both variants. With
   no query it lists the nav; typing hits `searchEverything()`. That action is a

@@ -18,6 +18,10 @@ const isPublicRoute = createRouteMatcher([
   // scoped to one report id, good for five minutes. Path-anchored like the
   // others, so /printer-foo is not exempted along with it.
   "/print/(.*)",
+  // Shared Drive files. The browser fetches these itself (images, video, a
+  // PDF frame), so each URL carries a token this server signed while listing
+  // a folder it had just checked. See src/lib/google-drive.ts.
+  "/api/drive/raw/(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

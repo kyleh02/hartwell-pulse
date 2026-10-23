@@ -6,6 +6,7 @@ import { signAssets } from "@/lib/assets";
 import { getClientFolders, buildFolderView } from "@/lib/folders";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { AssetsBrowser } from "@/components/assets/AssetsBrowser";
+import { DriveFolderCards, type DriveFolderCard } from "@/components/drive/DriveFolderCards";
 
 export const metadata = { title: "Assets" };
 
@@ -31,8 +32,20 @@ export default async function AssetsPage({
     .order("created_at", { ascending: false })
     .limit(300);
   query = folderId ? query.eq("folder_id", folderId) : query.is("folder_id", null);
-  const { data } = await query;
+  // Shared Drive folders lead the top level. A missing table (migration 0053
+  // not run yet) simply means none.
+  const [{ data }, { data: driveData }] = await Promise.all([
+    query,
+    folderId
+      ? Promise.resolve({ data: null })
+      : supabase
+          .from("drive_links")
+          .select("id, title")
+          .eq("client_id", session.clientId)
+          .order("position"),
+  ]);
   const assets = await signAssets(supabase, (data as Asset[] | null) ?? []);
+  const driveLinks = (driveData as DriveFolderCard[] | null) ?? [];
 
   return (
     <div>
@@ -41,6 +54,7 @@ export default async function AssetsPage({
         title="Your files"
         description="Keep your images, documents and copy in one place. Sort them into folders, tag them, and Kyle can leave notes right on anything you upload."
       />
+      <DriveFolderCards links={driveLinks} base="/assets" role="client" />
       <AssetsBrowser
         role="client"
         currentUserId={session.clerkUserId}
