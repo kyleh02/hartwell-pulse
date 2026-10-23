@@ -54,14 +54,20 @@ Live at https://portal.hartwelldigital.com
 - Write them idempotent: `add column if not exists`, `drop policy if exists`
   before `create policy` (Postgres has no CREATE POLICY IF NOT EXISTS),
   `drop trigger if exists`, guarded `do $$` blocks.
-- **ALL of 0001 to 0046 were confirmed applied in production on 2 September
-  2026**, by probing the live database for the signature table or column of each
-  migration: 34 probes, none missing. This supersedes the earlier note that only
-  0035 to 0041 were verified and everything below was assumed. Re-probe after
-  any new migration rather than trusting this line: attempt a zero-row select on
-  the object a migration creates (`select <column>` or `select *` with
-  `head: true`) and read the error code. `42P01`/`PGRST205` means the table is
-  absent, `42703`/`PGRST204` means the column is.
+- **0044 to 0046 were NOT applied until 23 October 2026**, although this file
+  said the 2 September probe confirmed everything through 0046. The admin
+  dashboard's "Add it" failed with `Could not find the table
+  'public.work_items' in the schema cache`, and re-running the three together
+  (`supabase/fix-work-items.sql`, which records whether the table existed
+  first) returned `existed_before = false`. So the dashboard had never been
+  able to save, and nobody saw it because `listWork` and `getWorkStrip` ignore
+  read errors: a missing table rendered as an empty list. Treat the 2 September
+  claim as covering 0001 to 0043 at most. 0047 to 0052 were each run by Kyle as
+  their feature shipped in October. Re-probe after any new migration rather
+  than trusting a line here: attempt a zero-row select on the object a
+  migration creates (`select <column>` or `select *` with `head: true`) and
+  read the error code. `42P01`/`PGRST205` means the table is absent,
+  `42703`/`PGRST204` means the column is.
 - **Applied state is not tracked anywhere, so check it, never assume it.** This
   file used to record 0001–0036 as applied "as of 2026-08-07", but 0036 was
   written after that date, so the note cannot have been right. That is the
