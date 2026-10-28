@@ -2,21 +2,30 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 
 /**
- * The one place the portal talks to Claude. Opus 5.5 throughout: Kyle asked
- * for it by name, and at $4 / $20 per million tokens a client question costs
- * a cent or two.
+ * The one place the portal talks to Claude. Two models, chosen by Kyle on 28
+ * October 2026 to spend less than Opus 5.5 everywhere:
  *
- * Every request opts into server-side refusal fallback (`fallbacks:
- * "default"`): if Opus 5.5's safety classifiers decline a request, the API
- * re-runs it on Anthropic's recommended fallback model instead of returning
- * nothing. That is Anthropic's guidance for this model from day one, and in a
- * client-facing chat a silent non-answer is the worst outcome.
+ * - Clients' Quick answers run on Haiku 5.5 ($0.10 / $0.50 per million
+ *   tokens, under a tenth of a cent a question). The job suits it: short
+ *   answers from facts the portal hands over, anything hard passed to Kyle.
+ *   Haiku 5.5 has NO server-side refusal fallback, so its requests must not
+ *   send `fallbacks` (a list of models is a 400); a decline is handled by the
+ *   caller with a "message Kyle" reply.
+ * - Kyle's drafts run on Sonnet 5.5 ($2 / $10): few a day, written in his
+ *   voice, where the writing matters. These opt into server-side fallback
+ *   (`fallbacks: "default"`), Anthropic's guidance for the model, so a decline
+ *   is re-run rather than coming back empty.
+ *
+ * Both think adaptively; effort is the only lever. Never send
+ * `thinking: {type: "disabled"}` to Sonnet 5.5 (a 400) or force `tool_choice`
+ * (a 400 on Sonnet 5.5).
  *
  * Returns null without ANTHROPIC_API_KEY, so every caller has a plain "not set
  * up yet" path instead of an exception.
  */
 
-export const MODEL = "claude-opus-5-5";
+export const ASSISTANT_MODEL = "claude-haiku-5-5";
+export const DRAFT_MODEL = "claude-sonnet-5-5";
 export const FALLBACK_BETA = "server-side-fallback-2026-07-01";
 
 let client: Anthropic | null = null;
@@ -50,7 +59,7 @@ export async function draft(opts: { system: string; prompt: string; maxTokens?: 
   const api = claude();
   if (!api) return null;
   const res = await api.beta.messages.create({
-    model: MODEL,
+    model: DRAFT_MODEL,
     max_tokens: opts.maxTokens ?? 2000,
     betas: [FALLBACK_BETA],
     fallbacks: "default",

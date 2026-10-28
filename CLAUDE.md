@@ -617,15 +617,18 @@ Live at https://portal.hartwelldigital.com
   with its reason.
 
 ## The assistant and the AI employee (0059)
-- **Claude Opus 5.5 (`claude-opus-5-5`) everywhere, through `src/lib/ai/claude.ts`
-  and the official `@anthropic-ai/sdk`.** Every request opts into server-side
-  refusal fallback (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`),
-  Anthropic's guidance for this model, so a classifier decline is re-run rather
-  than leaving a client with nothing. Effort is `low`: these are short answers.
-  Thinking cannot be switched off on this model; never send `thinking:
-  {type: "disabled"}` or a budget (both 400), and never force `tool_choice`
-  (400 too). Needs `ANTHROPIC_API_KEY` in Vercel; without it every AI feature
-  says plainly that it is not set up.
+- **Two models, through `src/lib/ai/claude.ts` and the official
+  `@anthropic-ai/sdk`.** Built on Opus 5.5, then split on 28 October 2026 at
+  Kyle's request to spend less: clients' Quick answers on **Haiku 5.5**
+  (`claude-haiku-5-5`, under a tenth of a cent a question) and Kyle's drafts on
+  **Sonnet 5.5** (`claude-sonnet-5-5`, where his voice matters). Haiku 5.5 has
+  no server-side refusal fallback, so its requests must not send `fallbacks`
+  (a list is a 400); a decline gets the "message Kyle" reply. The drafts opt
+  into `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`). Effort
+  is `low` on both: short answers. Thinking counts toward `max_tokens`. Never
+  send Sonnet 5.5 `thinking: {type: "disabled"}` (400) and never force
+  `tool_choice` (400). Needs `ANTHROPIC_API_KEY` in Vercel; without it every AI
+  feature says plainly that it is not set up.
 - **Quick answers** is the second tab in the client's chat bubble, shown only
   when Kyle has switched it on in Settings AND the key is set. It streams from
   `/api/assistant` (a route, not an action: ten seconds is not enough).

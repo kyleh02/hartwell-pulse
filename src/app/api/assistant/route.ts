@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getPulseSession } from "@/lib/auth/session";
 import { createAdminSupabase } from "@/lib/supabase/admin";
-import { FALLBACK_BETA, MODEL, claude } from "@/lib/ai/claude";
+import { ASSISTANT_MODEL, claude } from "@/lib/ai/claude";
 import {
   CONVERSATION_GAP_MS,
   DAILY_LIMIT,
@@ -124,11 +124,11 @@ export async function POST(req: Request) {
       };
       try {
         for (let turn = 0; turn < 3; turn++) {
+          // Haiku 5.5: no server-side fallback exists for it, so none is sent.
+          // Thinking counts toward max_tokens, hence the room for a short reply.
           const stream = api.beta.messages.stream({
-            model: MODEL,
+            model: ASSISTANT_MODEL,
             max_tokens: 2048,
-            betas: [FALLBACK_BETA],
-            fallbacks: "default",
             output_config: { effort: "low" },
             system,
             tools: [PASS_TO_KYLE],
