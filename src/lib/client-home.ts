@@ -3,7 +3,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getClientDashboardData, type DashMetric } from "@/lib/dashboard";
 import { formatMoney, isSuperseded, outstandingOf } from "@/lib/invoices-shared";
 import { businessToday } from "@/lib/business-time";
-import { drivePagePath } from "@/lib/drive-shared";
 
 /**
  * Everything the client's Home shows, in one load.
@@ -22,7 +21,7 @@ import { drivePagePath } from "@/lib/drive-shared";
 export type TileTone = "attention" | "ok" | "neutral";
 
 export interface HomeTile {
-  key: "website" | "reports" | "assets" | "copy" | "invoices" | "messages";
+  key: "website" | "reports" | "assets" | "approvals" | "copy" | "invoices" | "messages";
   title: string;
   line: string;
   sub: string;
@@ -111,7 +110,7 @@ export async function getClientHome(
     clientMessagesRes,
     lastMessageRes,
     conversationsRes,
-    driveRes,
+    approvalsRes,
     dash,
   ] = await Promise.all([
     supabase
@@ -173,13 +172,14 @@ export async function getClientHome(
       .select("id", { count: "exact", head: true })
       .eq("client_id", clientId)
       .is("deleted_at", null),
-    // Shared Drive folders. Missing until migration 0053 runs, which reads as none.
+    // Sent work only: a draft is Kyle's until he sends it. Missing until
+    // migration 0054 runs, which reads as nothing to approve.
     supabase
-      .from("drive_links")
-      .select("id, title")
+      .from("approvals")
+      .select("id, title, status")
       .eq("client_id", clientId)
-      .order("position")
-      .limit(3),
+      .neq("status", "draft")
+      .order("updated_at", { ascending: false }),
     getClientDashboardData(supabase, clientId),
   ]);
 
@@ -268,20 +268,7 @@ export async function getClientHome(
   // ---- assets -------------------------------------------------------------------
   const assetCount = assetsAllRes.count ?? 0;
   const addedThisWeek = assetsWeekRes.count ?? 0;
-  // A folder Kyle has shared from Drive is the thing to open, so it takes the
-  // tile when there is one.
-  const shared = (driveRes.data as { id: string; title: string }[] | null) ?? [];
-  if (shared.length > 0) {
-    tiles.push({
-      key: "assets",
-      title: "Assets",
-      line: shared.length === 1 ? `${shared[0].title} from Kyle` : `${shared.length} folders from Kyle`,
-      sub: assetCount > 0 ? `Plus ${plural(assetCount, "file")} of your own` : "Open, download, or drop files in",
-      cta: "Open",
-      href: shared.length === 1 ? drivePagePath(shared[0].id) : "/assets",
-      tone: "neutral",
-    });
-  } else tiles.push({
+  tiles.push({
     key: "assets",
     title: "Assets",
     line: assetCount > 0 ? plural(assetCount, "file") : "Nothing uploaded yet",
@@ -294,13 +281,53 @@ export async function getClientHome(
     tone: "neutral",
   });
 
-  // ---- copy: what is waiting on whom -------------------------------------------
+  // ---- approvals: anything waiting on them leads -----------------------------
+  const work = (approvalsRes.data as { id: string; title: string; status: string }[] | null) ?? [];
+  const waiting = work.filter((w) => w.status === "waiting");
+  const beingChanged = work.filter((w) => w.status === "changes");
+  const signedOff = work.filter((w) => w.status === "approved");
+  tiles.push(
+    waiting.length > 0
+      ? {
+          key: "approvals",
+          title: "Approvals",
+          line: waiting.length === 1 ? "1 thing waiting on you" : `${waiting.length} things waiting on you`,
+          sub: waiting.length === 1 ? waiting[0].title : `${waiting[0].title}, and more`,
+          cta: "Review",
+          href: waiting.length === 1 ? `/approvals/${waiting[0].id}` : "/approvals",
+          tone: "attention",
+        }
+      : beingChanged.length > 0
+        ? {
+            key: "approvals",
+            title: "Approvals",
+            line: `Kyle is updating ${beingChanged.length === 1 ? beingChanged[0].title : `${beingChanged.length} pieces`}`,
+            sub: "With the changes you asked for",
+            cta: "Open",
+            href: "/approvals",
+            tone: "neutral",
+          }
+        : {
+            key: "approvals",
+            title: "Approvals",
+            line: signedOff.length > 0 ? "All approved" : "Nothing to approve yet",
+            sub:
+              signedOff.length > 0
+                ? `${plural(signedOff.length, "piece")} signed off`
+                : "Copy, designs, posts and ads land here for your OK",
+            cta: "Open",
+            href: "/approvals",
+            tone: signedOff.length > 0 ? "ok" : "neutral",
+          },
+  );
+
+  // ---- copy: only for clients who write their own -----------------------------
   const docs = (copyRes.data as { title: string; status: string; updated_at: string }[] | null) ?? [];
   const byStatus = (s: string) => docs.filter((d) => d.status === s);
   const changes = byStatus("changes_requested");
   const drafts = byStatus("draft");
   const submitted = byStatus("submitted");
-  tiles.push(
+  if (docs.length > 0) tiles.push(
     changes.length > 0
       ? {
           key: "copy",

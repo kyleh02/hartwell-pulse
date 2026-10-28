@@ -8,7 +8,6 @@ import { getClientFolders, buildFolderView } from "@/lib/folders";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AssetsBrowser } from "@/components/assets/AssetsBrowser";
-import { DriveFolderCards, type DriveFolderCard } from "@/components/drive/DriveFolderCards";
 
 export const metadata = { title: "Client assets" };
 
@@ -73,18 +72,8 @@ export default async function AdminAssetsPage({
     .order("created_at", { ascending: false })
     .limit(300);
   query = folderId ? query.eq("folder_id", folderId) : query.is("folder_id", null);
-  const [{ data }, { data: driveData }] = await Promise.all([
-    query,
-    folderId
-      ? Promise.resolve({ data: null })
-      : supabase
-          .from("drive_links")
-          .select("id, title")
-          .eq("client_id", clientId)
-          .order("position"),
-  ]);
+  const { data } = await query;
   const assets = await signAssets(supabase, (data as Asset[] | null) ?? []);
-  const driveLinks = (driveData as DriveFolderCard[] | null) ?? [];
   const currentClientName = clients.find((c) => c.id === clientId)?.business_name;
 
   return (
@@ -94,7 +83,6 @@ export default async function AdminAssetsPage({
         title="Client files"
         description="Browse this client's files, leave feedback, organise folders, or upload on their behalf."
       />
-      <DriveFolderCards links={driveLinks} base="/admin/assets" role="admin" />
       <AssetsBrowser
         role="admin"
         currentUserId={session?.clerkUserId ?? ""}

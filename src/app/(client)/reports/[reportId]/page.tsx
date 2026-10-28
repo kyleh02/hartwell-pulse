@@ -65,6 +65,7 @@ export default async function ReportViewerPage({
       bundle={bundle}
       imageUrls={imageUrls}
       business={business}
+      pdfHref={bundle.report.pdf_path ? `/reports/${bundle.report.id}/pdf` : null}
     />
   );
 }

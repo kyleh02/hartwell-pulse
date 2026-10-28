@@ -47,13 +47,14 @@ export default async function ClientLayout({
   // when there is something behind it. The threads are for the chat bubble,
   // and RLS returns only the ones this user is a member of, exactly as on the
   // Messages page.
-  const [{ count: previewCount }, { data: convoRows }] = await Promise.all([
+  const [{ count: previewCount }, { data: convoRows }, { count: copyCount }] = await Promise.all([
     supabase.from("client_previews").select("id", { count: "exact", head: true }),
     supabase
       .from("conversations")
       .select("id, kind, title")
       .is("deleted_at", null)
       .order("created_at", { ascending: true }),
+    supabase.from("copy_documents").select("id", { count: "exact", head: true }),
   ]);
   const conversations: ClientConversationRow[] = (
     (convoRows as Pick<Conversation, "id" | "kind" | "title">[] | null) ?? []
@@ -73,6 +74,7 @@ export default async function ClientLayout({
       clientName={client?.business_name ?? null}
       clientLogoUrl={client?.logo_url ?? null}
       hasPreview={(previewCount ?? 0) > 0}
+      hasCopy={(copyCount ?? 0) > 0}
       conversations={conversations}
       clientId={session.clientId}
     >

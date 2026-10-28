@@ -15,15 +15,19 @@ import {
 } from "@/components/reports/ReportLetterhead";
 import { IRONPEAK_DOC_CLASS, isIronpeak } from "@/lib/brand";
 import { cn } from "@/lib/utils/cn";
+import { buttonClasses } from "@/components/ui/Button";
 
 export function ReportViewerChrome({
   bundle,
   imageUrls,
   business = null,
+  pdfHref = null,
 }: {
   bundle: ReportBundle;
   imageUrls: Record<string, string>;
   business?: BusinessSettings | null;
+  /** The real PDF, when the portal has made one. Otherwise the page prints. */
+  pdfHref?: string | null;
 }) {
   const [query, setQuery] = useState("");
   const brand = bundle.report.brand ?? "hartwell";
@@ -82,14 +86,17 @@ export function ReportViewerChrome({
               className="w-full rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 py-2 pl-9 pr-3 text-sm text-pulse-text placeholder:text-pulse-text-mute focus:border-pulse-border-strong focus:outline-none"
             />
           </div>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-[var(--radius-input)] bg-pulse-gold px-4 text-sm font-medium text-pulse-bg transition-colors hover:bg-pulse-gold-light"
-          >
-            <Download size={16} strokeWidth={2} />
-            Download PDF
-          </button>
+          {pdfHref ? (
+            <a href={pdfHref} className={buttonClasses("primary", "md")}>
+              <Download size={16} strokeWidth={2} />
+              Download PDF
+            </a>
+          ) : (
+            <button type="button" onClick={() => window.print()} className={buttonClasses("primary", "md")}>
+              <Download size={16} strokeWidth={2} />
+              Download PDF
+            </button>
+          )}
         </div>
 
         {/* The sheet. An Ironpeak report is a white document with its own

@@ -12,7 +12,6 @@ import { ClientActions } from "@/components/admin/ClientActions";
 import { EditClientForm } from "@/components/admin/EditClientForm";
 import { ClientUsersDialog } from "@/components/admin/ClientUsersDialog";
 import { ClientPreviewsDialog } from "@/components/admin/ClientPreviewsDialog";
-import { ClientDriveDialog } from "@/components/admin/ClientDriveDialog";
 import { formatAbn } from "@/lib/billing";
 
 export const metadata = { title: "Clients" };
@@ -177,7 +176,6 @@ function ClientCard({ client: c, section }: { client: Client; section: Section }
             />
             <ClientUsersDialog clientId={c.id} clientName={c.business_name} />
             <ClientPreviewsDialog clientId={c.id} clientName={c.business_name} />
-            <ClientDriveDialog clientId={c.id} clientName={c.business_name} />
           </>
         )}
         <ClientActions

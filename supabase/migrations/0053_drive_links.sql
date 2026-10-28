@@ -1,4 +1,12 @@
 -- =============================================================================
+-- RETIRED 28 October 2026. Do not run.
+--
+-- Kyle decided to keep client files in the portal rather than in Google Drive
+-- before this was ever connected, and the feature was removed. 0054 drops
+-- these tables if they were created. Kept so the numbering has no gap.
+-- =============================================================================
+
+-- =============================================================================
 -- 0053 — Google Drive folders, shown to clients inside the portal
 --
 -- Kyle keeps client work in Google Drive, and Claude saves into it. Rather than

@@ -33,6 +33,8 @@ interface ShellProps {
   clientLogoUrl?: string | null;
   /** Hide the Website tab when this client has nothing to preview. */
   hasPreview?: boolean;
+  /** Hide the Copy tab unless this client has copy documents. */
+  hasCopy?: boolean;
   /** The client's threads, for the chat bubble. Client variant only. */
   conversations?: ClientConversationRow[];
   clientId?: string | null;
@@ -122,6 +124,7 @@ export function Shell({
   clientName,
   clientLogoUrl,
   hasPreview = false,
+  hasCopy = false,
   conversations = [],
   clientId = null,
   children,
@@ -136,7 +139,7 @@ export function Shell({
   // A tab that is always empty is noise, and on a six-item nav it is a
   // sizeable fraction of the noise.
   const items = (variant === "admin" ? adminNav : clientNav).filter(
-    (i) => i.href !== "/website" || hasPreview,
+    (i) => (i.href !== "/website" || hasPreview) && (i.href !== "/copy" || hasCopy),
   );
   const [drawerOpen, setDrawerOpen] = useState(false);
 
