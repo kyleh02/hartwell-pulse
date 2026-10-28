@@ -3,14 +3,19 @@ import { getBusinessSettings, listPricingItems } from "@/lib/invoices";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SettingsManager } from "@/components/admin/SettingsManager";
 import { OnboardingSettings } from "@/components/admin/OnboardingSettings";
+import { ClaudeConnector } from "@/components/admin/ClaudeConnector";
+import { listConnections } from "@/app/admin/settings/connector-actions";
+import { requestOrigin } from "@/lib/mcp/http";
 
 export const metadata = { title: "Settings" };
 
 export default async function AdminSettingsPage() {
   const supabase = await createServerSupabase();
-  const [business, pricing] = await Promise.all([
+  const [business, pricing, connections, origin] = await Promise.all([
     getBusinessSettings(supabase),
     listPricingItems(supabase),
+    listConnections(),
+    requestOrigin(),
   ]);
 
   return (
@@ -18,12 +23,13 @@ export default async function AdminSettingsPage() {
       <PageHeader
         label={["Settings"]}
         title="Settings"
-        description="Your business details for invoices, your pricing catalogue, and how new clients are welcomed."
+        description="Your business details for invoices, your pricing catalogue, how new clients are welcomed, and Claude's access to your pipeline."
       />
       <OnboardingSettings
         kickoffUrl={(business as { kickoff_url?: string | null } | null)?.kickoff_url ?? null}
         welcome={(business as { welcome_message?: string | null } | null)?.welcome_message ?? null}
       />
+      <ClaudeConnector url={`${origin}/api/mcp`} connections={connections} />
       <SettingsManager initialBusiness={business} initialPricing={pricing} />
     </div>
   );

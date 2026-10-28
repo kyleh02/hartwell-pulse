@@ -28,6 +28,19 @@ const nextConfig = {
     "/api/invoices/**": ["./node_modules/@sparticuz/chromium/**/*"],
     "/api/cron/recurring": ["./node_modules/@sparticuz/chromium/**/*"],
   },
+  // The page where Kyle approves Claude's connector must never sit inside
+  // another site's frame, where a disguised button could collect his Allow.
+  async headers() {
+    return [
+      {
+        source: "/oauth/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+        ],
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       // Supabase Storage public/object URLs (set your project ref in the host)

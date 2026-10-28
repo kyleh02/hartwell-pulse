@@ -21,6 +21,13 @@ const isPublicRoute = createRouteMatcher([
   // The welcome email's one-click sign-in. The person is signed out by
   // definition; the page swaps a one-time Clerk ticket for a session.
   "/welcome-in",
+  // Claude's connector (0057). The MCP endpoint checks its own bearer token,
+  // the OAuth endpoints are how Claude gets one, and the well-known documents
+  // tell it where they are. None of them can hold a Clerk session. The
+  // approval page itself, /oauth/authorize, is NOT here: Kyle signs in first.
+  "/api/mcp",
+  "/api/oauth/(.*)",
+  "/.well-known/(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

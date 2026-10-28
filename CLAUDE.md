@@ -551,6 +551,42 @@ Live at https://portal.hartwelldigital.com
   the board. A second enquiry from someone with an open lead becomes a note on
   it, not a second card. A new enquiry is due today.
 
+## Claude connector (0057)
+- **Claude works the pipeline from Kyle's own chats** through an MCP server at
+  `/api/mcp`, added in Claude as a custom connector (the address is on
+  Settings). Hand-written JSON-RPC over Streamable HTTP, one JSON reply per
+  request, no SSE and no session: initialize, ping, tools/list, tools/call.
+- **The portal is its own OAuth 2.1 server for this one resource**
+  (`src/lib/mcp/oauth.ts`). Claude discovers it from
+  `/.well-known/oauth-protected-resource` and
+  `/.well-known/oauth-authorization-server`, registers at `/api/oauth/register`
+  (or names a Client ID Metadata Document, fetched ONLY from claude.ai,
+  claude.com or anthropic.com), sends Kyle to `/oauth/authorize`, and swaps the
+  code at `/api/oauth/token`. Authorization code with PKCE S256 only.
+- **An approval can only ever go back to Claude or localhost.** Registration
+  refuses any other redirect, and the consent page re-checks it. An unknown app
+  or a wrong redirect is shown an error and never redirected, as OAuth says.
+- `/oauth/authorize` is NOT public: signed out means sign in first. Only an
+  admin is asked. Allow is a server action that re-checks everything (the form
+  is only what the browser sent back), and `next.config.mjs` forbids framing
+  `/oauth/*` so a disguised button on another site cannot collect Kyle's Allow.
+- **Tokens are random strings stored as SHA-256 hashes** (0057's three tables
+  are RLS on with no policies: service role only). Access tokens last an hour
+  and are bound to `<origin>/api/mcp`; refresh tokens last 90 days and rotate on
+  every use. A code used twice, or a spent refresh token replayed more than a
+  minute after rotation, revokes the whole family: that is what a stolen copy
+  looks like. Every MCP call and every refresh re-checks the person is still an
+  admin in `client_users`.
+- **What Claude may do is drawn at what reaches a person or cannot be undone**
+  (`src/lib/mcp/pipeline-tools.ts`): read, add, update, move, log, check the
+  do-not-contact list. It cannot mark a lead won (that creates a portal and
+  emails a welcome), delete, or email anyone. Writes go through
+  `src/lib/pipeline-ops.ts`, the same functions as the portal's own buttons,
+  with `created_by = 'claude'`. Bad input comes back as a tool error the model
+  can read, never a crash.
+- Settings lists what is connected and Disconnect revokes every token that app
+  holds, effective on its next request.
+
 ## Ironpeak
 - Ironpeak Consulting is a **registered business name against Hartwell Digital's
   ABN 44 286 503 049**, trading in defence only. Internal surfaces may say
