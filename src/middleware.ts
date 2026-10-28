@@ -28,6 +28,9 @@ const isPublicRoute = createRouteMatcher([
   "/api/mcp",
   "/api/oauth/(.*)",
   "/.well-known/(.*)",
+  // The feedback email's number buttons. The token in the address is the
+  // credential, and nothing is saved until Send is pressed on the page.
+  "/nps/(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

@@ -4,6 +4,8 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { getClientHome } from "@/lib/client-home";
 import { ClientHome } from "@/components/home/ClientHome";
 import { SetPasswordCard } from "@/components/home/SetPasswordCard";
+import { NpsCard } from "@/components/nps/NpsCard";
+import { openSurveyFor } from "@/lib/nps";
 
 export const metadata = { title: "Home" };
 
@@ -12,14 +14,19 @@ export default async function HomePage() {
   if (!session?.clientId) redirect("/");
 
   const supabase = await createServerSupabase();
-  const data = await getClientHome(supabase, session.clientId, {
-    firstName: session.profile?.full_name,
-  });
+  const [data, survey] = await Promise.all([
+    getClientHome(supabase, session.clientId, {
+      firstName: session.profile?.full_name,
+    }),
+    // Read through RLS: a person only ever sees their own question.
+    openSurveyFor(supabase, session.clerkUserId),
+  ]);
   if (!data) redirect("/");
 
   return (
     <>
       <SetPasswordCard />
+      {survey && <NpsCard surveyId={survey.id} />}
       <ClientHome data={data} />
     </>
   );

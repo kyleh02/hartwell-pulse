@@ -32,7 +32,11 @@ export async function notifyClientPeople(clientId: string, type: NoticeType, n: 
   );
 }
 
-export async function notifyAdmins(clientId: string | null, type: NoticeType, n: Notice) {
+/**
+ * `in_portal` puts it in the bell only, for when the caller has already
+ * emailed Kyle itself and a second email would be noise.
+ */
+export async function notifyAdmins(clientId: string | null, type: NoticeType, n: Notice, channel: "instant" | "in_portal" = "instant") {
   const supabase = createAdminSupabase();
   const { data } = await supabase.from("client_users").select("clerk_user_id").eq("role", "admin");
   await insert(
@@ -40,7 +44,7 @@ export async function notifyAdmins(clientId: string | null, type: NoticeType, n:
       recipient_user_id: u.clerk_user_id,
       client_id: clientId,
       type,
-      channel: "instant",
+      channel,
       ...n,
     })),
   );

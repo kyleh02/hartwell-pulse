@@ -587,6 +587,35 @@ Live at https://portal.hartwelldigital.com
 - Settings lists what is connected and Disconnect revokes every token that app
   holds, effective on its next request.
 
+## Client feedback, NPS (0058)
+- One question, 0 to 10, "How likely are you to recommend Hartwell Digital to
+  a friend or colleague?", then an optional reason. Asked of every person on a
+  client account 30 days after the client started (onboarding sent, else the
+  day they were added), then 91 days after each round. Paused and deleted
+  clients are skipped. The rules are pure, in `src/lib/nps-shared.ts`.
+- **Off until Kyle switches it on** (Settings, Client feedback,
+  `business_settings.nps_enabled`). Deploying it emailed nobody. The Feedback
+  page says who the first morning would reach while it is off.
+- `/api/cron/nps` runs weekday mornings (22:30 UTC Sunday to Thursday), raises
+  the round and emails it. One round per person per date (unique index), so a
+  second run asks nobody twice, and no email goes without its row.
+- **The email's number buttons only open `/nps/<token>?s=N` with that number
+  picked; nothing is saved until Send.** Mail scanners (Outlook Safe Links and
+  the like) follow every link in a message, and a link that recorded a score
+  would answer for the client. The token is the credential, stored hashed;
+  `/nps/(.*)` is public in middleware.
+- The same question sits on the client's Home while it is open (21 days), read
+  through RLS (own rows only). "Not now" hides it for that visit. Answers are
+  written by server actions with the service role after an ownership check,
+  conditional on no answer yet, so the first answer stands.
+- **A score of 6 or under emails Kyle at once** (direct send, plus a bell
+  notification on `in_portal` so the email job does not send a second). Other
+  scores go out through the instant channel as usual. A 9 or 10 is shown Kyle's
+  Google review link if he has saved one.
+- `/admin/feedback`: the score over 12 months (promoters minus detractors, -100
+  to +100), the counts, response rate, the trend by quarter, and every answer
+  with its reason.
+
 ## Ironpeak
 - Ironpeak Consulting is a **registered business name against Hartwell Digital's
   ABN 44 286 503 049**, trading in defence only. Internal surfaces may say

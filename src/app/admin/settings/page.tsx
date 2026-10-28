@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SettingsManager } from "@/components/admin/SettingsManager";
 import { OnboardingSettings } from "@/components/admin/OnboardingSettings";
 import { ClaudeConnector } from "@/components/admin/ClaudeConnector";
+import { FeedbackSettings } from "@/components/admin/FeedbackSettings";
 import { listConnections } from "@/app/admin/settings/connector-actions";
 import { requestOrigin } from "@/lib/mcp/http";
 
@@ -23,11 +24,15 @@ export default async function AdminSettingsPage() {
       <PageHeader
         label={["Settings"]}
         title="Settings"
-        description="Your business details for invoices, your pricing catalogue, how new clients are welcomed, and Claude's access to your pipeline."
+        description="Your business details for invoices, your pricing catalogue, how new clients are welcomed, client feedback, and Claude's access to your pipeline."
       />
       <OnboardingSettings
         kickoffUrl={(business as { kickoff_url?: string | null } | null)?.kickoff_url ?? null}
         welcome={(business as { welcome_message?: string | null } | null)?.welcome_message ?? null}
+      />
+      <FeedbackSettings
+        enabled={(business as { nps_enabled?: boolean } | null)?.nps_enabled === true}
+        reviewUrl={(business as { google_review_url?: string | null } | null)?.google_review_url ?? null}
       />
       <ClaudeConnector url={`${origin}/api/mcp`} connections={connections} />
       <SettingsManager initialBusiness={business} initialPricing={pricing} />

@@ -13,6 +13,7 @@ import {
   Target,
   TrendingUp,
   type LucideIcon,
+  Smile,
 } from "lucide-react";
 
 export interface NavItem {
@@ -46,6 +47,7 @@ export const adminNav: NavItem[] = [
   { label: "Messages", href: "/admin/messages", icon: MessageSquare, badge: "messages" },
   { label: "Invoices", href: "/admin/invoices", icon: Receipt },
   { label: "Income", href: "/admin/income", icon: TrendingUp },
+  { label: "Feedback", href: "/admin/feedback", icon: Smile },
   { label: "Pipeline", href: "/admin/pipeline", icon: Target },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];

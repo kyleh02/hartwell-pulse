@@ -35,6 +35,10 @@ function shell(
 
 const p = (t: string) => `<p style="font-size:15px;line-height:1.65;color:#444;margin:0 0 14px">${t}</p>`;
 
+/** The same letterhead and signature, for other emails in Kyle's voice (NPS). */
+export const brandedEmail = shell;
+export const emailPara = p;
+
 export function welcomeEmail(opts: {
   origin: string;
   first: string;
