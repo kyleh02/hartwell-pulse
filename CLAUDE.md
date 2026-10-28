@@ -747,6 +747,17 @@ Live at https://portal.hartwelldigital.com
 - Benchmarks that do not change: 2 to 3 substantive replies per 15 sent, and
   **zero opt-outs** — that last one is the health metric, shown first.
 
+## Income (admin)
+- `/admin/income` works Kyle's income out of his invoices with nothing to
+  enter. The rules live in `src/lib/income-shared.ts`, pure and tested: a paid
+  invoice counts in its Melbourne paid month for total less deposit; a
+  credited deposit counts in the invoice's issue month; split parents never
+  count (`isSuperseded`), their instalments do; drafts, voids and recurring
+  templates are not income. Retainers are the active recurring templates.
+  Financial year is 1 July to 30 June, compared with last year to the same day.
+- If deposits are ever billed as invoices of their own, the deposit rule
+  counts them twice. That is the line to change.
+
 ## The dashboard: work items
 - **Everything Kyle owes anyone is a `work_items` row.** The dashboard used to
   read `board_cards` and nothing else, which is why it went unused: the work
