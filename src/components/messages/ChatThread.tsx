@@ -15,6 +15,7 @@ import {
   Download,
   Trash2,
   Pencil,
+  Sparkles,
   X,
 } from "lucide-react";
 import { useSupabaseClient } from "@/lib/supabase/client";
@@ -164,6 +165,31 @@ export function ChatThread({
   const [reactingTo, setReactingTo] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [drafting, setDrafting] = useState(false);
+
+  // Kyle only: Claude suggests the next reply into the box. It is his to edit
+  // and send; nothing is sent from here (src/app/api/ai/draft-reply).
+  async function draftReply() {
+    setDrafting(true);
+    setAttachError(null);
+    try {
+      const res = await fetch("/api/ai/draft-reply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId }),
+      });
+      const j = (await res.json().catch(() => ({}))) as { text?: string; error?: string };
+      if (!res.ok || !j.text) setAttachError(j.error ?? "Couldn't draft a reply.");
+      else {
+        setBody(j.text);
+        textareaRef.current?.focus();
+      }
+    } catch {
+      setAttachError("Couldn't reach the portal. Try again.");
+    } finally {
+      setDrafting(false);
+    }
+  }
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
@@ -1092,6 +1118,21 @@ export function ChatThread({
             </div>
           )}
         </div>
+        {role === "admin" && (
+          <button
+            type="button"
+            onClick={draftReply}
+            disabled={drafting || busy}
+            aria-label="Draft a reply with Claude"
+            title="Draft a reply with Claude"
+            className={cn(
+              "flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-input)] text-pulse-text-mute hover:bg-pulse-surface-2 hover:text-pulse-gold",
+              drafting && "animate-pulse text-pulse-gold",
+            )}
+          >
+            <Sparkles size={18} />
+          </button>
+        )}
         <textarea
           ref={textareaRef}
           value={body}

@@ -616,6 +616,42 @@ Live at https://portal.hartwelldigital.com
   to +100), the counts, response rate, the trend by quarter, and every answer
   with its reason.
 
+## The assistant and the AI employee (0059)
+- **Claude Opus 5.5 (`claude-opus-5-5`) everywhere, through `src/lib/ai/claude.ts`
+  and the official `@anthropic-ai/sdk`.** Every request opts into server-side
+  refusal fallback (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`),
+  Anthropic's guidance for this model, so a classifier decline is re-run rather
+  than leaving a client with nothing. Effort is `low`: these are short answers.
+  Thinking cannot be switched off on this model; never send `thinking:
+  {type: "disabled"}` or a budget (both 400), and never force `tool_choice`
+  (400 too). Needs `ANTHROPIC_API_KEY` in Vercel; without it every AI feature
+  says plainly that it is not set up.
+- **Quick answers** is the second tab in the client's chat bubble, shown only
+  when Kyle has switched it on in Settings AND the key is set. It streams from
+  `/api/assistant` (a route, not an action: ten seconds is not enough).
+- **It only ever sees three things** (`src/lib/assistant.ts`): the portal guide
+  written there, Kyle's notes from Settings, and a summary of this client's own
+  account. Facts, not figures: invoice amounts are deliberately never put in
+  front of it, nor anything about another client. What it was never given, it
+  cannot leak. Keep it that way when adding account facts.
+- Prices, quotes, changes to services, invoice problems, complaints and
+  anything it cannot answer go to Kyle through its one tool, `pass_to_kyle`: a
+  bell notification (`in_portal`, so no extra email) and the reply marked
+  "Passed to Kyle". The question is saved before Claude is called, so Kyle sees
+  it even if the call fails.
+- **One email per conversation**, sent by the 15-minute email job once the
+  conversation has been quiet for ten minutes, with every question and answer
+  ("Needs you:" in the subject if anything was passed over). Claimed before
+  sending. A question after that email starts a new conversation, so nothing is
+  sent twice. A 30-minute gap also starts a new one.
+- 30 questions per person per day, 1,000 characters each.
+- **The AI employee drafts, never sends.** A sparkle button in Kyle's chat
+  composer (`/api/ai/draft-reply`) puts a suggested reply in the box for him to
+  edit; "Follow-up email" on a lead (`/api/ai/draft-follow-up`) drafts a subject
+  and body for his own mail app. It refuses anyone on the do-not-contact list.
+  Missing facts come back as [placeholders], not inventions.
+- `/admin/assistant` shows every conversation and what was passed over.
+
 ## Ironpeak
 - Ironpeak Consulting is a **registered business name against Hartwell Digital's
   ABN 44 286 503 049**, trading in defence only. Internal surfaces may say

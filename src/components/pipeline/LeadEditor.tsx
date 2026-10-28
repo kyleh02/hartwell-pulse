@@ -24,6 +24,7 @@ import {
   type OnboardResult,
 } from "@/app/admin/pipeline/actions";
 import { celebrate } from "@/lib/celebrate";
+import { FollowUpDraft } from "@/components/pipeline/FollowUpDraft";
 import { BUSINESS_TZ } from "@/lib/business-time";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import { cn } from "@/lib/utils/cn";
@@ -248,6 +249,8 @@ export function LeadEditor({
               />
             </section>
           )}
+
+          {!closed && !doNotContact && <FollowUpDraft leadId={lead.id} email={lead.email} />}
 
           {/* ---- what happened ---- */}
           <section className="space-y-3 rounded-[20px] border border-pulse-border bg-pulse-surface p-5">

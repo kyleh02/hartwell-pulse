@@ -14,6 +14,7 @@ import {
   TrendingUp,
   type LucideIcon,
   Smile,
+  Sparkles,
 } from "lucide-react";
 
 export interface NavItem {
@@ -48,6 +49,7 @@ export const adminNav: NavItem[] = [
   { label: "Invoices", href: "/admin/invoices", icon: Receipt },
   { label: "Income", href: "/admin/income", icon: TrendingUp },
   { label: "Feedback", href: "/admin/feedback", icon: Smile },
+  { label: "Assistant", href: "/admin/assistant", icon: Sparkles },
   { label: "Pipeline", href: "/admin/pipeline", icon: Target },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];

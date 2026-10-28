@@ -4,6 +4,7 @@ import { sendEmail, emailLayout, escapeHtml } from "@/lib/email";
 import { cronAuthorized } from "@/lib/cron-auth";
 import { HARTWELL } from "@/lib/brand";
 import { dayThreeEmail, daySevenEmail } from "@/lib/welcome-emails";
+import { QUIET_BEFORE_EMAIL_MS, digestEmail, type Transcript } from "@/lib/assistant";
 import type { Notification } from "@/lib/types/database";
 
 export const dynamic = "force-dynamic";
@@ -257,8 +258,9 @@ export async function GET(req: NextRequest) {
   }
 
   const checkins = await sendCheckins(supabase);
+  const assistant = await sendAssistantDigests(supabase);
 
-  return Response.json({ processed: notes.length, sent, nudged, checkins });
+  return Response.json({ processed: notes.length, sent, nudged, checkins, assistant });
 }
 
 /** How late a check-in may go out before it is dropped. "How's your first
@@ -334,6 +336,52 @@ async function sendCheckins(supabase: ReturnType<typeof createAdminSupabase>): P
     const res = await sendEmail({ to: row.to_email, subject: mail.subject, html: mail.html, ref: { kind: "other", id: row.client_id ?? row.id } });
     if (res.error || res.skipped) {
       await supabase.from("scheduled_emails").update({ sent_at: null }).eq("id", row.id);
+      continue;
+    }
+    count++;
+  }
+  return count;
+}
+
+/**
+ * The portal assistant (0059): one email to Kyle per conversation, once it has
+ * been quiet for ten minutes, with every question and every answer. Claimed
+ * before sending, like the check-ins, and handed back if the send fails. A
+ * question asked after the email starts a new conversation (see
+ * /api/assistant), so nothing is emailed twice.
+ */
+async function sendAssistantDigests(supabase: ReturnType<typeof createAdminSupabase>): Promise<number> {
+  const { data, error } = await supabase
+    .from("assistant_conversations")
+    .select("id, client_id, user_id, started_at, last_message_at, handed_off, message_count")
+    .is("emailed_at", null)
+    .gt("message_count", 0)
+    .lt("last_message_at", new Date(Date.now() - QUIET_BEFORE_EMAIL_MS).toISOString())
+    .order("last_message_at", { ascending: true })
+    .limit(20);
+  if (error) return 0; // 0059 not run yet
+  const origin = (process.env.NEXT_PUBLIC_APP_URL || `https://${HARTWELL.site}`).replace(/\/$/, "");
+  let count = 0;
+  for (const conv of (data as Omit<Transcript, "messages">[] | null) ?? []) {
+    const { data: claimed } = await supabase
+      .from("assistant_conversations")
+      .update({ emailed_at: new Date().toISOString() })
+      .eq("id", conv.id)
+      .is("emailed_at", null)
+      .select("id");
+    if (!claimed?.length) continue;
+    const [{ data: msgs }, { data: client }, { data: person }] = await Promise.all([
+      supabase.from("assistant_messages").select("role, content, handed_off, created_at").eq("conversation_id", conv.id).order("created_at"),
+      supabase.from("clients").select("business_name").eq("id", conv.client_id).maybeSingle(),
+      supabase.from("client_users").select("full_name, email").eq("clerk_user_id", conv.user_id).maybeSingle(),
+    ]);
+    const messages = (msgs as Transcript["messages"] | null) ?? [];
+    if (!messages.length) continue;
+    const p = person as { full_name: string | null; email: string | null } | null;
+    const mail = digestEmail(origin, { ...conv, messages }, (client as { business_name: string } | null)?.business_name ?? "A client", p?.full_name || p?.email || "A client");
+    const res = await sendEmail({ to: HARTWELL.email, subject: mail.subject, html: mail.html, ref: { kind: "other", id: conv.client_id } });
+    if (res.error || res.skipped) {
+      await supabase.from("assistant_conversations").update({ emailed_at: null }).eq("id", conv.id);
       continue;
     }
     count++;

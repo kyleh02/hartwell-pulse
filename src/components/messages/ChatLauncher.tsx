@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Maximize2, MessageCircle, MessageSquare, Users, X } from "lucide-react";
+import { Maximize2, MessageCircle, MessageSquare, Sparkles, Users, X } from "lucide-react";
 import { ChatThread } from "@/components/messages/ChatThread";
+import { AssistantThread } from "@/components/assistant/AssistantThread";
 import { UnreadMessagesBadge } from "@/components/messages/UnreadMessagesBadge";
 import type { ClientConversationRow } from "@/components/messages/ClientMessages";
 import { HARTWELL } from "@/lib/brand";
@@ -38,9 +39,12 @@ export function openChat() {
 export function ChatLauncher({
   conversations,
   clientId,
+  assistant = false,
 }: {
   conversations: ClientConversationRow[];
   clientId: string;
+  /** Kyle has switched the assistant on (0059) and an API key is set. */
+  assistant?: boolean;
 }) {
   // Shell leaves this out on Messages itself, which already is the chat.
   const pathname = usePathname();
@@ -52,6 +56,10 @@ export function ChatLauncher({
     () => (conversations.find((c) => c.kind !== "group") ?? conversations[0])?.id ?? null,
   );
   const active = conversations.find((c) => c.id === activeId) ?? conversations[0] ?? null;
+  // Kyle first, always: the bubble is a line to him. Quick answers is the
+  // second tab, for a question that does not need to wait for him.
+  const [mode, setMode] = useState<"kyle" | "ask">("kyle");
+  const asking = assistant && mode === "ask";
 
   const launcherRef = useRef<HTMLButtonElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -114,7 +122,7 @@ export function ChatLauncher({
       {open && (
         <div
           role="dialog"
-          aria-label={`Chat with ${HARTWELL.personFirst}`}
+          aria-label={asking ? "Quick answers" : `Chat with ${HARTWELL.personFirst}`}
           className={cn(
             "no-print fixed z-[45] flex flex-col overflow-hidden bg-pulse-surface",
             // phone: the whole screen, inside the notch and the home bar
@@ -131,14 +139,14 @@ export function ChatLauncher({
               aria-hidden="true"
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-pulse-gold/20 text-[15px] font-semibold text-pulse-gold"
             >
-              {HARTWELL.personFirst.slice(0, 1)}
+              {asking ? <Sparkles size={18} /> : HARTWELL.personFirst.slice(0, 1)}
             </span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-[15px] font-semibold text-pulse-text">
-                {HARTWELL.personFirst} at {HARTWELL.name}
+                {asking ? "Quick answers" : `${HARTWELL.personFirst} at ${HARTWELL.name}`}
               </p>
               <p className="truncate text-xs text-pulse-text-dim">
-                Messages go straight to {HARTWELL.personFirst}
+                {asking ? `An assistant. ${HARTWELL.personFirst} sees every question` : `Messages go straight to ${HARTWELL.personFirst}`}
               </p>
             </div>
             <Link
@@ -160,7 +168,32 @@ export function ChatLauncher({
             </button>
           </div>
 
-          {conversations.length > 1 && (
+          {assistant && (
+            <div role="tablist" aria-label="Who to ask" className="grid shrink-0 grid-cols-2 border-b border-pulse-border">
+              {(
+                [
+                  ["kyle", `Message ${HARTWELL.personFirst}`],
+                  ["ask", "Quick answers"],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === key}
+                  onClick={() => setMode(key)}
+                  className={cn(
+                    "h-10 border-b-2 text-[12px] font-bold tracking-[0.12em] uppercase transition-colors",
+                    mode === key ? "border-pulse-gold text-pulse-text" : "border-transparent text-pulse-text-mute hover:text-pulse-text",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {!asking && conversations.length > 1 && (
             <div className="flex shrink-0 gap-2 overflow-x-auto border-b border-pulse-border px-3 py-2">
               {conversations.map((c) => (
                 <button
@@ -187,7 +220,9 @@ export function ChatLauncher({
           )}
 
           <div className="min-h-0 flex-1">
-            {active ? (
+            {asking ? (
+              <AssistantThread onMessageKyle={() => setMode("kyle")} />
+            ) : active ? (
               <ChatThread
                 key={active.id}
                 conversationId={active.id}

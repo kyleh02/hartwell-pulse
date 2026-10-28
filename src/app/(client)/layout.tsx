@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { getPulseSession } from "@/lib/auth/session";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { createAdminSupabase } from "@/lib/supabase/admin";
+import { aiConfigured } from "@/lib/ai/claude";
+import { assistantSettings } from "@/lib/assistant";
 import { Shell } from "@/components/nav/Shell";
 import type { Conversation } from "@/lib/types/database";
 import type { ClientConversationRow } from "@/components/messages/ClientMessages";
@@ -67,6 +70,10 @@ export default async function ClientLayout({
   const name =
     session.profile?.full_name ?? session.profile?.email ?? "Client";
 
+  // Kyle's settings hold bank details, so they are read server side with the
+  // service role and only the one switch leaves here.
+  const assistantOn = aiConfigured() && (await assistantSettings(createAdminSupabase())).enabled;
+
   return (
     <Shell
       variant="client"
@@ -75,6 +82,7 @@ export default async function ClientLayout({
       clientLogoUrl={client?.logo_url ?? null}
       hasPreview={(previewCount ?? 0) > 0}
       hasCopy={(copyCount ?? 0) > 0}
+      assistant={assistantOn}
       conversations={conversations}
       clientId={session.clientId}
     >

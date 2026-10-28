@@ -35,6 +35,8 @@ interface ShellProps {
   hasPreview?: boolean;
   /** Hide the Copy tab unless this client has copy documents. */
   hasCopy?: boolean;
+  /** The client assistant is on (0059): the chat panel gets a Quick answers tab. */
+  assistant?: boolean;
   /** The client's threads, for the chat bubble. Client variant only. */
   conversations?: ClientConversationRow[];
   clientId?: string | null;
@@ -125,6 +127,7 @@ export function Shell({
   clientLogoUrl,
   hasPreview = false,
   hasCopy = false,
+  assistant = false,
   conversations = [],
   clientId = null,
   children,
@@ -278,7 +281,7 @@ export function Shell({
       </div>
 
       {showChat && clientId && (
-        <ChatLauncher conversations={conversations} clientId={clientId} />
+        <ChatLauncher conversations={conversations} clientId={clientId} assistant={assistant} />
       )}
 
       {/* ---------- client bottom tab bar (mobile only) ---------- */}
