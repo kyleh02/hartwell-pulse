@@ -19,7 +19,7 @@ export interface SearchHit {
  * RLS does the access control, not this function. It runs on the ordinary
  * server client, so a client account searching "invoice" gets their own
  * invoices and nothing else, and the CRM query returns nothing at all for them
- * because crm_* is admin-only. That is the whole reason this is safe to write
+ * because leads are admin-only. That is the whole reason this is safe to write
  * as one flat sweep rather than branching on role and hoping the branch is
  * right.
  *
@@ -38,7 +38,7 @@ export async function searchEverything(raw: string): Promise<SearchHit[]> {
   const like = `%${q}%`;
   const hits: SearchHit[] = [];
 
-  const [clients, invoices, reports, assets, copy, crm] = await Promise.all([
+  const [clients, invoices, reports, assets, copy, leads] = await Promise.all([
     isAdmin
       ? supabase
           .from("clients")
@@ -65,9 +65,9 @@ export async function searchEverything(raw: string): Promise<SearchHit[]> {
       .limit(5),
     isAdmin
       ? supabase
-          .from("crm_organisations")
-          .select("id, legal_name, trading_name, stage, brand")
-          .or(`legal_name.ilike.${like},trading_name.ilike.${like}`)
+          .from("leads")
+          .select("id, name, business, stage")
+          .or(`business.ilike.${like},name.ilike.${like},email.ilike.${like}`)
           .limit(6)
       : Promise.resolve({ data: null }),
   ]);
@@ -138,21 +138,15 @@ export async function searchEverything(raw: string): Promise<SearchHit[]> {
     });
   }
 
-  for (const o of (crm.data as
-    | {
-        id: string;
-        legal_name: string;
-        trading_name: string | null;
-        stage: string;
-        brand: string;
-      }[]
+  for (const l of (leads.data as
+    | { id: string; name: string | null; business: string | null; stage: string }[]
     | null) ?? []) {
     hits.push({
-      id: `crm-${o.id}`,
+      id: `lead-${l.id}`,
       group: "Pipeline",
-      title: o.trading_name || o.legal_name,
-      subtitle: `${o.stage} · ${o.brand}`,
-      href: `/admin/crm/${o.id}`,
+      title: l.business || l.name || "Lead",
+      subtitle: l.business && l.name ? `${l.name} · ${l.stage}` : l.stage,
+      href: `/admin/pipeline/${l.id}`,
     });
   }
 

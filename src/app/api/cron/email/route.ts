@@ -2,6 +2,8 @@ import { type NextRequest } from "next/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { sendEmail, emailLayout, escapeHtml } from "@/lib/email";
 import { cronAuthorized } from "@/lib/cron-auth";
+import { HARTWELL } from "@/lib/brand";
+import { dayThreeEmail, daySevenEmail } from "@/lib/welcome-emails";
 import type { Notification } from "@/lib/types/database";
 
 export const dynamic = "force-dynamic";
@@ -254,5 +256,87 @@ export async function GET(req: NextRequest) {
     nudged++;
   }
 
-  return Response.json({ processed: notes.length, sent, nudged });
+  const checkins = await sendCheckins(supabase);
+
+  return Response.json({ processed: notes.length, sent, nudged, checkins });
+}
+
+/** How late a check-in may go out before it is dropped. "How's your first
+ *  week going?" a month in reads as a broken robot, not a person. */
+const CHECKIN_GRACE_MS = 3 * 86_400_000;
+
+/**
+ * The day-3 and day-7 check-ins booked when a lead is won (0056).
+ *
+ * Each row is CLAIMED before it is sent, by setting sent_at on a row where it
+ * is still null: an email cannot be taken back, and two overlapping runs that
+ * both read the row as due must not both send it. A send that fails hands the
+ * claim back so the next run tries again. A database without 0056 has no such
+ * table and the read simply returns nothing.
+ */
+async function sendCheckins(supabase: ReturnType<typeof createAdminSupabase>): Promise<number> {
+  const now = Date.now();
+  const { data } = await supabase
+    .from("scheduled_emails")
+    .select("id, client_id, recipient_user_id, to_email, kind, send_after")
+    .is("sent_at", null)
+    .is("cancelled_at", null)
+    .lte("send_after", new Date(now).toISOString())
+    .order("send_after", { ascending: true })
+    .limit(20);
+  const due =
+    (data as
+      | { id: string; client_id: string | null; recipient_user_id: string | null; to_email: string; kind: string; send_after: string }[]
+      | null) ?? [];
+  const origin = (process.env.NEXT_PUBLIC_APP_URL || `https://${HARTWELL.site}`).replace(/\/$/, "");
+  let count = 0;
+
+  for (const row of due) {
+    const cancel = () =>
+      supabase.from("scheduled_emails").update({ cancelled_at: new Date().toISOString() }).eq("id", row.id);
+    if (now - new Date(row.send_after).getTime() > CHECKIN_GRACE_MS) {
+      await cancel();
+      continue;
+    }
+    // Still on the account? Someone removed since day one gets nothing.
+    const { data: cu } = await supabase
+      .from("client_users")
+      .select("full_name")
+      .eq("clerk_user_id", row.recipient_user_id ?? "")
+      .eq("client_id", row.client_id ?? "")
+      .maybeSingle();
+    if (!cu) {
+      await cancel();
+      continue;
+    }
+    const first = (cu as { full_name: string | null }).full_name?.trim().split(/\s+/)[0] || "there";
+
+    let mail: { subject: string; html: string } | null = null;
+    if (row.kind === "welcome_day3") {
+      const { data: ob } = await supabase.from("onboarding").select("status").eq("client_id", row.client_id ?? "").maybeSingle();
+      mail = dayThreeEmail({ origin, first, onboardingDone: (ob as { status: string } | null)?.status === "submitted" });
+    } else if (row.kind === "welcome_day7") {
+      mail = daySevenEmail({ origin, first });
+    }
+    if (!mail) {
+      await cancel();
+      continue;
+    }
+
+    const { data: claimed } = await supabase
+      .from("scheduled_emails")
+      .update({ sent_at: new Date().toISOString() })
+      .eq("id", row.id)
+      .is("sent_at", null)
+      .select("id");
+    if (!claimed?.length) continue;
+
+    const res = await sendEmail({ to: row.to_email, subject: mail.subject, html: mail.html, ref: { kind: "other", id: row.client_id ?? row.id } });
+    if (res.error || res.skipped) {
+      await supabase.from("scheduled_emails").update({ sent_at: null }).eq("id", row.id);
+      continue;
+    }
+    count++;
+  }
+  return count;
 }

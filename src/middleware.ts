@@ -18,6 +18,9 @@ const isPublicRoute = createRouteMatcher([
   // scoped to one report id, good for five minutes. Path-anchored like the
   // others, so /printer-foo is not exempted along with it.
   "/print/(.*)",
+  // The welcome email's one-click sign-in. The person is signed out by
+  // definition; the page swaps a one-time Clerk ticket for a session.
+  "/welcome-in",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

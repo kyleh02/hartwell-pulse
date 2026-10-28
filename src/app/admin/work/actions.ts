@@ -37,13 +37,6 @@ export async function completeWork(id: string): Promise<Result> {
   if (!data) return { ok: false, message: "That item no longer exists." };
   const item = data as { source_kind: WorkSourceKind; source_id: string | null };
 
-  if (item.source_kind === "crm_send") {
-    return {
-      ok: false,
-      message:
-        "Sends are logged where they happen. Open the record, send it, then confirm there. The touch log is the Spam Act record and it should only ever say what actually went.",
-    };
-  }
   if (item.source_kind === "invoice") {
     return {
       ok: false,
@@ -57,15 +50,6 @@ export async function completeWork(id: string): Promise<Result> {
     .update({ state: "done", done_at: new Date().toISOString() })
     .eq("id", id);
   if (error) return { ok: false, message: error.message };
-
-  // Harmless and reversible, so it closes at the source too and stops the
-  // reminder cron raising it again tomorrow.
-  if (item.source_kind === "crm_task" && item.source_id) {
-    await supabase
-      .from("crm_tasks")
-      .update({ done_at: new Date().toISOString() })
-      .eq("id", item.source_id);
-  }
 
   refresh();
   return { ok: true };

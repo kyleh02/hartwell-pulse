@@ -3,6 +3,7 @@ import { getPulseSession } from "@/lib/auth/session";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getClientHome } from "@/lib/client-home";
 import { ClientHome } from "@/components/home/ClientHome";
+import { SetPasswordCard } from "@/components/home/SetPasswordCard";
 
 export const metadata = { title: "Home" };
 
@@ -16,5 +17,10 @@ export default async function HomePage() {
   });
   if (!data) redirect("/");
 
-  return <ClientHome data={data} />;
+  return (
+    <>
+      <SetPasswordCard />
+      <ClientHome data={data} />
+    </>
+  );
 }

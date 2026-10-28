@@ -21,10 +21,6 @@
       "schedule": "0 4 * * *"
     },
     {
-      "path": "/api/cron/crm-reminders",
-      "schedule": "0 22 * * *"
-    },
-    {
       "path": "/api/cron/brief",
       "schedule": "0 21 * * *"
     },

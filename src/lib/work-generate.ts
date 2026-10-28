@@ -175,80 +175,27 @@ async function fromReports(supabase: SupabaseClient, today: string) {
 }
 
 /**
- * Ironpeak sends that are approved and due.
- *
- * Approved only, deliberately. An unapproved record is not work yet, it is a
- * decision Kyle has not made, and the composer is where that decision belongs.
- * These carry has_time, because 08:47 is the whole point of the schedule.
+ * Leads whose follow-up date has come. One item per lead per date, so moving
+ * the date on (or ticking it off and setting the next one) raises the next
+ * follow-up when its day comes, and never a second item for the same day.
  */
-async function fromCrmSends(supabase: SupabaseClient, now: Date) {
-  const { data } = await supabase
-    .from("crm_organisations")
-    .select("id, legal_name, trading_name, scheduled_send_at, send_approved_at, stage")
-    .eq("brand", "ironpeak")
-    .not("send_approved_at", "is", null)
-    .not("scheduled_send_at", "is", null)
-    .in("stage", ["queued", "contacted", "bounced"])
-    .lte("scheduled_send_at", new Date(now.getTime() + 86_400_000).toISOString());
-
-  const rows =
-    (data as
-      | {
-          id: string;
-          legal_name: string;
-          trading_name: string | null;
-          scheduled_send_at: string;
-        }[]
-      | null) ?? [];
-
-  return rows.map((o) => ({
-    title: `Send ${o.trading_name ?? o.legal_name}`,
-    detail: "Press send in Outlook, then confirm it on the record.",
-    brand: "ironpeak" as const,
-    due_at: o.scheduled_send_at,
-    has_time: true,
-    source_kind: "crm_send",
-    source_id: o.id,
-    source_key: `crm_send:${o.id}:${o.scheduled_send_at.slice(0, 10)}`,
+async function fromLeads(supabase: SupabaseClient, today: string): Promise<NewItem[]> {
+  const { data, error } = await supabase
+    .from("leads")
+    .select("id, name, business, follow_up_on, next_action")
+    .not("stage", "in", "(won,lost)")
+    .not("follow_up_on", "is", null)
+    .lte("follow_up_on", today);
+  if (error) return []; // 0056 not run yet
+  return ((data as { id: string; name: string | null; business: string | null; follow_up_on: string; next_action: string | null }[] | null) ?? []).map((l) => ({
+    title: `Follow up ${l.business || l.name || "a lead"}`,
+    detail: l.next_action,
+    brand: "hartwell" as const,
+    due_at: atNine(l.follow_up_on),
+    source_kind: "lead",
+    source_id: l.id,
+    source_key: `lead:${l.id}:${l.follow_up_on}`,
   }));
-}
-
-/** Follow-ups, LinkedIn connects, re-verifies: the CRM's own task list. */
-async function fromCrmTasks(supabase: SupabaseClient, today: string) {
-  const { data } = await supabase
-    .from("crm_tasks")
-    .select("id, title, due_on, kind, organisation_id, crm_organisations(legal_name, trading_name)")
-    .is("done_at", null)
-    .lte("due_on", today);
-
-  const rows =
-    (data as
-      | {
-          id: string;
-          title: string;
-          due_on: string;
-          organisation_id: string | null;
-          crm_organisations:
-            | { legal_name: string; trading_name: string | null }
-            | { legal_name: string; trading_name: string | null }[]
-            | null;
-        }[]
-      | null) ?? [];
-
-  return rows.map((t) => {
-    const org = Array.isArray(t.crm_organisations)
-      ? t.crm_organisations[0]
-      : t.crm_organisations;
-    return {
-      title: t.title,
-      detail: org ? (org.trading_name ?? org.legal_name) : null,
-      brand: "ironpeak" as const,
-      due_at: atNine(t.due_on),
-      source_kind: "crm_task",
-      source_id: t.id,
-      source_key: `crm_task:${t.id}`,
-    };
-  });
 }
 
 /**
@@ -266,8 +213,7 @@ export async function generateWorkItems(
   const groups: [string, NewItem[]][] = [
     ["invoice", await fromInvoices(supabase, today)],
     ["report", await fromReports(supabase, today)],
-    ["crm_send", await fromCrmSends(supabase, now)],
-    ["crm_task", await fromCrmTasks(supabase, today)],
+    ["lead", await fromLeads(supabase, today)],
   ];
 
   const byKind: Record<string, number> = {};

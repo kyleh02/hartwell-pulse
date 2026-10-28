@@ -17,7 +17,7 @@ import { isSuperseded, outstandingOf } from "@/lib/invoices-shared";
 export interface WorkStrip {
   owed: number;
   overdue: number;
-  sendsThisWeek: number;
+  followUps: number;
   reportsDue: number;
   snoozed: number;
   open: number;
@@ -75,21 +75,18 @@ export async function getWorkStrip(
   now = new Date(),
 ): Promise<WorkStrip> {
   const today = businessToday(now);
-  const weekEnd = new Date(now);
-  weekEnd.setDate(weekEnd.getDate() + 7);
 
   const [invoices, sends, reports, items] = await Promise.all([
     supabase
       .from("invoices")
       .select("total, due_date, status, deposit_amount, split_at")
       .eq("status", "sent"),
+    // Missing until migration 0056 runs, which reads as none due.
     supabase
-      .from("crm_organisations")
+      .from("leads")
       .select("id")
-      .eq("brand", "ironpeak")
-      .not("scheduled_send_at", "is", null)
-      .gte("scheduled_send_at", now.toISOString())
-      .lte("scheduled_send_at", weekEnd.toISOString()),
+      .not("stage", "in", "(won,lost)")
+      .lte("follow_up_on", today),
     supabase.from("reports").select("id").eq("status", "draft"),
     supabase.from("work_items").select("state, snoozed_until").eq("state", "open"),
   ]);
@@ -111,7 +108,7 @@ export async function getWorkStrip(
     overdue: inv
       .filter((i) => i.due_date && i.due_date < today)
       .reduce((sum, i) => sum + outstandingOf(i), 0),
-    sendsThisWeek: (sends.data as unknown[] | null)?.length ?? 0,
+    followUps: (sends.data as unknown[] | null)?.length ?? 0,
     reportsDue: (reports.data as unknown[] | null)?.length ?? 0,
     snoozed: open.filter(
       (i) => i.snoozed_until && new Date(i.snoozed_until) > now,

@@ -29,9 +29,10 @@ export function WorkStrip({ strip }: { strip: Strip }) {
       tone: strip.overdue > 0 ? "danger" : undefined,
     },
     {
-      label: "Sends this week",
-      value: String(strip.sendsThisWeek),
-      href: "/admin/crm/plan",
+      label: "Follow-ups due",
+      value: String(strip.followUps),
+      href: "/admin/pipeline",
+      tone: strip.followUps > 0 ? "warn" : undefined,
     },
     {
       label: "Reports in draft",

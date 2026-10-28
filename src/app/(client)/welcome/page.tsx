@@ -6,6 +6,7 @@ import { createAdminSupabase } from "@/lib/supabase/admin";
 import { DEFAULT_WELCOME, NEXT_STEPS, type Answers } from "@/lib/onboarding-shared";
 import { HARTWELL } from "@/lib/brand";
 import { OnboardingFlow } from "@/components/onboarding/OnboardingFlow";
+import { SetPasswordCard } from "@/components/home/SetPasswordCard";
 
 export const metadata = { title: "Welcome" };
 
@@ -34,6 +35,7 @@ export default async function WelcomePage() {
 
   return (
     <div className="space-y-8">
+      <SetPasswordCard />
       {/* ---- the welcome, from Kyle ---- */}
       <section
         className="relative overflow-hidden rounded-[20px] border border-pulse-border bg-pulse-surface p-6 sm:p-9"

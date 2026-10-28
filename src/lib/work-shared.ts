@@ -9,7 +9,8 @@ export type WorkSourceKind =
   | "invoice"
   | "report"
   | "recurring"
-  | "notification";
+  | "notification"
+  | "lead";
 
 export type WorkState = "open" | "done" | "dropped";
 
@@ -135,16 +136,15 @@ export function stepProgress(steps: WorkStep[]): { done: number; total: number }
  * checkbox on a list of twelve is not where either gets decided.
  */
 export function needsConfirmation(item: WorkItem): boolean {
-  return item.source_kind === "crm_send" || item.source_kind === "invoice";
+  return item.source_kind === "invoice";
 }
 
 /** Where the confirm-elsewhere kinds send you. */
 export function sourceHref(item: WorkItem): string | null {
   if (!item.source_id) return null;
   switch (item.source_kind) {
-    case "crm_send":
-    case "crm_task":
-      return `/admin/crm/${item.source_id}`;
+    case "lead":
+      return `/admin/pipeline/${item.source_id}`;
     case "invoice":
       return `/admin/invoices/${item.source_id}`;
     case "report":
@@ -162,4 +162,5 @@ export const SOURCE_LABEL: Record<WorkSourceKind, string> = {
   report: "Report",
   recurring: "Recurring",
   notification: "Notification",
+  lead: "Pipeline",
 };

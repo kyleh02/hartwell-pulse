@@ -32,8 +32,7 @@ Live at https://portal.hartwelldigital.com
   what prevents it.
 - Paths on Kyle's machine: Drive is `H:\My Drive\Website Code\hartwell-pulse`
   (the same Google Drive is also mounted as `D:`), clone is
-  `C:\Users\Kyle\pulse-verify`. The Ironpeak working folder, which holds
-  `portal-handoff-pipeline.md`, is `H:\My Drive\Ironpeak Consulting Build`.
+  `C:\Users\kylea\pulse-verify`.
 - The two copies differ in line endings on nearly every top-level file, so diff
   them through `tr -d '\r'` or everything reads as changed when nothing is.
 - **Sync this file back to the clone and commit it.** The Drive copy stayed
@@ -74,9 +73,6 @@ Live at https://portal.hartwelldigital.com
   reason for probing: `information_schema.columns` for a column,
   `pg_proc.prosrc` for what a function body actually says,
   `pg_get_constraintdef` for a check constraint.
-- The CRM prospect data is NOT a migration: it imports in-app from Pipeline,
-  because 30 KB of string literals proved unreliable to paste into the Supabase
-  SQL editor.
 
 ## Security model (do not weaken)
 - Helpers `is_admin()`, `current_client_id()`, `clerk_user_id()` read the Clerk
@@ -472,7 +468,7 @@ Live at https://portal.hartwelldigital.com
 - **Cmd+K** opens `CommandPalette`, mounted in `Shell` for both variants. With
   no query it lists the nav; typing hits `searchEverything()`. That action is a
   flat sweep with NO role branching on purpose: it runs on the RLS client, so a
-  client account gets their own rows and `crm_*` returns nothing. Adding a
+  client account gets their own rows and `leads` returns nothing. Adding a
   branch there would be a second access-control system to keep in step with the
   first.
 - The header button exists because a shortcut nobody knows about is a shortcut
@@ -507,257 +503,66 @@ Live at https://portal.hartwelldigital.com
   is the entire point.
 - Needs `RESEND_WEBHOOK_SECRET` in Vercel plus an endpoint configured in Resend.
 
-## Ironpeak outreach: the portal drafts, Outlook sends
-- **The portal does not send outreach, and that is not a preference.** On 10 and
-  11 August 2026 four Graph sends produced four `550 5.7.708` rejections to four
-  unrelated recipient domains, while every message Kyle typed by hand in Outlook
-  the same day arrived, including a cold prospect sitting between two of the
-  failures. Restricted entities was empty and SPF, DKIM and DMARC all passed, so
-  it was neither an account block nor authentication. The remaining difference
-  was the submission path: Exchange Online scores programmatically submitted
-  mail separately, and anything tripping the outbound spam filter goes out
-  through the high-risk delivery pool, whose IPs receiving servers reject with
-  exactly that code.
-- So `/api/cron/crm-send` calls `graphCreateDraft` at the scheduled minute and
-  leaves a finished draft in Drafts with a deep link straight to it. Kyle presses
-  send, then confirms in the portal. What that costs is sending while he is
-  asleep. What it keeps is a delivery path that reaches people.
-- **The Microsoft 365 tenant itself is blocked.** OWA returns
-  `TenantAccessBlockedException`, which is a tenant-level block by Microsoft,
-  not a password or licence fault, and DNS is clean. Version 4 of the handoff
-  reads the four `5.7.708` codes as the earlier stage of the same thing: an
-  outbound reputation flag that throttled programmatic submission first and
-  escalated a week later. Manual sending did not work because it was manual, it
-  worked because it was slower. **Do not resume scheduled sending until the
-  block is resolved AND the sending arrangement has changed**, since cold
-  outreach from `kyle@ironpeakconsulting.com.au` risks the mailbox the website
-  contact form and live client correspondence depend on.
-- `graphSendMail` has been deleted rather than left sitting unused. Restoring a
-  send path from here is a worse idea after version 4, not a better one.
-- **A draft is not a send, and nothing at draft time writes a touch.**
-  `draftOutreach` composes; `confirmSent` writes the `crm_touches` row
-  afterwards, from the same body. Logging at draft time would fill the Spam Act
-  record with messages that never left, which is exactly the failure this
-  replaced: evidence of something that did not happen is not evidence.
-- `draft_created_at` (0039) stops the cron re-drafting the same email every few
-  minutes. A record that cannot be drafted has `send_approved_at` cleared, so it
-  stops being retried and starts being something to look at.
-- Outreach never goes through Resend. Resend sends as hartwelldigital.com, the
-  domain carrying every invoice and client notification, and cold mail there
-  would risk the reputation of the mail that pays.
-- Plain text, never HTML. A cold email that arrives as a styled document reads
-  as marketing however good the words are.
-- **Nothing drafts without `send_approved_at`.** The nine pre-send checks are
-  ticked at APPROVAL, not at send: nobody is at the keyboard at 8:47am, and a
-  checklist confirmed by a machine is not a check. Editing the body clears
-  approval, because an email that changed is not the one that was read.
-- `crm_dry_run_touch` asks the guard for permission BEFORE anything reaches the
-  folder. A ready-to-send draft sitting in Drafts for a record that cannot
-  lawfully be emailed is a trap for a tired thumb.
-- **The opt-out is a reply, not a link,** and that was a correction rather than a
-  preference. The link pointed at portal.hartwelldigital.com and was wrong on
-  three counts, each sufficient on its own: the domain did not match the sending
-  domain, which is a strong spam signal on cold mail; the token made it
-  per-recipient tracking, which the settled rules forbid on first contact; and it
-  published the tie between Ironpeak and Hartwell Digital to every prospect. A
-  reply satisfies the Spam Act, which asks for a functional low-cost opt-out that
-  is honoured, and honouring it is the operator's job: the guard blocks every
-  channel the moment `opt_out_at` is set. `/unsubscribe/[token]` still exists and
-  still works on GET, it is simply not linked from an email any more.
-- The signature and the opt-out are appended in `buildOutreachText`, never
-  stored in a body. A footer retyped 30 times is wrong on at least one of them.
-  Pre-send check c6 exists for the inverse risk: a body pasted in with its own
-  signature already attached goes out carrying two.
-- The nine checks live once, in `src/lib/crm-presend.ts`, imported by both the
-  manual flow and the automated one. They used to be two copies of the same
-  array, which made the automated path the easy way to skip a check.
-- Env: `MS_GRAPH_TENANT_ID`, `MS_GRAPH_CLIENT_ID`, `MS_GRAPH_CLIENT_SECRET`,
-  `IRONPEAK_SEND_FROM`, all in Vercel only. Application `Mail.Send` grants
-  access to EVERY mailbox in the tenant, so scope it with an Exchange
-  ApplicationAccessPolicy.
-- `/api/cron/crm-send` runs every few minutes from cron-job.org. Vercel Hobby
-  caps its own crons at daily and these are scheduled to the minute.
+## Sales pipeline (0056)
+- **The old outreach CRM was deleted on 28 October 2026**, at Kyle's request:
+  he had never used it. Every `crm_*` table and function went, with the
+  Ironpeak pipeline data, the Outlook drafting cron (`crm-send`), the
+  `crm-reminders` cron and the Graph client. 0056 copies everyone who opted out
+  or was marked do not contact into `do_not_contact` FIRST, then drops the rest.
+  The code is in git history before the Stage 5 commit.
+- **`do_not_contact` is kept for good.** An opt-out is honoured forever, not
+  until the next clear-out. `email_lower` is generated and unique. Adding a lead
+  checks it and warns, the lead page shows it, and Kyle adds people at
+  `/admin/pipeline/do-not-contact`.
+- `/admin/pipeline` is Follow up today first, then a board of New, Contacted,
+  Meeting and Proposal (drag a card between columns), then Won and Lost. Every
+  open lead carries `follow_up_on`, tomorrow by default. Due and overdue ones
+  show on the dashboard strip, and the work generator makes an item keyed
+  `lead:<id>:<date>`. Logging a call, email or meeting on a New lead moves it to
+  Contacted, because that is nearly always what happened.
+- **Won is never a drag.** `moveLead` refuses it. The only way in is "They said
+  yes" on the lead (`onboardLead`), so a won lead always has a client behind it.
+- **"They said yes" does it all, and reports each step**: create the portal
+  passwordless (`provisionClient` in `src/lib/provision.ts`, shared with Add
+  client), start onboarding, send the welcome email (`src/lib/welcome-emails.ts`)
+  with a one-click sign-in button, leave a welcome in their chat (its
+  notification marked emailed, so day one is one email, not two), book the day
+  3 and day 7 check-ins in `scheduled_emails`, and mark the lead won. Only the
+  first step can stop it; a missed email is reported so Kyle can send it by
+  hand. It celebrates, admin side only.
+- **The one-click button is a Clerk sign-in token**, single use and valid seven
+  days, landing on `/welcome-in` (public in middleware), which swaps it for a
+  session and goes to `/welcome`. Nobody is sent a password. `SetPasswordCard`
+  on Home and `/welcome` asks them to choose one for next time while
+  `passwordEnabled` is false. If Clerk refuses the passwordless create,
+  provisioning falls back to a temporary password and the dialog shows it, so a
+  client is never left with no way in. **Not yet proven against live Clerk as of
+  28 October 2026**: check the first real welcome link signs in.
+- The check-ins go out from the 15-minute `/api/cron/email` job. Each row is
+  CLAIMED (sent_at set where still null) before it sends and handed back if the
+  send fails, because an email cannot be taken back. Day 3 thanks them if
+  onboarding was sent and nudges if not. A check-in more than three days late is
+  dropped, and so is one for someone no longer on the account.
+- **Website enquiries arrive by themselves.** The site's `/api/enquiry` and
+  `/api/quiz` post to `/api/webhooks/lead` AFTER Kyle's own email has gone,
+  through `waitUntil` (website `lib/pulse.js`), so the portal can never lose or
+  delay a lead. The route fails CLOSED without `LEAD_WEBHOOK_SECRET` in Vercel,
+  which must equal `PULSE_LEAD_SECRET` in Cloudflare Pages. Likely spam stays off
+  the board. A second enquiry from someone with an open lead becomes a note on
+  it, not a second card. A new enquiry is due today.
 
-## CRM (admin only, two brands)
-- One CRM, two pipelines, toggled by `?brand=` on /admin/crm: **ironpeak** and
-  **hartwell**. Prospects, lists and metrics are all brand-scoped so a reply
-  rate from one client base never averages into the other.
-- **The rule sets differ, deliberately.** Ironpeak's gates (two-email cap, a
-  dated and verified fault before a first email, nine pre-send checks) are
-  defence *playbook strategy* and fire only for `brand = 'ironpeak'`. Applying
-  them to Hartwell Digital's general client base would make the CRM unusable
-  for it.
-- **Universal for every brand, because it is law not strategy:** the Spam Act
-  2003 covers every commercial electronic message sent in Australia, so the
-  opt-out and the full consent trail are required before any outbound email is
-  logged, whichever brand it is.
-
-## Ironpeak specifics
+## Ironpeak
 - Ironpeak Consulting is a **registered business name against Hartwell Digital's
   ABN 44 286 503 049**, trading in defence only. Internal surfaces may say
-  Hartwell is the parent; **client-facing output must not** — no "a business of
+  Hartwell is the parent; **client-facing output must not**: no "a business of
   Hartwell Digital", no dual logos. The bare ABN line is the only permitted
-  expression of the parent.
-- `crm_*` tables are admin-only (`is_admin()`), so clients never see a prospect.
-- **The live pipeline is `src/lib/crm-pipeline-v2.ts`: 30 companies, applied by
-  "Load 7 Aug pipeline" on /admin/crm.** It is GENERATED by
-  `scripts/gen-pipeline.py` from `portal-handoff-pipeline.md` and never
-  hand-edited: 19 email bodies retyped by hand is 19 chances to change a word
-  Kyle chose, and he has explicitly rejected specific phrasings. Change the
-  markdown and regenerate.
-- The current data is **version 4, 18 August 2026**, loaded by "Load v4
-  pipeline". Version 4 rewrote 16 of the 19 bodies to the shape fault, second
-  observation, scope block, link, costless close, at 150 to 175 words, merged
-  the greeting into the opener, and corrected Owen International's subject,
-  which called DISP an accreditation and would have gone out that way. **Two
-  exceptions are deliberate and must not be normalised:** Kennewell runs 198
-  words with no link, because its offer is a caption pass rather than a
-  rebuild, and Universal Motion Simulation opens "Good morning Dr Meikle".
-- **`HARD_WARNINGS` in the generator is keyed by rank number, not by company.**
-  Ranks held across version 4, so the five warnings still land correctly, but
-  if a future handoff re-ranks anything that dict has to move with it or the
-  PRP founder constraint attaches to the wrong company.
-- **Seven sends have an unknown outcome, not sixteen.** Part H scheduled 16
-  across 12 to 17 August, but the database showed only seven were ever approved
-  and drafted: Kennewell, Lintek, One Ocean, Micron on the 12th, then Owen
-  International, Decem and PRP on the 13th. Everything scheduled for the 14th
-  and 17th was never approved, so no draft was ever made for it, and the only
-  send path is Kyle pressing send on a draft. Those nine are not in doubt and
-  are deliberately not flagged: warning about all sixteen when seven are
-  uncertain is how a warning gets ignored.
-- `src/lib/crm-unresolved.ts` holds those seven as **written-down constants, not
-  a query**, and that is load-bearing. The evidence is `draft_created_at`, which
-  replacing the pipeline clears so a rewritten body can draft again, so the
-  database stopped being able to answer the moment "Load v4 pipeline" was
-  pressed. Captured 18 August 2026 from the rows themselves.
-- It WARNS rather than blocks, on the plan and again in the composer at
-  approval. A record that genuinely did not send has to stay approvable, and
-  there is nowhere to record "confirmed not sent" without a migration. Logging
-  the send is the only thing that clears it, which is the same record the Spam
-  Act defence rests on.
-- **Replacing the pipeline clears `draft_created_at` as well as the approval.**
-  The cron reads a non-null value as "done", so a record drafted under an old
-  body would never draft again and the rewritten email would sit approved and
-  silently undraftable. Drafts already in Outlook still hold the OLD text and
-  have to be deleted there by hand.
-- It REPLACES every earlier dataset, and the earlier datasets are **gone**.
-  `crm-seed-data.ts`, `crm-pipeline-master.ts` and the four actions and two
-  components that applied them were deleted with version 4: every one of them
-  would have resurrected the companies that were deliberately triaged out. The
-  target-NN research files in the Drive folder are superseded too and must not
-  be re-imported. `replacePipeline` creates the companies it cannot find, so it
-  bootstraps an empty pipeline on its own and nothing else was needed.
-- **The offer was repositioned on 7 August 2026** from capability statements to
-  websites. The first 14 sends led with a capability statement and produced
-  zero replies in eight days; across ~50 researched companies at least nine had
-  paid an agency for a website and none had a capability statement. Every hook
-  is now a specific verified fault on the company's own site.
-- **Part H of the handoff is the only clock.** Part E dropped `send_at` so the
-  two can no longer disagree: Part E supplies structured fields, Part H supplies
-  the times. The parser reads the whole of Part H and relies on the strict time
-  format to keep other tables out. It used to slice at section 2, which was
-  harmless until a rebuild moved the schedule there and it silently returned
-  zero rows.
-- **Replace UPDATES, it never wipes.** Companies that already exist are updated
-  in place so the touch log survives, and that log is the Spam Act defence. A
-  company dropped from the list but carrying a logged send is marked `lost`,
-  never deleted. The portal's stage wins where the portal knows more, with two
-  exceptions: `bounced` and `email_closed` are things only the file knows, so
-  the file wins outright on those.
-- **`bounced` is not terminal.** Nobody saw the message, so nobody refused
-  anything. Bounced touches are also excluded from the two-email cap, which used
-  to count them and spend one of two on a message nobody read. The touch itself
-  stays, because it is a true record of an attempt and deleting evidence to fix
-  arithmetic is the wrong trade. A re-send logs as `email_1`: a message nobody
-  received is still the first one they will read.
-- **`email_closed` ends one channel, not all of them.** Their mail server refuses
-  this sender, so email is not viable, but LinkedIn and the phone stay open.
-  Coastal Aviation is the case it was built for.
-- Anything filtering by stage for sending must include `queued`, `contacted` AND
-  `bounced`. That filter has been too narrow three times, and each time the
-  symptom was silence rather than an error.
-- **`scheduled_send_at`, `draft_created_at` and a logged touch are three
-  different things.** The first is when it is planned to go, the second means it
-  is written and sitting in Drafts, and the touch is the actual send: that is
-  what advances the stage, counts toward the goal, and stands as the Spam Act
-  record.
-- `/admin/crm/plan` is the run sheet: the whole schedule as one table, then
-  overdue follow-ups and sends grouped by day. The board answers "where is
-  everything", the plan answers "what am I doing today".
-- **The plan ticks a row off from the touch log, never from
-  `send_attempted_at`.** Only `markSent` writes that column, so anything logged
-  through the manual flow stayed on the board as outstanding work forever:
-  Copamate and NH Micro went on 30 July and were still listed as to do three
-  weeks later. `sent_at` is computed on the plan page as the latest outbound
-  touch whose outcome is not `bounce`, which also puts the "a bounce is not a
-  send" rule in one place instead of in a stage check in each component.
-- **`autoSchedule` never places anything in the past.** It used to pin a
-  follow-up to its stored `followup_due`, and nine of those windows opened in
-  early August and closed again, so the whole plan rendered as a list of dates
-  that had already gone. A lapsed follow-up now queues from the start day and
-  takes its turn behind whatever is on it; only a follow-up still inside its
-  window beats the four-a-day shape.
-- **Lay out the schedule** (`autoSchedule`) applies the fixed rules in one press
-  rather than by hand in SQL: four a day, weekdays only, never on the hour or
-  half hour, WA at 11:00 AEST or later so it lands mid-morning Perth, and a
-  follow-up inside its day 8 to 10 window rather than before it opens. The window
-  beats the four-a-day shape, because a follow-up sent early is worse than a day
-  carrying five. Slot times are the ones already proven in the handoff, so a week
-  of them still reads as a person at their desk. Anything already drafted keeps
-  its time; blocked, LinkedIn-only and email-closed records get no slot at all.
-- **Stages `blocked` and `linkedin_only`, and terminal `declined`/`stopped`/
-  `do_not_contact`, are enforced in `crm_touch_guard`,** not just shown. Tynbell
-  is blocked because their website went down, taking the conspicuous publication
-  that created inferred consent with it.
-- `email_source_note` holds where the address appears in words ("footer and
-  contact page"). It is NOT a URL and must never be turned into one: what the
-  Spam Act needs is that it was published plus when it was checked, and a
-  fabricated URL fakes the one thing that has to be checkable.
-- `hard_warning` is undismissable. PRP Manufacturing's founder died in November
-  2021: never reference the founder or company history. Micca Holdings has no
-  LinkedIn, so email only and never attempt a connect.
-- A hook older than 14 days may not be quoted without re-verification, and the
-  guard refuses it rather than warning about it.
-- **Absence claims are the ones that go wrong.** Kennewell was wrong twice and
-  Micron once, all the same way: a claim about "your site" built from one page,
-  or from text alone. Kennewell's "empty" work page holds 29 photographs and
-  Micron's about 63, both loaded by JavaScript. Crawl every page, count images
-  and gallery markers rather than text, and prefer presence claims: "I found
-  this on your site" is provable, "there is no X" is not.
-- Prospects belong to a **source list** (`crm_lists`), so a reply rate from a
-  grant list and one from a cold trade show never average into a single
-  meaningless number. New batches get their own list.
-- **Ironpeak runs on exactly one list, and `replacePipeline` maintains it.** It
-  creates `ironpeak-pipeline` if missing, puts all 30 records on it, then
-  deletes any other Ironpeak list left empty. The per-company provenance that
-  matters is on the record already: `channel` is DIDG or AIC. Before this, 12
-  companies sat on the old grant-recipient list and 18 carried no list at all,
-  and since `PipelineView` auto-selects the single list it finds and filters to
-  it, those 18 never appeared on the board. A list nobody chose, quietly hiding
-  rows, is worse than no list.
-- `email_as_published` and `direct_email` are **different fields on purpose**.
-  The published one is the consent evidence and must never be overwritten by a
-  personal address given later.
-- The compliance trail is the point, not a nicety. Cold outreach relies on
-  **inferred consent under the Spam Act 2003**, which only attaches to an
-  address the business itself conspicuously published. `email_as_published` is
-  stored **verbatim** (never trimmed or lowercased) with its source note and
-  verified date, because those three are the legal defence.
-- Rules enforced by database triggers, not just UI: one contact per
-  organisation; hard block on touching an opted-out contact; two emails then the
-  sequence closes (lifts once they reply); a first email needs a **verified
-  fault carrying a verification date no older than 14 days**; all nine pre-send
-  checks ticked, stored per touch.
-- Logging a send is what advances the stage, counts towards the daily goal, and
-  books the LinkedIn request and the day 8 to 10 follow-up. LinkedIn connect
-  roughly two hours after each send, under 200 characters, mention the email,
-  no pitch.
-- Goals are 3 a day and 15 a week, set by Kyle on 30 July 2026. The outreach
-  playbook benchmarks 3 a WEEK, so this runs five times that rate: the abort
-  warning (15 sends, no substantive reply) now lands after about a week rather
-  than five. Kyle was shown the trade-off and chose the faster pace.
-- Benchmarks that do not change: 2 to 3 substantive replies per 15 sent, and
-  **zero opt-outs** — that last one is the health metric, shown first.
+  expression of the parent. Invoices and reports carry it through `brand`.
+- **Do not resume Ironpeak cold outreach.** In August 2026 programmatic sends
+  through Microsoft Graph drew `550 5.7.708` rejections and the Microsoft 365
+  tenant was then blocked (`TenantAccessBlockedException`). The drafting
+  pipeline went with the CRM. `MS_GRAPH_*` and `IRONPEAK_SEND_FROM` in Vercel are
+  unused now, and the cron-job.org job for `/api/cron/crm-send` should be
+  deleted (the route is gone).
 
 ## Income (admin)
 - `/admin/income` works Kyle's income out of his invoices with nothing to
@@ -775,12 +580,10 @@ Live at https://portal.hartwelldigital.com
   read `board_cards` and nothing else, which is why it went unused: the work
   lived in the CRM, the invoices and the reports and none of it reached the
   page. Design and reasoning in `docs/dashboard-spec.md` (0044, 0045).
-- **A tick may never fabricate a record with legal or financial weight.**
-  `completeWork` REFUSES a `crm_send` and an `invoice` and says where to go
-  instead. The touch log is the Spam Act defence and paid means money arrived;
-  neither gets decided by a checkbox among twelve others. Everything else
-  closes, and a `crm_task` closes at its source too because a LinkedIn connect
-  is harmless and reversible.
+- **A tick may never fabricate a record with financial weight.**
+  `completeWork` REFUSES an `invoice` and says where to go instead: paid means
+  money arrived, and that is not decided by a checkbox among twelve others.
+  Everything else closes.
 - **The partial unique index is the whole design.**
   `(source_kind, source_key) where state = 'open'` lets the generator run
   hourly and never make a second open item. The key carries a STAGE, not a row:
@@ -790,9 +593,6 @@ Live at https://portal.hartwelldigital.com
   answering sets `asked_at` and it never returns. That is the difference from
   the notification it replaced, which asked every morning and could only be
   read.
-- **`crm-reminders` no longer notifies per task**, and that cron was the thing
-  driving Kyle mad. Those tasks are work items now. It still books re-verify
-  tasks, which is the half worth keeping.
 - **One notification a day for Kyle's own work**: `/api/cron/brief` at 21:00
   UTC, which is 7am Brisbane, and it stays silent when nothing is due. Client
   triggered notifications are untouched, because those are someone waiting.
@@ -805,10 +605,8 @@ Live at https://portal.hartwelldigital.com
 - Admin surfaces only. Clients are businesses and defence buyers are
   conservative, so confetti in a client portal would read as unserious.
 - `celebrate()` in `src/lib/celebrate.ts` fires on OUTCOMES, never activity:
-  finishing the day's goal (once), a substantive reply, an invoice marked paid.
-  **Never celebrate a send.** The playbook says volume is the risk, so
-  rewarding each send would train the behaviour that gets a campaign
-  complained about. Sending an invoice gets nothing either; being paid does.
+  a client won ("They said yes"), an invoice marked paid. **Never celebrate a
+  send.** Sending an invoice gets nothing; being paid does.
 - Honours `prefers-reduced-motion`: the toast shows, the confetti does not.
 
 ## Platform constraints

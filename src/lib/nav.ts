@@ -46,8 +46,7 @@ export const adminNav: NavItem[] = [
   { label: "Messages", href: "/admin/messages", icon: MessageSquare, badge: "messages" },
   { label: "Invoices", href: "/admin/invoices", icon: Receipt },
   { label: "Income", href: "/admin/income", icon: TrendingUp },
-  // Ironpeak Consulting outreach. Admin only, like the rest of this nav.
-  { label: "Pipeline", href: "/admin/crm", icon: Target },
+  { label: "Pipeline", href: "/admin/pipeline", icon: Target },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
 

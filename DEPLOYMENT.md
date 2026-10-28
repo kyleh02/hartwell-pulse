@@ -13,7 +13,7 @@ secrets (`.env.local`) already excluded from git.
 
 No. You can launch on a free `*.vercel.app` URL. For a proper production setup
 the recommended option is a **free subdomain of a domain you already own**, e.g.
-`pulse.hartwelldigital.com`. A custom domain matters mainly because Clerk's
+`portal.hartwelldigital.com`. A custom domain matters mainly because Clerk's
 production keys need DNS records on a domain you control. Email verifies
 `hartwelldigital.com`, which you already own.
 
@@ -40,10 +40,10 @@ production keys need DNS records on a domain you control. Email verifies
 
 1. In your DNS provider for `hartwelldigital.com`, you'll add records Vercel
    gives you. In Vercel: **Project → Settings → Domains → Add** →
-   `pulse.hartwelldigital.com`.
+   `portal.hartwelldigital.com`.
 2. Vercel shows a **CNAME** record (usually `cname.vercel-dns.com`). Add it at
    your DNS host for the `pulse` subdomain. It verifies in a few minutes.
-3. Set `NEXT_PUBLIC_APP_URL` to `https://pulse.hartwelldigital.com`.
+3. Set `NEXT_PUBLIC_APP_URL` to `https://portal.hartwelldigital.com`.
 
 ## Step 4 — Clerk production instance
 
@@ -52,7 +52,7 @@ Your current Clerk app is in **development**. Create a production instance:
 1. Clerk dashboard → your app → switch to **Production** (top of the page) →
    create it.
 2. Set the application domain to your portal domain
-   (`pulse.hartwelldigital.com`).
+   (`portal.hartwelldigital.com`).
 3. Clerk gives you **DNS records** (CNAMEs like `clerk.pulse...`,
    `accounts.pulse...`). Add them at your DNS host. They verify in minutes.
 4. Redo the two settings on the **production** instance (they're per-instance):
@@ -101,7 +101,7 @@ Project → **Settings → Environment Variables**. Add these for **Production**
 | `RESEND_API_KEY` | `re_...` (Step 6) |
 | `EMAIL_FROM` | `Kyle at Hartwell Digital <kyle@hartwelldigital.com>` |
 | `CRON_SECRET` | any long random string (protects the cron routes) |
-| `NEXT_PUBLIC_APP_URL` | `https://pulse.hartwelldigital.com` |
+| `NEXT_PUBLIC_APP_URL` | `https://portal.hartwelldigital.com` |
 
 After adding them, **redeploy** (Deployments → ⋯ → Redeploy).
 
@@ -131,7 +131,7 @@ the URL with the `Authorization: Bearer <CRON_SECRET>` header.
 ## Go-live checklist
 
 - [ ] Code pushed to GitHub, Vercel project deploys green
-- [ ] `pulse.hartwelldigital.com` resolves and loads
+- [ ] `portal.hartwelldigital.com` resolves and loads
 - [ ] Clerk production: DNS verified, role claim + restricted sign-up set
 - [ ] Supabase: production Clerk domain added to Third-Party Auth, migrations 1–6 run
 - [ ] Resend: domain verified, key set
