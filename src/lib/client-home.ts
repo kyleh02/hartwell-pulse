@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getClientDashboardData, type DashMetric } from "@/lib/dashboard";
 import { formatMoney, isSuperseded, outstandingOf } from "@/lib/invoices-shared";
 import { businessToday } from "@/lib/business-time";
+import { ONBOARDING_WINDOW_DAYS } from "@/lib/onboarding-shared";
 
 /**
  * Everything the client's Home shows, in one load.
@@ -32,10 +33,12 @@ export interface HomeTile {
 }
 
 export interface HomeStep {
-  key: "signed-in" | "say-hello" | "share-files";
+  key: "about" | "kickoff" | "signed-in" | "say-hello" | "share-files";
   title: string;
   detail: string;
   done: boolean;
+  /** Where doing it happens. */
+  href?: string;
 }
 
 export interface ClientHomeData {
@@ -45,6 +48,8 @@ export interface ClientHomeData {
   daysWithUs: number;
   /** Still getting set up: any step not done yet. Drives the greeting. */
   isNew: boolean;
+  /** Onboarding is switched on and not yet sent to Kyle: Home says "Start here". */
+  onboardingOpen: boolean;
   steps: HomeStep[];
   tiles: HomeTile[];
   metrics: DashMetric[];
@@ -111,6 +116,7 @@ export async function getClientHome(
     lastMessageRes,
     conversationsRes,
     approvalsRes,
+    onboardingRes,
     dash,
   ] = await Promise.all([
     supabase
@@ -180,6 +186,8 @@ export async function getClientHome(
       .eq("client_id", clientId)
       .neq("status", "draft")
       .order("updated_at", { ascending: false }),
+    // Missing until migration 0055 runs; Home then keeps its older steps.
+    supabase.from("onboarding").select("status, kickoff_booked_at").eq("client_id", clientId).maybeSingle(),
     getClientDashboardData(supabase, clientId),
   ]);
 
@@ -192,7 +200,37 @@ export async function getClientHome(
   // ---- getting started: ticked by what actually happened, not by a click -----
   const saidHello = (clientMessagesRes.count ?? 0) > 0;
   const sharedFiles = (assetsByClientRes.count ?? 0) > 0;
-  const steps: HomeStep[] = [
+  const obErr = onboardingRes.error as { code?: string } | null;
+  const onboardingOn = !obErr || !(obErr.code === "PGRST205" || obErr.code === "42P01");
+  const ob = onboardingRes.data as { status: string; kickoff_booked_at: string | null } | null;
+  const told = ob?.status === "submitted";
+  const booked = !!ob?.kickoff_booked_at;
+  const filesStep: HomeStep = {
+    key: "share-files",
+    title: "Share your files",
+    detail: sharedFiles ? "Done. Thank you." : "Logo, photos, documents. Drop them in Assets.",
+    done: sharedFiles,
+    href: "/assets",
+  };
+  const steps: HomeStep[] = onboardingOn
+    ? [
+        {
+          key: "about",
+          title: "Tell us about your business",
+          detail: told ? "Done. I've got your answers." : "About ten minutes, saved as you go.",
+          done: told,
+          href: "/welcome",
+        },
+        {
+          key: "kickoff",
+          title: "Book your kickoff call",
+          detail: booked ? "Booked. See you then." : "Half an hour to agree the plan.",
+          done: booked,
+          href: "/welcome#kickoff",
+        },
+        filesStep,
+      ]
+    : [
     {
       key: "signed-in",
       title: "Sign in to your portal",
@@ -207,16 +245,12 @@ export async function getClientHome(
         : "Tap the chat bubble, bottom right. It comes straight to me.",
       done: saidHello,
     },
-    {
-      key: "share-files",
-      title: "Share your files",
-      detail: sharedFiles
-        ? "Done. Thank you."
-        : "Logo, photos, documents. Drop them in Assets.",
-      done: sharedFiles,
-    },
+    filesStep,
   ];
-  const isNew = steps.some((s) => !s.done);
+  // New means recently joined (or mid-onboarding) AND something left to do.
+  // A client of a year who never uploaded a file is not new.
+  const recent = daysWithUs <= ONBOARDING_WINDOW_DAYS || (!!ob && !told);
+  const isNew = recent && steps.some((s) => !s.done);
 
   const tiles: HomeTile[] = [];
 
@@ -433,6 +467,7 @@ export async function getClientHome(
     startedOn: calendar(startedKey, true),
     daysWithUs,
     isNew,
+    onboardingOpen: onboardingOn && recent && !told,
     steps,
     tiles,
     metrics: dash.hasData ? dash.summary.slice(0, 4) : [],

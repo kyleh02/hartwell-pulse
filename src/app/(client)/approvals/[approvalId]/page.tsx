@@ -45,7 +45,7 @@ export default async function ApprovalPage({ params }: { params: Promise<{ appro
       </div>
       <div className="gold-rule mt-5 mb-7" aria-hidden="true" />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <ApprovalContent approval={approval} files={files} />
         <aside className="space-y-5 lg:sticky lg:top-24 lg:self-start">
           <ApprovalDecision id={approval.id} status={approval.status} />

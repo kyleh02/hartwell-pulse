@@ -1,6 +1,5 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createAdminSupabase } from "@/lib/supabase/admin";
 import {
   isImage,
   type Approval,
@@ -108,48 +107,4 @@ async function signPaths(supabase: SupabaseClient, paths: string[]): Promise<Map
   const { data } = await supabase.storage.from(BUCKET).createSignedUrls(paths, HOUR);
   for (const s of data ?? []) if (s.path && s.signedUrl) out.set(s.path, s.signedUrl);
   return out;
-}
-
-// ---------------------------------------------------------------------------
-// telling people
-// ---------------------------------------------------------------------------
-
-/**
- * Bell notifications on the instant channel: the email job turns each into an
- * email within fifteen minutes, with a button straight to the work.
- */
-export async function notifyClientPeople(clientId: string, n: { title: string; body: string | null; link: string }) {
-  const supabase = createAdminSupabase();
-  const { data } = await supabase
-    .from("client_users")
-    .select("clerk_user_id")
-    .eq("client_id", clientId)
-    .eq("role", "client");
-  const rows = ((data as { clerk_user_id: string }[] | null) ?? []).map((u) => ({
-    recipient_user_id: u.clerk_user_id,
-    client_id: clientId,
-    type: "approval",
-    channel: "instant",
-    ...n,
-  }));
-  if (rows.length) {
-    const { error } = await supabase.from("notifications").insert(rows);
-    if (error) console.error("[approvals] client notification failed", error.message);
-  }
-}
-
-export async function notifyAdmins(clientId: string, n: { title: string; body: string | null; link: string }) {
-  const supabase = createAdminSupabase();
-  const { data } = await supabase.from("client_users").select("clerk_user_id").eq("role", "admin");
-  const rows = ((data as { clerk_user_id: string }[] | null) ?? []).map((u) => ({
-    recipient_user_id: u.clerk_user_id,
-    client_id: clientId,
-    type: "approval",
-    channel: "instant",
-    ...n,
-  }));
-  if (rows.length) {
-    const { error } = await supabase.from("notifications").insert(rows);
-    if (error) console.error("[approvals] admin notification failed", error.message);
-  }
 }

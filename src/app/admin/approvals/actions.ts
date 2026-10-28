@@ -12,7 +12,7 @@ import {
   type Approval,
   type ApprovalKind,
 } from "@/lib/approvals-shared";
-import { notifyClientPeople } from "@/lib/approvals";
+import { notifyClientPeople } from "@/lib/notify";
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; message: string };
 
@@ -177,7 +177,7 @@ export async function sendApproval(id: string): Promise<Result> {
     author_role: "admin",
     author_name: session.profile?.full_name ?? "Kyle",
   });
-  await notifyClientPeople(a.client_id, {
+  await notifyClientPeople(a.client_id, "approval", {
     title: nextRound > 1 ? `Kyle has updated ${a.title}` : `Kyle needs your approval: ${a.title}`,
     body: a.note ?? (nextRound > 1 ? "Here's the next version. Have a look and approve it, or ask for more changes." : "Have a look and approve it, or ask for changes."),
     link: `/approvals/${id}`,
@@ -209,7 +209,7 @@ export async function adminComment(id: string, body: string): Promise<Result> {
   if (error) return { ok: false, message: error.message };
   // A note on a draft is Kyle talking to himself; the client hears nothing.
   if (a.status !== "draft") {
-    await notifyClientPeople(a.client_id, {
+    await notifyClientPeople(a.client_id, "approval", {
       title: `Kyle commented on ${a.title}`,
       body: text.length > 200 ? `${text.slice(0, 199)}…` : text,
       link: `/approvals/${id}`,

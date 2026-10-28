@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getPulseSession } from "@/lib/auth/session";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import type { Approval } from "@/lib/approvals-shared";
-import { notifyAdmins } from "@/lib/approvals";
+import { notifyAdmins } from "@/lib/notify";
 
 type Result = { ok: true } | { ok: false; message: string };
 
@@ -73,7 +73,7 @@ export async function decideApproval(
     author_role: "client",
     author_name: who,
   });
-  await notifyAdmins(a.client_id, {
+  await notifyAdmins(a.client_id, "approval", {
     title: decision === "approved" ? `${business} approved ${a.title}` : `${business} asked for changes to ${a.title}`,
     body: text ? `${who}: ${text.length > 200 ? `${text.slice(0, 199)}…` : text}` : `${who} approved it.`,
     link: `/admin/approvals/${id}`,
@@ -102,7 +102,7 @@ export async function clientComment(id: string, body: string): Promise<Result> {
     author_name: who,
   });
   if (error) return { ok: false, message: error.message };
-  await notifyAdmins(a.client_id, {
+  await notifyAdmins(a.client_id, "approval", {
     title: `${business} commented on ${a.title}`,
     body: `${who}: ${text.length > 200 ? `${text.slice(0, 199)}…` : text}`,
     link: `/admin/approvals/${id}`,

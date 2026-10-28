@@ -18,6 +18,7 @@ import { formatMetricValue } from "@/lib/metrics";
 import { HARTWELL } from "@/lib/brand";
 import { DeltaBadge } from "@/components/dashboard/DeltaBadge";
 import { OpenChatButton } from "@/components/home/OpenChatButton";
+import { buttonClasses } from "@/components/ui/Button";
 import { cn } from "@/lib/utils/cn";
 
 const ICON: Record<HomeTile["key"], LucideIcon> = {
@@ -83,6 +84,11 @@ export function ClientHome({
               } and a direct line to me.`
             : `Here's where everything stands at ${data.businessName} today.`}
         </p>
+        {data.onboardingOpen && !preview && (
+          <Link href="/welcome" className={cn(buttonClasses("primary", "md"), "mb-5")}>
+            Start here <ArrowRight size={15} aria-hidden="true" />
+          </Link>
+        )}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-pulse-gold/35 bg-pulse-gold/10 px-3 py-1 text-[13px] text-pulse-text">
             <CalendarDays size={15} className="text-pulse-gold" aria-hidden="true" />
@@ -118,7 +124,10 @@ export function ClientHome({
             {data.steps.map((step, i) => (
               <li
                 key={step.key}
-                className="flex items-start gap-3 rounded-xl bg-pulse-text/[0.04] p-3"
+                className={cn(
+                  "relative flex items-start gap-3 rounded-xl bg-pulse-text/[0.04] p-3",
+                  step.href && !step.done && !preview && "transition-colors hover:bg-pulse-gold/10",
+                )}
               >
                 {step.done ? (
                   <>
@@ -144,7 +153,14 @@ export function ClientHome({
                       step.done && "line-through opacity-70",
                     )}
                   >
-                    {step.title}
+                    {step.href && !step.done && !preview ? (
+                      // The whole step is the link: the title stretches over it.
+                      <Link href={step.href} className="after:absolute after:inset-0">
+                        {step.title}
+                      </Link>
+                    ) : (
+                      step.title
+                    )}
                   </p>
                   <p className="mt-0.5 text-xs text-pulse-text-dim">{step.detail}</p>
                 </div>

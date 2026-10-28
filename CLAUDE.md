@@ -383,6 +383,31 @@ Live at https://portal.hartwelldigital.com
   (`person`, `email` = admin@hartwelldigital.com). Never retype them in a
   component.
 
+## Client onboarding (0055)
+- `/welcome` is where a new client starts: Kyle's photo (the website's real
+  headshot, `public/images/kyle.webp`) and welcome note, what happens next, and
+  the onboarding form a section at a time, saved as they type. Home links
+  there ("Start here" plus three tappable steps) until it is sent.
+- **The questions live in `src/lib/onboarding-shared.ts`**, and the answers in
+  one JSON document per client (`onboarding.answers`), so changing a question
+  needs no migration. Add a new key rather than renaming one, or old answers
+  are lost. `saveOnboarding` drops anything not shaped like an answer.
+- **Never ask for passwords.** The access section has clients add
+  admin@hartwelldigital.com to each platform and tick it off.
+- Sending it needs business, goals and brand; access and the kickoff call can
+  follow. The first send notifies Kyle (type `onboarding`) and puts "Review
+  <client>'s onboarding" on his dashboard with a four-step checklist, keyed
+  `onboarding:<client_id>` so the open-item index stops a duplicate. Sending
+  again only notifies.
+- The kickoff call uses Kyle's booking link from Settings ("New client
+  onboarding", its own update so a database without 0055 refuses only that).
+  "I've booked it" is the client's word for it, recorded once.
+- **New means recent.** Home treats a client as new only within 60 days of
+  joining (`ONBOARDING_WINDOW_DAYS`) or while onboarding is part done, so a
+  long-standing client is never greeted as a newcomer.
+- Kyle reads the answers at `/admin/clients/[id]/onboarding` (the Onboarding
+  button on each client card).
+
 ## Content approval board (0054)
 - **Kyle posts work, the client signs it off, in the portal.** Four kinds:
   website copy, designs, social posts, ads. `approvals` (status draft, waiting,

@@ -176,6 +176,12 @@ function ClientCard({ client: c, section }: { client: Client; section: Section }
             />
             <ClientUsersDialog clientId={c.id} clientName={c.business_name} />
             <ClientPreviewsDialog clientId={c.id} clientName={c.business_name} />
+            <Link
+              href={`/admin/clients/${c.id}/onboarding`}
+              className={buttonClasses("secondary", "sm")}
+            >
+              Onboarding
+            </Link>
           </>
         )}
         <ClientActions
