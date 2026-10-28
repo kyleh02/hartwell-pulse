@@ -49,26 +49,31 @@ export function ClientHome({
 }) {
   const hasWebsite = data.tiles.some((t) => t.key === "website");
   const greeting = data.isNew ? "Welcome to your portal" : "Welcome back";
-  const name = data.firstName ? `, ${data.firstName}` : "";
+  const name = data.firstName;
   const doneCount = data.steps.filter((s) => s.done).length;
 
   return (
     <div className="space-y-4">
       {/* ---- welcome ---------------------------------------------------- */}
       <section
-        className="relative overflow-hidden rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-5 sm:p-7"
+        className="relative overflow-hidden rounded-[20px] border border-pulse-border bg-pulse-surface p-6 sm:p-9"
         style={{
           backgroundImage:
             "radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--pulse-gold) 16%, transparent) 0%, transparent 55%)",
         }}
       >
-        <p className="mono-label mb-2.5 truncate">{data.businessName}</p>
-        <h1 className="text-2xl leading-tight font-semibold tracking-tight text-pulse-text sm:text-[30px]">
+        <p className="eyebrow mb-3 truncate">{data.businessName}</p>
+        <h1 className="text-[28px] leading-[1.02] font-extrabold tracking-[-0.01em] text-pulse-text uppercase sm:text-[42px]">
           {greeting}
-          {name}
+          {name && (
+            <>
+              , <span className="text-pulse-gold">{name}</span>
+            </>
+          )}
           {WAVE}
         </h1>
-        <p className="mt-2 mb-4 max-w-[620px] text-[15px] text-pulse-text-dim">
+        <div className="gold-rule mt-5 mb-4 max-w-xl" aria-hidden="true" />
+        <p className="mb-5 max-w-[620px] text-[15px] leading-relaxed text-pulse-text-dim">
           {data.isNew
             ? `This is home for everything we're doing together at ${data.businessName}: ${
                 hasWebsite
@@ -103,7 +108,7 @@ export function ClientHome({
       {data.isNew && (
         <section className="rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="mono-label">Getting started</h2>
+            <h2 className="eyebrow">Getting started</h2>
             <p className="text-xs text-pulse-text-mute">
               {doneCount} of {data.steps.length} done
             </p>
@@ -159,7 +164,7 @@ export function ClientHome({
       {data.metrics.length > 0 && (
         <section className="rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-4">
           <div className="flex items-baseline justify-between gap-3">
-            <h2 className="mono-label">{data.metricsMonth ?? "This month"}</h2>
+            <h2 className="eyebrow">{data.metricsMonth ?? "This month"}</h2>
             {!preview && (
               <Link
                 href="/dashboard/performance"
@@ -197,15 +202,15 @@ export function ClientHome({
             {HARTWELL.personFirst.slice(0, 1)}
           </span>
           <div className="min-w-0">
-            <h2 className="mono-label">Your contact</h2>
-            <p className="mt-0.5 text-base font-semibold text-pulse-text">{HARTWELL.person}</p>
+            <h2 className="eyebrow">Your contact</h2>
+            <p className="mt-1 text-[17px] font-extrabold tracking-[0.02em] text-pulse-text uppercase">{HARTWELL.person}</p>
             <p className="text-sm text-pulse-text-dim">{HARTWELL.name}</p>
           </div>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <a
             href={preview ? undefined : `mailto:${HARTWELL.email}`}
-            className="inline-flex h-11 min-w-0 items-center justify-center gap-2 rounded-[10px] border border-pulse-border px-4 text-sm text-pulse-text transition-colors hover:border-pulse-border-strong"
+            className="inline-flex h-11 min-w-0 items-center justify-center gap-2 rounded-[2px] border border-pulse-border px-5 text-sm text-pulse-text transition-colors hover:border-pulse-gold/50 hover:text-pulse-gold-strong"
           >
             <Mail size={17} className="shrink-0" aria-hidden="true" />
             <span className="truncate">{HARTWELL.email}</span>
@@ -222,8 +227,8 @@ function Tile({ tile, preview }: { tile: HomeTile; preview: boolean }) {
   const body = (
     <>
       <div className="flex items-center justify-between">
-        <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-pulse-gold/12 text-pulse-gold">
-          <Icon size={18} strokeWidth={1.75} aria-hidden="true" />
+        <span className="flex h-12 w-12 items-center justify-center rounded-[14px] border border-pulse-gold/20 bg-pulse-gold/10 text-pulse-gold transition-[background-color,color,transform] duration-400 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:-rotate-[8deg] group-hover:scale-110 group-hover:bg-pulse-gold group-hover:text-pulse-bg motion-reduce:group-hover:rotate-0 motion-reduce:group-hover:scale-100">
+          <Icon size={21} strokeWidth={1.6} aria-hidden="true" />
         </span>
         <ArrowRight
           size={16}
@@ -231,7 +236,7 @@ function Tile({ tile, preview }: { tile: HomeTile; preview: boolean }) {
           className="text-pulse-text-mute transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
         />
       </div>
-      <h2 className="mono-label flex items-center gap-2">
+      <h2 className="mt-1 flex items-center gap-2 text-[16px] font-extrabold tracking-[0.02em] text-pulse-text uppercase transition-colors group-hover:text-pulse-gold">
         {tile.title}
         {tile.tone === "attention" && (
           <>
@@ -240,21 +245,20 @@ function Tile({ tile, preview }: { tile: HomeTile; preview: boolean }) {
           </>
         )}
       </h2>
-      <p className="flex items-start gap-1.5 text-[15px] font-medium break-words text-pulse-text">
+      <p className="flex items-start gap-1.5 text-[15px] break-words text-pulse-text">
         {tile.tone === "ok" && (
           <CircleCheck size={16} className="mt-[3px] shrink-0 text-pulse-success" aria-hidden="true" />
         )}
         <span className="min-w-0">{tile.line}</span>
       </p>
       <p className="truncate text-xs text-pulse-text-dim">{tile.sub}</p>
-      <p className="mt-auto pt-1 text-[13px] text-pulse-gold">{tile.cta}</p>
+      <p className="mt-auto pt-2 text-[11px] font-bold tracking-[0.16em] text-pulse-gold uppercase">{tile.cta}</p>
     </>
   );
   const cls = cn(
-    "group flex min-w-0 flex-col gap-2 rounded-[var(--radius-card)] border bg-pulse-surface p-4 transition-colors",
-    tile.tone === "attention"
-      ? "border-pulse-warn/40 hover:border-pulse-warn/70"
-      : "border-pulse-border hover:border-pulse-border-strong",
+    "group flex min-w-0 flex-col gap-2 rounded-[20px] border bg-pulse-surface p-6",
+    !preview && "lift",
+    tile.tone === "attention" ? "border-pulse-warn/40" : "border-pulse-border",
   );
   if (preview) return <div className={cls}>{body}</div>;
   return (

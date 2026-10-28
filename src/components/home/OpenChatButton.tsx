@@ -24,8 +24,8 @@ export function OpenChatButton({
       onClick={preview ? undefined : openChat}
       aria-disabled={preview || undefined}
       className={cn(
-        "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-pulse-gold px-4 text-sm font-medium text-pulse-bg transition-colors hover:bg-pulse-gold-light",
-        preview && "cursor-default hover:bg-pulse-gold",
+        "inline-flex h-11 items-center justify-center gap-2 rounded-[2px] px-5 text-xs font-bold tracking-[0.14em] uppercase bg-pulse-gold text-pulse-bg transition-[background-color,transform,box-shadow] duration-200 hover:-translate-y-px hover:bg-pulse-gold-light hover:shadow-[0_12px_32px_rgba(181,166,117,0.25)] motion-reduce:hover:translate-y-0",
+        preview && "cursor-default hover:translate-y-0 hover:bg-pulse-gold hover:shadow-none",
         className,
       )}
     >

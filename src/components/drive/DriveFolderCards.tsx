@@ -28,7 +28,7 @@ export function DriveFolderCards({
           <Link
             key={l.id}
             href={`${base}/drive/${l.id}`}
-            className="group flex items-center gap-3 rounded-[var(--radius-card)] border border-pulse-gold/30 bg-pulse-surface p-4 transition-colors hover:border-pulse-gold/60"
+            className="lift group flex items-center gap-3 rounded-[20px] border border-pulse-gold/30 bg-pulse-surface p-5"
             style={{
               backgroundImage:
                 "radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--pulse-gold) 10%, transparent) 0%, transparent 60%)",

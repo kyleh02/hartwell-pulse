@@ -440,6 +440,22 @@ Live at https://portal.hartwelldigital.com
 - Code tolerates 0053 not being run: a missing table reads as no folders, and
   Settings says what to do.
 
+## Look and feel: the website's, on purpose
+- **Clients should feel they are still on hartwelldigital.com.** Same palette
+  (the site's gold, #0e0d0b dark, #f9f7f2 light), same Outfit, and since 28
+  October 2026 the same typography and blocks. The site lives in
+  `../hartwell-digital-v6_21/hd-v5` (CSS in `css/global.css`, section styles
+  inline in each page); read it before inventing a new treatment.
+- Page titles are heavy uppercase with the LAST word in gold (`PageHeader`
+  does it; a one-word title stays plain), over a fading `gold-rule`. Section
+  openers are `.eyebrow` (gold, 700, spaced). `.mono-label` kept its name but
+  is Outfit now, not monospace. `.data-mono` stays monospace for figures.
+- Buttons are square (2px), uppercase, spaced, and the gold one rises with a
+  glow. Clickable cards take `.lift`: a springy rise, gold border and a gold
+  line sweeping across the top, drawn by the card's own `::before` so no
+  `overflow: hidden` is needed. Never put `transition-colors` on a `.lift`
+  element: utilities win and the rise would snap instead of spring.
+
 ## Portal shell
 - **Cmd+K** opens `CommandPalette`, mounted in `Shell` for both variants. With
   no query it lists the nav; typing hits `searchEverything()`. That action is a

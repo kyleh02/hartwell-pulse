@@ -30,7 +30,7 @@
    ========================================================================== */
 
 :root {
-  --pulse-bg: #0a0908; /* near-black, slightly warm, main background */
+  --pulse-bg: #0e0d0b; /* the website's dark, so the portal and the site are one place */
   --pulse-surface: #14110f; /* raised panels, cards */
   --pulse-surface-2: #1c1815; /* inputs, hover states, secondary panels */
   --pulse-border: rgba(181, 166, 117, 0.12); /* hairline gold-tinted borders */
@@ -109,7 +109,8 @@
   --font-ip-body: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
   --font-ip-mono: var(--font-geist-mono), ui-monospace, monospace;
 
-  --radius-card: 12px;
+  /* The website's blocks are 16 to 20px round; the portal matches. */
+  --radius-card: 16px;
   --radius-input: 8px;
 }
 
@@ -271,21 +272,59 @@
     line-height: 1.7;
   }
 
-  /* A card that responds to being pointed at. Border and a 1px rise only:
-     anything more and a page of them starts to feel like a trampoline. */
+  /* A card that responds to being pointed at, the way the website's do: it
+     rises with a little spring, the border warms to gold, and a gold line
+     sweeps across the top. The line is the pseudo-element's own background,
+     clipped by its own rounded corners, so it never pokes past the card's
+     curve and the card needs no overflow: hidden (which would clip menus). */
   .lift {
+    position: relative;
     transition:
-      border-color 0.18s ease,
-      transform 0.18s ease;
+      border-color 0.3s ease,
+      box-shadow 0.4s ease,
+      transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .lift::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(to right, var(--pulse-gold), transparent) top left / 0% 2px no-repeat;
+    transition: background-size 0.45s ease;
   }
   .lift:hover {
-    border-color: var(--pulse-border-strong);
-    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--pulse-gold) 38%, transparent);
+    box-shadow: 0 20px 56px color-mix(in srgb, var(--pulse-gold) 8%, transparent);
+    transform: translateY(-4px);
+  }
+  .lift:hover::before {
+    background-size: 100% 2px;
   }
   @media (prefers-reduced-motion: reduce) {
+    .lift,
+    .lift::before {
+      transition: none;
+    }
     .lift:hover {
       transform: none;
     }
+  }
+
+  /* The website's section opener: small, heavy, spaced, gold. */
+  .eyebrow {
+    font-family: var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--pulse-gold);
+  }
+
+  /* The website's thin gold rule, fading out to the right. */
+  .gold-rule {
+    height: 1px;
+    background: linear-gradient(to right, color-mix(in srgb, var(--pulse-gold) 40%, transparent), transparent);
   }
 
   /* ---- loading --------------------------------------------------------- */
@@ -345,13 +384,16 @@
       pulse-fade-in 0.15s ease-out 0.12s both;
   }
 
-  /* Monospace small-caps section header, e.g. PERFORMANCE / GOOGLE ADS */
+  /* Small-caps label, e.g. PERFORMANCE / GOOGLE ADS. Heavy Outfit, spaced
+     out, as the website labels its stats, rather than the monospace it used
+     to be. The name stayed so nothing that uses it had to change. Ironpeak
+     documents still set their own face below. */
   .mono-label {
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     text-transform: uppercase;
     letter-spacing: 0.16em;
     font-size: 0.6875rem;
-    font-weight: 500;
+    font-weight: 700;
     color: var(--pulse-text-dim);
   }
 
