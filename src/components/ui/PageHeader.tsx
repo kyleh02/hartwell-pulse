@@ -1,9 +1,12 @@
-import { SectionLabel } from "@/components/ui/SectionLabel";
-
 /**
- * The top of every page, set the way the website sets its sections: a gold
- * eyebrow, a heavy uppercase title whose last word is picked out in gold, and
- * a thin gold rule fading away underneath.
+ * The top of every page, set the way the website sets its sections: a heavy
+ * uppercase title whose last word is picked out in gold, and a thin gold rule
+ * fading away underneath.
+ *
+ * No label sits above the title. The website had every one of those removed
+ * as AI-looking (see `.card-title` in globals.css). Where a page needs to say
+ * where it sits, as an admin page for one client does, the trail is a plain,
+ * sentence-case line of links, which is navigation rather than decoration.
  *
  * A one-word title stays plain. Gold on the only word reads as a highlight of
  * nothing in particular; the website only ever golds the word that lands it.
@@ -26,7 +29,9 @@ export function PageHeader({
     <div className="mb-7 sm:mb-9">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          {label && <SectionLabel parts={label} className="mb-3" />}
+          {label && label.length > 1 && (
+            <p className="mb-2 text-sm text-pulse-text-mute">{label.join(" / ")}</p>
+          )}
           <h1 className="text-[26px] leading-[1.05] font-extrabold tracking-[-0.01em] break-words text-pulse-text uppercase sm:text-[34px]">
             {words.join(" ")}
             {last && (

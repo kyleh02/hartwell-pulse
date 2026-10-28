@@ -30,7 +30,10 @@ export default async function ApprovalPage({ params }: { params: Promise<{ appro
         <ArrowLeft size={15} aria-hidden="true" /> All approvals
       </Link>
 
-      <div className="mb-6 flex flex-wrap items-center gap-2">
+      <h1 className="text-[26px] leading-[1.05] font-extrabold tracking-[-0.01em] break-words text-pulse-text uppercase sm:text-[34px]">
+        {approval.title}
+      </h1>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         <KindChip kind={approval.kind} channel={approval.channel} />
         <StatusPill status={approval.status} role="client" />
         {approval.round > 1 && <span className="text-xs text-pulse-text-mute">Version {approval.round}</span>}
@@ -40,9 +43,6 @@ export default async function ApprovalPage({ params }: { params: Promise<{ appro
           </span>
         )}
       </div>
-      <h1 className="text-[26px] leading-[1.05] font-extrabold tracking-[-0.01em] break-words text-pulse-text uppercase sm:text-[34px]">
-        {approval.title}
-      </h1>
       <div className="gold-rule mt-5 mb-7" aria-hidden="true" />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -50,7 +50,7 @@ export default async function ApprovalPage({ params }: { params: Promise<{ appro
         <aside className="space-y-5 lg:sticky lg:top-24 lg:self-start">
           <ApprovalDecision id={approval.id} status={approval.status} />
           <section className="rounded-[16px] border border-pulse-border bg-pulse-surface p-5">
-            <h2 className="eyebrow mb-4">History</h2>
+            <h2 className="card-title mb-4">History</h2>
             <ApprovalHistory events={events} />
             <div className="mt-5 border-t border-pulse-border pt-4">
               <ApprovalComment id={approval.id} role="client" />

@@ -20,12 +20,12 @@ export function ReportMetricBlock({
   return (
     <div className="report-block rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 p-4">
       <div className="flex items-baseline justify-between gap-2">
-        <p className="mono-label">{metric.label}</p>
+        <p className="data-mono text-2xl text-pulse-text">
+          {formatMetricValue(metric.current, metric.unit)}
+        </p>
         <DeltaBadge delta={metric.delta} />
       </div>
-      <p className="data-mono mt-1 text-2xl text-pulse-text">
-        {formatMetricValue(metric.current, metric.unit)}
-      </p>
+      <p className="mono-label mt-1">{metric.label}</p>
       {chart && metric.series.length > 1 && (
         <div className="mt-3">
           <MetricChart data={metric.series} unit={metric.unit} />

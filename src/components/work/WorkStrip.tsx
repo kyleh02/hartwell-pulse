@@ -50,9 +50,8 @@ export function WorkStrip({ strip }: { strip: Strip }) {
           href={c.href}
           className="lift rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface px-4 py-3.5"
         >
-          <p className="mono-label leading-tight">{c.label}</p>
           <p
-            className={`data-mono mt-2 text-xl leading-none ${
+            className={`data-mono text-xl leading-none ${
               c.tone === "danger"
                 ? "text-pulse-danger"
                 : c.tone === "warn"
@@ -62,6 +61,7 @@ export function WorkStrip({ strip }: { strip: Strip }) {
           >
             {c.value}
           </p>
+          <p className="mono-label mt-2 leading-tight">{c.label}</p>
         </Link>
       ))}
     </div>

@@ -231,8 +231,8 @@ function Stat({
   }[tone];
   return (
     <Card className={cn("p-4", lead && "border-pulse-border-strong")}>
-      <p className="mono-label">{label}</p>
-      <p className={cn("data-mono mt-1 text-xl sm:text-2xl", colour)}>{value}</p>
+      <p className={cn("data-mono text-xl sm:text-2xl", colour)}>{value}</p>
+      <p className="mono-label mt-1">{label}</p>
       <p className="data-mono mt-0.5 text-[10px] text-pulse-text-mute">{target}</p>
     </Card>
   );

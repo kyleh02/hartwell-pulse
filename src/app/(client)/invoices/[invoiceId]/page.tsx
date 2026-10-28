@@ -41,9 +41,8 @@ export default async function ClientInvoicePage({
     <div>
       <div className="no-print mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="mono-label">{bundle.invoice.invoice_number}</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-pulse-text">
-            Invoice
+          <h1 className="text-[26px] leading-[1.05] font-extrabold tracking-[-0.01em] text-pulse-text uppercase sm:text-[30px]">
+            Invoice <span className="text-pulse-gold">{bundle.invoice.invoice_number}</span>
           </h1>
         </div>
         <div className="flex items-center gap-2">

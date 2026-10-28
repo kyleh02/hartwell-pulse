@@ -12,11 +12,11 @@ export function SectionLabel({
   className?: string;
 }) {
   return (
-    <span className={cn("eyebrow inline-flex flex-wrap items-center", className)}>
+    <span className={cn("mono-label inline-flex flex-wrap items-center", className)}>
       {parts.map((part, i) => (
         <span key={i} className="inline-flex items-center">
           {i > 0 && <span className="mx-2 text-pulse-text-mute">/</span>}
-          <span className={i === parts.length - 1 ? "text-pulse-gold" : "text-pulse-text-mute"}>
+          <span className={i === parts.length - 1 ? "text-pulse-text-dim" : "text-pulse-text-mute"}>
             {part}
           </span>
         </span>

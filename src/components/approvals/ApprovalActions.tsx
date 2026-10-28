@@ -26,7 +26,7 @@ export function ApprovalDecision({ id, status }: { id: string; status: ApprovalS
   if (status !== "waiting") {
     return (
       <div className="rounded-[16px] border border-pulse-border bg-pulse-surface p-5">
-        <p className="eyebrow">{status === "approved" ? "Approved" : "With Kyle"}</p>
+        <p className="card-title">{status === "approved" ? "Approved" : "With Kyle"}</p>
         <p className="mt-2 text-sm text-pulse-text-dim">
           {status === "approved"
             ? "Thanks, this is signed off. Kyle will take it from here."
@@ -52,7 +52,7 @@ export function ApprovalDecision({ id, status }: { id: string; status: ApprovalS
 
   return (
     <div className="rounded-[16px] border border-pulse-warn/40 bg-pulse-surface p-5">
-      <p className="eyebrow">Your call</p>
+      <p className="card-title">Your call</p>
       <p className="mt-2 text-sm text-pulse-text-dim">Happy with it? Approve it. Not quite? Tell Kyle what to change.</p>
 
       {mode === null ? (

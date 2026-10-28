@@ -3,7 +3,6 @@ import { sectionBlocks, sectionPageBreak, metricKeyOf } from "@/lib/reports-shar
 import { ReportMetricBlock } from "@/components/reports/ReportMetricBlock";
 import { ZoomableImage } from "@/components/ui/ZoomableImage";
 import { ReportText } from "@/components/reports/ReportText";
-import { SectionLabel } from "@/components/ui/SectionLabel";
 import { cn } from "@/lib/utils/cn";
 
 type MetricBlock = Extract<ReportBlock, { type: "metric" }>;
@@ -60,8 +59,7 @@ export function ReportDocument({
             {/* The heading and its rule are one unit, so a page never breaks
                 between a section title and the first line under it. */}
             <div className="report-section-head mb-8 border-b border-pulse-border pb-4">
-              <SectionLabel parts={[section.kind, section.title]} />
-              <h2 className="report-heading mt-2.5 text-[1.375rem] font-semibold tracking-tight text-pulse-text">
+              <h2 className="report-heading text-[1.375rem] font-semibold tracking-tight text-pulse-text">
                 {section.title}
               </h2>
             </div>

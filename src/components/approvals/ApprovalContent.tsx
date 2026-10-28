@@ -28,7 +28,7 @@ export function ApprovalContent({
     <div className="space-y-5">
       {approval.note && (
         <div className="rounded-[16px] border border-pulse-gold/30 bg-pulse-gold/[0.06] px-5 py-4">
-          <p className="eyebrow mb-1.5">From {HARTWELL.personFirst}</p>
+          <p className="card-title mb-1.5">From {HARTWELL.personFirst}</p>
           <p className="text-[15px] leading-relaxed whitespace-pre-wrap text-pulse-text">{approval.note}</p>
         </div>
       )}

@@ -51,21 +51,19 @@ export default async function IncomePage() {
               "radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--pulse-gold) 14%, transparent) 0%, transparent 60%)",
           }}
         >
-          <p className="eyebrow">Received this month</p>
-          <p className="mt-3 text-[52px] leading-none font-extrabold tracking-[-0.02em] text-pulse-text">
+          <p className="text-[52px] leading-none font-extrabold tracking-[-0.02em] text-pulse-text">
             {dollars(s.thisMonth.amount)}
           </p>
-          <p className="mt-3 text-sm text-pulse-text-dim">{s.thisMonth.label} so far</p>
+          <p className="mt-3 text-sm text-pulse-text-dim">Received in {s.thisMonth.label} so far</p>
           <div className="gold-rule my-5" aria-hidden="true" />
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="mono-label">Last month</p>
-              <p className="mt-1 text-2xl font-bold text-pulse-text">{dollars(s.lastMonth.amount)}</p>
-              <p className="text-xs text-pulse-text-mute">{s.lastMonth.label}</p>
+              <p className="text-2xl font-bold text-pulse-text">{dollars(s.lastMonth.amount)}</p>
+              <p className="mt-1 text-xs text-pulse-text-dim">Last month, {s.lastMonth.label}</p>
             </div>
             <div>
-              <p className="mono-label">{s.fy.label} to date</p>
-              <p className="mt-1 text-2xl font-bold text-pulse-text">{dollars(s.fy.amount)}</p>
+              <p className="text-2xl font-bold text-pulse-text">{dollars(s.fy.amount)}</p>
+              <p className="mt-1 text-xs text-pulse-text-dim">{s.fy.label} to date</p>
               {fyDelta !== null ? (
                 <p
                   className={cn(
@@ -117,7 +115,7 @@ export default async function IncomePage() {
       {/* ---- month by month ---- */}
       <section className="mt-4 rounded-[20px] border border-pulse-border bg-pulse-surface p-6">
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="eyebrow">Received each month</h2>
+          <h2 className="card-title">Received each month</h2>
           <p className="text-xs text-pulse-text-mute">Last 12 months. This month is lighter until it ends.</p>
         </div>
         <IncomeChart months={s.months} />
@@ -143,7 +141,7 @@ export default async function IncomePage() {
 
       {/* ---- who it comes from ---- */}
       <section className="mt-4 rounded-[20px] border border-pulse-border bg-pulse-surface p-6">
-        <h2 className="eyebrow mb-4">By client, {s.fy.label}</h2>
+        <h2 className="card-title mb-4">By client, {s.fy.label}</h2>
         {s.byClient.length === 0 ? (
           <p className="text-sm text-pulse-text-dim">Nothing received yet this financial year.</p>
         ) : (
@@ -193,9 +191,9 @@ function Stat({
         tone === "warn" ? "border-pulse-warn/40" : "border-pulse-border",
       )}
     >
-      <p className="mono-label">{label}</p>
-      <p className="mt-2 text-[28px] leading-tight font-extrabold tracking-[-0.01em] text-pulse-text">{value}</p>
-      <p className={cn("mt-1 text-xs", tone === "warn" ? "text-pulse-warn" : "text-pulse-text-dim")}>{note}</p>
+      <p className="text-[28px] leading-tight font-extrabold tracking-[-0.01em] text-pulse-text">{value}</p>
+      <p className="mt-1 text-sm font-semibold text-pulse-text">{label}</p>
+      <p className={cn("mt-0.5 text-xs", tone === "warn" ? "text-pulse-warn" : "text-pulse-text-dim")}>{note}</p>
     </div>
   );
 }

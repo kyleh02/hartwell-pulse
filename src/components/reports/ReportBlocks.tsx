@@ -143,14 +143,14 @@ export function Compare({
 }) {
   return (
     <div className="report-block my-8 rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface-2/50 p-5">
-      {title && <p className="mono-label mb-3">{title}</p>}
+      {title && <p className="card-title mb-3">{title}</p>}
       <div className="grid grid-cols-2 gap-6">
         {[left, right].map((s, i) => (
           <div key={i} className={i === 1 ? "border-l border-pulse-border pl-6" : ""}>
-            <p className="mono-label leading-tight">{s.label}</p>
-            <p className="data-mono mt-1 text-2xl leading-none text-pulse-text">
+            <p className="data-mono text-2xl leading-none text-pulse-text">
               {s.value}
             </p>
+            <p className="mono-label mt-2 leading-tight">{s.label}</p>
             {s.note && (
               <p className="mt-1 text-[11px] text-pulse-text-mute">{s.note}</p>
             )}
@@ -184,7 +184,7 @@ export function NoteBlock({
 }) {
   return (
     <div className="report-block my-8 border-l-2 border-pulse-gold bg-pulse-surface-2/50 py-5 pl-5 pr-5">
-      {title && <p className="mono-label mb-3">{title}</p>}
+      {title && <p className="card-title mb-3">{title}</p>}
       <div className="space-y-3.5 text-[0.9375rem] leading-[1.75] text-pulse-text-dim">
         {children}
       </div>

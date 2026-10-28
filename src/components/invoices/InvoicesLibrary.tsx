@@ -94,22 +94,22 @@ export function InvoicesLibrary({
     <div>
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Card className="p-4">
-          <p className="mono-label">Outstanding</p>
-          <p className="data-mono mt-1 text-xl text-pulse-text sm:text-2xl">
+          <p className="data-mono text-xl text-pulse-text sm:text-2xl">
             {formatMoney(outstanding)}
           </p>
+          <p className="mono-label mt-1">Outstanding</p>
         </Card>
         <Card className="p-4">
-          <p className="mono-label">Paid this month</p>
-          <p className="data-mono mt-1 text-xl text-pulse-success sm:text-2xl">
+          <p className="data-mono text-xl text-pulse-success sm:text-2xl">
             {formatMoney(paidThisMonth)}
           </p>
+          <p className="mono-label mt-1">Paid this month</p>
         </Card>
         <Card className="p-4">
-          <p className="mono-label">Overdue</p>
-          <p className="data-mono mt-1 text-xl text-pulse-danger sm:text-2xl">
+          <p className="data-mono text-xl text-pulse-danger sm:text-2xl">
             {overdueCount}
           </p>
+          <p className="mono-label mt-1">Overdue</p>
         </Card>
       </div>
 

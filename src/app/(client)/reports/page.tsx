@@ -70,17 +70,17 @@ export default async function ReportsPage() {
                 "radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--pulse-gold) 14%, transparent) 0%, transparent 60%)",
             }}
           >
-            <p className="eyebrow">Latest report · {monthLabel(latest.period_month)}</p>
-            <h2 className="mt-3 text-[24px] leading-[1.08] font-extrabold tracking-[-0.01em] text-pulse-text uppercase sm:text-[32px]">
+            <h2 className="text-[24px] leading-[1.08] font-extrabold tracking-[-0.01em] text-pulse-text uppercase sm:text-[32px]">
               {latest.title}
             </h2>
             <div className="gold-rule mt-5 mb-4 max-w-xl" aria-hidden="true" />
             {excerpt(latest.summary) && (
               <p className="max-w-2xl text-[15px] leading-relaxed text-pulse-text-dim">{excerpt(latest.summary)}</p>
             )}
-            {published(latest.published_at) && (
-              <p className="mt-2 text-xs text-pulse-text-mute">Published {published(latest.published_at)}</p>
-            )}
+            <p className="mt-3 text-sm text-pulse-text-mute">
+              Your latest report, {monthLabel(latest.period_month)}
+              {published(latest.published_at) ? `. Published ${published(latest.published_at)}.` : "."}
+            </p>
             <div className="mt-6 flex flex-wrap gap-2">
               <Link href={`/reports/${latest.id}`} className={buttonClasses("primary", "md")}>
                 Read the report <ArrowRight size={15} aria-hidden="true" />
@@ -93,17 +93,17 @@ export default async function ReportsPage() {
 
           {earlier.length > 0 && (
             <>
-              <h2 className="eyebrow mt-10 mb-4">Earlier reports</h2>
+              <h2 className="card-title mt-10 mb-4">Earlier reports</h2>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {earlier.map((r) => (
                   <div key={r.id} className="lift group flex flex-col rounded-[20px] border border-pulse-border bg-pulse-surface p-6">
-                    <p className="mono-label">{monthLabel(r.period_month)}</p>
                     <Link
                       href={`/reports/${r.id}`}
-                      className="mt-2 text-[16px] font-extrabold tracking-[0.02em] text-pulse-text uppercase transition-colors group-hover:text-pulse-gold after:absolute after:inset-0"
+                      className="text-[16px] font-extrabold tracking-[0.02em] text-pulse-text uppercase transition-colors group-hover:text-pulse-gold after:absolute after:inset-0"
                     >
                       {r.title}
                     </Link>
+                    <p className="mt-1 text-sm text-pulse-text-dim">{monthLabel(r.period_month)}</p>
                     <div className="relative mt-auto flex items-center justify-between pt-5">
                       <span className="text-[11px] font-bold tracking-[0.16em] text-pulse-gold uppercase">Read it</span>
                       <a

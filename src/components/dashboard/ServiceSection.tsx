@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { SectionLabel } from "@/components/ui/SectionLabel";
 import { DeltaBadge } from "@/components/dashboard/DeltaBadge";
 import { MetricChart } from "@/components/dashboard/MetricChart";
 import { formatMetricValue } from "@/lib/metrics";
@@ -27,7 +26,7 @@ export function ServiceSection({
         aria-expanded={open}
         className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-pulse-surface-2/40"
       >
-        <SectionLabel parts={["Performance", section.displayName]} />
+        <span className="card-title">{section.displayName}</span>
         <span className="flex items-center gap-3">
           {primary && <DeltaBadge delta={primary.delta} />}
           <ChevronDown

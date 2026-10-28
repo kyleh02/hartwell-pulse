@@ -424,9 +424,19 @@ Live at https://portal.hartwelldigital.com
   `../hartwell-digital-v6_21/hd-v5` (CSS in `css/global.css`, section styles
   inline in each page); read it before inventing a new treatment.
 - Page titles are heavy uppercase with the LAST word in gold (`PageHeader`
-  does it; a one-word title stays plain), over a fading `gold-rule`. Section
-  openers are `.eyebrow` (gold, 700, spaced). `.mono-label` kept its name but
-  is Outfit now, not monospace. `.data-mono` stays monospace for figures.
+  does it; a one-word title stays plain), over a fading `gold-rule`.
+- **NO EYEBROWS. Ever.** No short, small, spaced-out uppercase label directly
+  above a heading. Kyle had all of them removed from the website on 19 October
+  2026 because they read as AI-generated, and a first pass at the portal look
+  on 28 October put them back before the site's changelog was read; they came
+  straight out again. A card's heading is `.card-title` (heavy, uppercase, in
+  the text colour, like the site's service-card titles) and stands alone;
+  context goes beside or below it. Stats put the NUMBER first and the label
+  under it, as the website's stat blocks do. Check by rendering the page and
+  looking for the device, not by grepping a class name: the website's own
+  removal missed ten that way.
+- `.mono-label` kept its name but is Outfit now, not monospace. `.data-mono`
+  stays monospace for figures.
 - Buttons are square (2px), uppercase, spaced, and the gold one rises with a
   glow. Clickable cards take `.lift`: a springy rise, gold border and a gold
   line sweeping across the top, drawn by the card's own `::before` so no

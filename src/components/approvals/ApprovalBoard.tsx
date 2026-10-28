@@ -27,7 +27,7 @@ export function ApprovalBoard({
     <div className="space-y-8">
       {role === "admin" && drafts.length > 0 && (
         <section>
-          <h2 className="eyebrow mb-3">Drafts, not sent yet</h2>
+          <h2 className="card-title mb-3">Drafts, not sent yet</h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {drafts.map((r) => (
               <Card key={r.id} row={r} role={role} href={`${hrefBase}/${r.id}`} today={today} />
@@ -42,7 +42,7 @@ export function ApprovalBoard({
           return (
             <section key={col.status} aria-label={role === "client" ? col.client : col.admin}>
               <div className="mb-3 flex items-baseline justify-between gap-2">
-                <h2 className="eyebrow">{role === "client" ? col.client : col.admin}</h2>
+                <h2 className="card-title">{role === "client" ? col.client : col.admin}</h2>
                 <span className="data-mono text-xs text-pulse-text-mute">{items.length}</span>
               </div>
               <div className="space-y-3">
@@ -96,10 +96,12 @@ function Card({
         </div>
       )}
       <div className="flex flex-1 flex-col gap-2 p-5">
-        <KindChip kind={row.kind} channel={row.channel} />
         <p className="text-[15px] leading-snug font-extrabold tracking-[0.02em] break-words text-pulse-text uppercase transition-colors group-hover:text-pulse-gold">
           {row.title}
         </p>
+        <div>
+          <KindChip kind={row.kind} channel={row.channel} />
+        </div>
         {role === "admin" && row.clientName && <p className="text-xs text-pulse-text-dim">{row.clientName}</p>}
         <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-xs text-pulse-text-mute">
           {due && (

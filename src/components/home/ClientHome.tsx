@@ -64,7 +64,6 @@ export function ClientHome({
             "radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--pulse-gold) 16%, transparent) 0%, transparent 55%)",
         }}
       >
-        <p className="eyebrow mb-3 truncate">{data.businessName}</p>
         <h1 className="text-[28px] leading-[1.02] font-extrabold tracking-[-0.01em] text-pulse-text uppercase sm:text-[42px]">
           {greeting}
           {name && (
@@ -110,7 +109,7 @@ export function ClientHome({
       {data.isNew && (
         <section className="rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="eyebrow">Getting started</h2>
+            <h2 className="card-title">Getting started</h2>
             <p className="text-xs text-pulse-text-mute">
               {doneCount} of {data.steps.length} done
             </p>
@@ -166,7 +165,7 @@ export function ClientHome({
       {data.metrics.length > 0 && (
         <section className="rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-4">
           <div className="flex items-baseline justify-between gap-3">
-            <h2 className="eyebrow">{data.metricsMonth ?? "This month"}</h2>
+            <h2 className="card-title">{data.metricsMonth ?? "This month"}</h2>
             {!preview && (
               <Link
                 href="/dashboard/performance"
@@ -204,9 +203,8 @@ export function ClientHome({
             {HARTWELL.personFirst.slice(0, 1)}
           </span>
           <div className="min-w-0">
-            <h2 className="eyebrow">Your contact</h2>
-            <p className="mt-1 text-[17px] font-extrabold tracking-[0.02em] text-pulse-text uppercase">{HARTWELL.person}</p>
-            <p className="text-sm text-pulse-text-dim">{HARTWELL.name}</p>
+            <h2 className="text-[17px] font-extrabold tracking-[0.02em] text-pulse-text uppercase">{HARTWELL.person}</h2>
+            <p className="text-sm text-pulse-text-dim">Your contact at {HARTWELL.name}</p>
           </div>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">

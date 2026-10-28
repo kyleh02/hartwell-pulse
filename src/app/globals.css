@@ -311,14 +311,22 @@
     }
   }
 
-  /* The website's section opener: small, heavy, spaced, gold. */
-  .eyebrow {
+  /* A card's own heading, set like the titles on the website's service
+     cards: heavy, uppercase, barely spaced, in the text colour.
+
+     There are deliberately NO eyebrows anywhere in the portal: no short,
+     small, spaced-out uppercase label sitting directly above a heading. Kyle
+     had all of them taken off hartwelldigital.com on 19 October 2026 because
+     they read as AI-generated, and the portal follows the site. A heading
+     stands on its own; context goes beside or below it, in plain text. */
+  .card-title {
     font-family: var(--font-sans);
     text-transform: uppercase;
-    letter-spacing: 0.18em;
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: var(--pulse-gold);
+    letter-spacing: 0.02em;
+    font-size: 0.9375rem;
+    font-weight: 800;
+    line-height: 1.25;
+    color: var(--pulse-text);
   }
 
   /* The website's thin gold rule, fading out to the right. */
