@@ -49,6 +49,20 @@
      without Ironpeak inheriting Hartwell's gold. */
   --pulse-steel: #7fa0c8;
   --pulse-steel-bright: #9db9d9;
+
+  /* The flat HD mark (HdMark.tsx), fitted to the 3D mark's resting frame so
+     the cross-fade between them is close to seamless: the sign-in hero's
+     gradient, the sidebar's (each stroke of the small 3D reads as one even
+     polished bar), and the darker inner edge of its round-over. */
+  --hd-stop-1: #e3d3a0;
+  --hd-stop-2: #d5c492;
+  --hd-stop-3: #a79769;
+  --hd-stop-4: #a68f59;
+  --hd-sm-stop-1: #d3c08a;
+  --hd-sm-stop-2: #d2bf89;
+  --hd-sm-stop-3: #c3b07b;
+  --hd-sm-stop-4: #c2ad76;
+  --hd-edge: #5a4a2a;
 }
 
 /* ---------- light theme ----------
@@ -80,6 +94,15 @@
   --pulse-warn: #8a6620;
   --pulse-danger: #9c4530;
   --pulse-steel: #4a6c96;
+  --hd-stop-1: #c8b98d;
+  --hd-stop-2: #b9ab80;
+  --hd-stop-3: #978960;
+  --hd-stop-4: #8a7648;
+  --hd-sm-stop-1: #d2c192;
+  --hd-sm-stop-2: #d3c292;
+  --hd-sm-stop-3: #cbbb8a;
+  --hd-sm-stop-4: #c9b37d;
+  --hd-edge: #4a3a1a;
   --pulse-steel-bright: #395878;
 }
 

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth, useSignIn } from "@clerk/nextjs";
 import { LoaderCircle } from "lucide-react";
 import { Wordmark } from "@/components/brand/Wordmark";
+import { HdMark } from "@/components/brand/HdMark";
 
 /**
  * Where the button in a welcome email lands. It carries a one-time sign-in
@@ -76,8 +77,9 @@ export default function WelcomeInPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-pulse-bg px-6 text-center">
       <div className="w-full max-w-sm">
-        <div className="mb-10 flex justify-center">
-          <Wordmark size="lg" />
+        <div className="mb-10 flex flex-col items-center">
+          <HdMark size={112} className="mb-7" />
+          <Wordmark size="lg" withGlyph={false} />
         </div>
         <Suspense fallback={null}>
           <SignInWithTicket />

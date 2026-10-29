@@ -186,7 +186,7 @@ export function Shell({
       {/* ---------- desktop sidebar ---------- */}
       <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-pulse-border bg-pulse-bg pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] lg:flex">
         <div className="flex h-16 items-center border-b border-pulse-border px-5">
-          <Wordmark size="md" />
+          <Wordmark size="md" mark="hd" />
         </div>
         <div className="flex-1 overflow-y-auto px-3 py-5">
           <NavLinks items={items} pathname={pathname} />
@@ -204,7 +204,7 @@ export function Shell({
           />
           <div className="absolute inset-y-0 left-0 flex w-72 flex-col border-r border-pulse-border bg-pulse-bg pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
             <div className="flex h-16 items-center justify-between border-b border-pulse-border px-5">
-              <Wordmark size="md" />
+              <Wordmark size="md" mark="hd" />
               <button
                 aria-label="Close menu"
                 onClick={() => setDrawerOpen(false)}
@@ -237,8 +237,12 @@ export function Shell({
             >
               <Menu size={21} />
             </button>
+            {/* Under 380 px (iPhone SE and mini, most 360 px Androids) the
+                monogram stands alone: with the words beside it the header is
+                wider than the screen and the page scrolls sideways. The words
+                stay for screen readers. */}
             <div className="lg:hidden">
-              <Wordmark size="sm" />
+              <Wordmark size="sm" mark="hd" textClassName="max-[379px]:sr-only" />
             </div>
             {/* A shortcut nobody knows about is a shortcut nobody uses, so it
                 gets a visible button. On a phone it is the only way in, since

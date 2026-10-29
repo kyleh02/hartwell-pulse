@@ -502,6 +502,39 @@ Live at https://portal.hartwelldigital.com
   popover stays dark in light mode. Left alone rather than risking auth UI that
   cannot be tested from here.
 
+## The 3D HD logo (30 October 2026)
+- **Kyle asked for the Hartwell Digital "HD" monogram turning in 3D**, polished
+  gold with a sparkle, after a liquid-chrome reference video: large on
+  `/sign-in` and `/welcome-in` (`<HdMark size={112} />`), small at the top left
+  of every portal page (`<Wordmark mark="hd" />` in `Shell`: sidebar, phone
+  header, phone menu). Printed documents keep the flat pulse glyph.
+- **The only master of the logo is raster** (the website's
+  `images/logo-mark.png`). `src/lib/brand/hd-path.ts` is a potrace of it,
+  checked by rendering it back over the original (99.5% of pixels agree). It is
+  one closed outline; the slivers between the H and the D are part of it, so
+  never thicken the outline (no stroke, no outward bevel).
+- `HdMark.tsx` paints a flat SVG of the mark first (server rendered, colours
+  in `--hd-*` tokens fitted to the 3D's resting frame), then lazy-loads
+  `src/lib/brand/hd-mark-scene.ts` (three.js r170, its own chunk, about 155 KB
+  gzipped, fetched only when the mark is on screen and the browser is idle) and
+  fades the canvas in over it. The flat mark stays for reduced motion, no
+  WebGL2, or a GPU that keeps dropping the context.
+- **It turns, then rests**: the sidebar and phone marks play one turn after
+  mounting and one more on each navigation or when the pointer comes onto the
+  lockup; the sign-in hero plays five (30 s). Resting, it draws nothing. Kyle
+  asked for it "playing"; this is the recommended reading of that (motion that
+  never stops at the edge of a client's eye all day is the likely complaint,
+  and WCAG 2.2.2 wants auto-motion to stop). `turns={Infinity}` makes one loop
+  forever if he wants that.
+- The scene is a pure function of time (`render(t)`, periodic), built from a
+  signed distance field of the outline (the rounded "pillow" edges), a
+  shader-painted studio through PMREM, its own alpha-correct bloom, and star
+  glints aimed at real highlights. Designed and reviewed in a scratch
+  prototype over two review rounds; the scene file's header explains the rest.
+- **The phone header drops the words under 380 px** (`max-[379px]:sr-only`):
+  with the monogram and "HARTWELL PULSE" side by side, a 375 px iPhone scrolled
+  sideways. It was already 1 px over at 360 px before the logo went in.
+
 ## Email delivery
 - Every `sendEmail` writes an `email_events` row; the Resend webhook at
   `/api/webhooks/resend` moves it along. Status only ever moves FORWARD through

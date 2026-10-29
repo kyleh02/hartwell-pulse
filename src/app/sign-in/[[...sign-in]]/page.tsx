@@ -1,5 +1,6 @@
 import { SignIn } from "@clerk/nextjs";
 import { Wordmark } from "@/components/brand/Wordmark";
+import { HdMark } from "@/components/brand/HdMark";
 
 export const metadata = { title: "Sign in" };
 
@@ -11,7 +12,8 @@ export default function SignInPage() {
 
       <div className="relative w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center text-center">
-          <Wordmark size="lg" />
+          <HdMark size={112} className="mb-7" />
+          <Wordmark size="lg" withGlyph={false} />
           <p className="mono-label mt-4">Client Portal</p>
           <p className="mt-3 max-w-xs text-sm text-pulse-text-dim">
             Check the pulse of your marketing. Sign in to pick up where you left
