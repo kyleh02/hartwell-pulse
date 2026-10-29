@@ -300,6 +300,12 @@ async function sendCheckins(supabase: ReturnType<typeof createAdminSupabase>): P
       await cancel();
       continue;
     }
+    // A client deleted since day one (a test, a mistaken "They said yes") gets nothing.
+    const { data: cl } = await supabase.from("clients").select("deleted_at").eq("id", row.client_id ?? "").maybeSingle();
+    if (!cl || (cl as { deleted_at: string | null }).deleted_at) {
+      await cancel();
+      continue;
+    }
     // Still on the account? Someone removed since day one gets nothing.
     const { data: cu } = await supabase
       .from("client_users")
