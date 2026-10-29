@@ -1,6 +1,9 @@
 # Hartwell Pulse — project guide for Claude Code
 
-Internal client portal for Hartwell Digital (Kyle Andruszkiewicz, sole trader, QLD).
+Internal client portal for Hartwell Digital (Kyle, sole trader, Melbourne).
+**Clients only ever see "Kyle".** On 29 October 2026 Kyle said the surname this
+file and the portal used to carry is not his; `HARTWELL.person` is first name
+only and admin-authored approval events always show `HARTWELL.personFirst`.
 Live at https://portal.hartwelldigital.com
 
 ## Stack

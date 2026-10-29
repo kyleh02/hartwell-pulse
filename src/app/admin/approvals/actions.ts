@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { HARTWELL } from "@/lib/brand";
 import { getPulseSession } from "@/lib/auth/session";
 import { createServerSupabase } from "@/lib/supabase/server";
 import {
@@ -175,7 +176,7 @@ export async function sendApproval(id: string): Promise<Result> {
     round: nextRound,
     author_id: session.clerkUserId,
     author_role: "admin",
-    author_name: session.profile?.full_name ?? "Kyle",
+    author_name: HARTWELL.personFirst,
   });
   await notifyClientPeople(a.client_id, "approval", {
     title: nextRound > 1 ? `Kyle has updated ${a.title}` : `Kyle needs your approval: ${a.title}`,
@@ -204,7 +205,7 @@ export async function adminComment(id: string, body: string): Promise<Result> {
     round: a.round,
     author_id: session.clerkUserId,
     author_role: "admin",
-    author_name: session.profile?.full_name ?? "Kyle",
+    author_name: HARTWELL.personFirst,
   });
   if (error) return { ok: false, message: error.message };
   // A note on a draft is Kyle talking to himself; the client hears nothing.

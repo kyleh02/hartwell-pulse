@@ -423,7 +423,7 @@ export async function callTool(name: string, args: Args, ctx: ToolContext): Prom
   }
 }
 
-export const INSTRUCTIONS = `This is Kyle Andruszkiewicz's sales pipeline at Hartwell Digital, a small digital marketing business in Melbourne. Leads move New, Contacted, Meeting, Proposal, then Won or Lost, and every open lead should have a follow-up date, which lands on Kyle's dashboard that morning.
+export const INSTRUCTIONS = `This is Kyle's sales pipeline at Hartwell Digital, a small digital marketing business in Melbourne. Leads move New, Contacted, Meeting, Proposal, then Won or Lost, and every open lead should have a follow-up date, which lands on Kyle's dashboard that morning.
 
 Call pipeline_overview first in a conversation: it gives today's date in Melbourne, so use it for any date you work out. Dates are YYYY-MM-DD.
 

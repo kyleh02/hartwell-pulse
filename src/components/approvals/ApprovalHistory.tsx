@@ -2,6 +2,7 @@ import { CircleCheck, MessageSquare, MessageSquareWarning, Send } from "lucide-r
 import type { ApprovalEvent } from "@/lib/approvals-shared";
 import { BUSINESS_TZ } from "@/lib/business-time";
 import { cn } from "@/lib/utils/cn";
+import { HARTWELL } from "@/lib/brand";
 
 function when(iso: string): string {
   return new Date(iso).toLocaleString("en-AU", {
@@ -23,7 +24,8 @@ export function ApprovalHistory({ events }: { events: ApprovalEvent[] }) {
       {events.map((e) => {
         const Icon =
           e.kind === "sent" ? Send : e.kind === "approved" ? CircleCheck : e.kind === "changes" ? MessageSquareWarning : MessageSquare;
-        const who = e.author_name || (e.author_role === "admin" ? "Kyle" : "Client");
+        // Kyle is always just Kyle to a client, whatever name an older event stored.
+        const who = e.author_role === "admin" ? HARTWELL.personFirst : e.author_name || "Client";
         const headline =
           e.kind === "sent"
             ? e.round > 1

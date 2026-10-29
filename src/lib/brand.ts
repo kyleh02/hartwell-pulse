@@ -21,8 +21,13 @@ export const IRONPEAK = {
 
 export const HARTWELL = {
   name: "Hartwell Digital",
-  /** Who a client is dealing with: the contact card and chat on their Home. */
-  person: "Kyle Andruszkiewicz",
+  /**
+   * Who a client is dealing with: the contact card and chat on their Home.
+   * First name only, deliberately. Clients know him as Kyle, and on 29 October
+   * 2026 Kyle said the surname this used to carry is not his. Never print a
+   * surname on a client-facing surface.
+   */
+  person: "Kyle",
   personFirst: "Kyle",
   email: "admin@hartwelldigital.com",
   site: "portal.hartwelldigital.com",
