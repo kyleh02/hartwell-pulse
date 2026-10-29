@@ -3,6 +3,7 @@ import type { Client, ClientUser, Conversation } from "@/lib/types/database";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { AdminMessages } from "@/components/messages/AdminMessages";
 import { PushToggle } from "@/components/notifications/PushToggle";
+import { staffNames } from "@/lib/staff";
 
 export const metadata = { title: "Messages" };
 
@@ -104,6 +105,7 @@ export default async function AdminMessagesPage() {
         actions={<PushToggle />}
       />
       <AdminMessages
+        staffNames={await staffNames()}
         conversations={rows}
         startableDirects={startableDirects}
         groupableClients={groupableClients}

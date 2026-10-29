@@ -381,6 +381,16 @@ Live at https://portal.hartwelldigital.com
 - Kyle's contact details on Home come from `HARTWELL` in `src/lib/brand.ts`
   (`person`, `email` = admin@hartwelldigital.com). Never retype them in a
   component.
+- **The chat is "our team", and each message names its sender** (29 October
+  2026, as Kyle takes on staff). The Messages page, the Home tile, the chat
+  bubble and Quick answers say "our team"; every team message shows its
+  sender's FIRST name from `staffNames()` (`src/lib/staff.ts`, service role,
+  first names only, "Hartwell Digital" for an account with no name). The same
+  first name goes on phone pushes and, from migration 0061, on the "New message
+  from" email. The Welcome page shows the logo (`public/images/hd-logo.webp`,
+  the website's black logo) rather than Kyle's photo. The Home contact card
+  and a few page descriptions still name Kyle, deliberately, until he says
+  otherwise.
 
 ## Client onboarding (0055)
 - `/welcome` is where a new client starts: Kyle's photo (the website's real

@@ -46,12 +46,12 @@ export default async function WelcomePage() {
       >
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
           <Image
-            src="/images/kyle.webp"
-            alt={`${HARTWELL.person}, Hartwell Digital`}
+            src="/images/hd-logo.webp"
+            alt={HARTWELL.name}
             width={112}
-            height={140}
+            height={112}
             priority
-            className="h-28 w-28 shrink-0 rounded-full border-2 border-pulse-gold/40 object-cover object-top"
+            className="h-28 w-28 shrink-0 rounded-full border-2 border-pulse-gold/40 object-cover"
           />
           <div className="min-w-0">
             <h1 className="text-[28px] leading-[1.04] font-extrabold tracking-[-0.01em] text-pulse-text uppercase sm:text-[38px]">

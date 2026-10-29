@@ -4,6 +4,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import type { Conversation } from "@/lib/types/database";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PushToggle } from "@/components/notifications/PushToggle";
+import { staffNames } from "@/lib/staff";
 import {
   ClientMessages,
   type ClientConversationRow,
@@ -18,31 +19,31 @@ export default async function MessagesPage() {
   // RLS returns only the threads this user is a member of — a teammate's
   // private thread with Kyle never appears here.
   const supabase = await createServerSupabase();
-  const { data } = await supabase
-    .from("conversations")
-    .select("*")
-    .is("deleted_at", null)
-    .order("created_at", { ascending: true });
+  const [{ data }, staff] = await Promise.all([
+    supabase.from("conversations").select("*").is("deleted_at", null).order("created_at", { ascending: true }),
+    staffNames(),
+  ]);
 
   const conversations: ClientConversationRow[] = (
     (data as Conversation[] | null) ?? []
   ).map((c) => ({
     id: c.id,
     kind: c.kind,
-    label: c.kind === "group" ? (c.title ?? "Team chat") : "Kyle",
+    label: c.kind === "group" ? (c.title ?? "Team chat") : "Our team",
   }));
 
   return (
     <div>
       <PageHeader
         label={["Messages"]}
-        title="Messages with Kyle"
-        description="A direct line to Kyle. Ask a question, share a file, or just check in."
+        title="Messages with our team"
+        description="A direct line to the Hartwell Digital team. Ask a question, share a file, or just check in."
         actions={<PushToggle />}
       />
       <ClientMessages
         conversations={conversations}
         clientId={session.clientId}
+        staffNames={staff}
       />
     </div>
   );

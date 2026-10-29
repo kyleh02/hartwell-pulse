@@ -98,7 +98,7 @@ function snippet(text: string | null, max = 70): string {
 export async function getClientHome(
   supabase: SupabaseClient,
   clientId: string,
-  opts: { firstName?: string | null } = {},
+  opts: { firstName?: string | null; staffNames?: Record<string, string> } = {},
 ): Promise<ClientHomeData | null> {
   const today = businessToday();
   const weekAgo = new Date(Date.now() - 7 * DAY).toISOString();
@@ -168,7 +168,7 @@ export async function getClientHome(
       .eq("sender_role", "client"),
     supabase
       .from("messages")
-      .select("body, sender_role, created_at")
+      .select("body, sender_role, sender_user_id, created_at")
       .eq("client_id", clientId)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -447,15 +447,15 @@ export async function getClientHome(
 
   // ---- messages -----------------------------------------------------------------
   const last = lastMessageRes.data as
-    | { body: string | null; sender_role: string; created_at: string }
+    | { body: string | null; sender_role: string; sender_user_id: string; created_at: string }
     | null;
   tiles.push({
     key: "messages",
     title: "Messages",
     line: last
-      ? `${last.sender_role === "admin" ? "Kyle" : "You"}: ${snippet(last.body)}`
-      : "Say hello to Kyle",
-    sub: last ? `Last message ${ago(last.created_at, today)}` : "Messages go straight to Kyle",
+      ? `${last.sender_role === "admin" ? (opts.staffNames?.[last.sender_user_id] ?? "Our team") : "You"}: ${snippet(last.body)}`
+      : "Contact our team",
+    sub: last ? `Last message ${ago(last.created_at, today)}` : "Messages go straight to our team",
     cta: "Open chat",
     href: "/messages",
     tone: "neutral",

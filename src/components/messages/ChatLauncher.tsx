@@ -40,9 +40,12 @@ export function ChatLauncher({
   conversations,
   clientId,
   assistant = false,
+  staffNames,
 }: {
   conversations: ClientConversationRow[];
   clientId: string;
+  /** Team first names, so each message says who it is from. */
+  staffNames?: Record<string, string>;
   /** Kyle has switched the assistant on (0059) and an API key is set. */
   assistant?: boolean;
 }) {
@@ -122,7 +125,7 @@ export function ChatLauncher({
       {open && (
         <div
           role="dialog"
-          aria-label={asking ? "Quick answers" : `Chat with ${HARTWELL.personFirst}`}
+          aria-label={asking ? "Quick answers" : "Chat with our team"}
           className={cn(
             "no-print fixed z-[45] flex flex-col overflow-hidden bg-pulse-surface",
             // phone: the whole screen, inside the notch and the home bar
@@ -135,18 +138,23 @@ export function ChatLauncher({
           )}
         >
           <div className="flex shrink-0 items-center gap-3 border-b border-pulse-border bg-[linear-gradient(135deg,color-mix(in_srgb,var(--pulse-gold)_22%,var(--pulse-surface))_0%,var(--pulse-surface)_100%)] px-4 py-3.5">
-            <span
-              aria-hidden="true"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-pulse-gold/20 text-[15px] font-semibold text-pulse-gold"
-            >
-              {asking ? <Sparkles size={18} /> : HARTWELL.personFirst.slice(0, 1)}
-            </span>
+            {asking ? (
+              <span
+                aria-hidden="true"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-pulse-gold/20 text-pulse-gold"
+              >
+                <Sparkles size={18} />
+              </span>
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element -- a 2 KB local logo; next/image buys nothing here
+              <img src="/images/hd-logo-sm.webp" alt="" width={40} height={40} className="h-10 w-10 shrink-0 rounded-full" />
+            )}
             <div className="min-w-0 flex-1">
               <p className="truncate text-[15px] font-semibold text-pulse-text">
-                {asking ? "Quick answers" : `${HARTWELL.personFirst} at ${HARTWELL.name}`}
+                {asking ? "Quick answers" : HARTWELL.name}
               </p>
               <p className="truncate text-xs text-pulse-text-dim">
-                {asking ? `An assistant. ${HARTWELL.personFirst} sees every question` : `Messages go straight to ${HARTWELL.personFirst}`}
+                {asking ? "An assistant. Our team sees every question" : "Messages go straight to our team"}
               </p>
             </div>
             <Link
@@ -172,7 +180,7 @@ export function ChatLauncher({
             <div role="tablist" aria-label="Who to ask" className="grid shrink-0 grid-cols-2 border-b border-pulse-border">
               {(
                 [
-                  ["kyle", `Message ${HARTWELL.personFirst}`],
+                  ["kyle", "Message our team"],
                   ["ask", "Quick answers"],
                 ] as const
               ).map(([key, label]) => (
@@ -229,13 +237,14 @@ export function ChatLauncher({
                 clientId={clientId}
                 kind={active.kind}
                 role="client"
-                peerName={active.label}
+                peerName={active.kind === "group" ? active.label : "our team"}
+                staffNames={staffNames}
                 fill
               />
             ) : (
               <div className="flex h-full flex-col items-center justify-center px-8 text-center">
                 <p className="text-sm text-pulse-text">
-                  {HARTWELL.personFirst} will open your chat shortly.
+                  Our team will open your chat shortly.
                 </p>
                 <p className="mt-2 text-sm text-pulse-text-dim">
                   In the meantime you can email{" "}
@@ -257,7 +266,7 @@ export function ChatLauncher({
         ref={launcherRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
-        aria-label={open ? "Close chat" : `Message ${HARTWELL.personFirst}`}
+        aria-label={open ? "Close chat" : "Message our team"}
         aria-expanded={open}
         className={cn(
           "no-print fixed right-4 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-40 flex h-14 w-14 items-center justify-center rounded-full bg-pulse-gold text-pulse-bg shadow-[0_10px_30px_rgba(0,0,0,0.35),0_0_0_6px_color-mix(in_srgb,var(--pulse-gold)_14%,transparent)] transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-pulse-gold motion-reduce:transition-none motion-reduce:hover:scale-100 lg:right-6 lg:bottom-6",

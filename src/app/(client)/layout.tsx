@@ -4,6 +4,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { aiConfigured } from "@/lib/ai/claude";
 import { assistantSettings } from "@/lib/assistant";
+import { staffNames } from "@/lib/staff";
 import { Shell } from "@/components/nav/Shell";
 import type { Conversation } from "@/lib/types/database";
 import type { ClientConversationRow } from "@/components/messages/ClientMessages";
@@ -64,7 +65,7 @@ export default async function ClientLayout({
   ).map((c) => ({
     id: c.id,
     kind: c.kind,
-    label: c.kind === "group" ? (c.title ?? "Team chat") : "Kyle",
+    label: c.kind === "group" ? (c.title ?? "Team chat") : "Our team",
   }));
 
   const name =
@@ -72,7 +73,10 @@ export default async function ClientLayout({
 
   // Kyle's settings hold bank details, so they are read server side with the
   // service role and only the one switch leaves here.
-  const assistantOn = aiConfigured() && (await assistantSettings(createAdminSupabase())).enabled;
+  const [assistantOn, staff] = await Promise.all([
+    aiConfigured() ? assistantSettings(createAdminSupabase()).then((s) => s.enabled) : Promise.resolve(false),
+    staffNames(),
+  ]);
 
   return (
     <Shell
@@ -83,6 +87,7 @@ export default async function ClientLayout({
       hasPreview={(previewCount ?? 0) > 0}
       hasCopy={(copyCount ?? 0) > 0}
       assistant={assistantOn}
+      staffNames={staff}
       conversations={conversations}
       clientId={session.clientId}
     >

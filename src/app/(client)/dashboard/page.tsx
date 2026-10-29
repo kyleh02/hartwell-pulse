@@ -6,6 +6,7 @@ import { ClientHome } from "@/components/home/ClientHome";
 import { SetPasswordCard } from "@/components/home/SetPasswordCard";
 import { NpsCard } from "@/components/nps/NpsCard";
 import { openSurveyFor } from "@/lib/nps";
+import { staffNames } from "@/lib/staff";
 
 export const metadata = { title: "Home" };
 
@@ -14,9 +15,11 @@ export default async function HomePage() {
   if (!session?.clientId) redirect("/");
 
   const supabase = await createServerSupabase();
+  const staff = await staffNames();
   const [data, survey] = await Promise.all([
     getClientHome(supabase, session.clientId, {
       firstName: session.profile?.full_name,
+      staffNames: staff,
     }),
     // Read through RLS: a person only ever sees their own question.
     openSurveyFor(supabase, session.clerkUserId),

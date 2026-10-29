@@ -30,6 +30,7 @@ import type {
 } from "@/lib/types/database";
 import { isImageMime } from "@/lib/assets-shared";
 import { cn } from "@/lib/utils/cn";
+import { HARTWELL } from "@/lib/brand";
 
 interface Attachment {
   path: string;
@@ -130,6 +131,7 @@ export function ChatThread({
   kind,
   role,
   peerName,
+  staffNames = {},
   fill = false,
 }: {
   conversationId: string;
@@ -137,6 +139,8 @@ export function ChatThread({
   kind: ConversationKind;
   role: "client" | "admin";
   peerName: string;
+  /** First names of the Hartwell Digital team, by Clerk id (src/lib/staff.ts). */
+  staffNames?: Record<string, string>;
   /**
    * Fill the parent instead of sizing itself, with no frame of its own. For the
    * panel the chat bubble opens, which is already the right size and already
@@ -272,8 +276,8 @@ export function ChatThread({
           .select("*")
           .eq("conversation_id", conversationId),
         // Sender names + receipt names. Clients see their own client's users
-        // (peer policy); Kyle's row isn't in it, so admin senders fall back to
-        // "Kyle" below.
+        // (peer policy); team rows aren't in it, so team members are named
+        // from `staffNames`, which the server passes down.
         supabase
           .from("client_users")
           .select("clerk_user_id, full_name")
@@ -518,7 +522,7 @@ export function ChatThread({
     if (now - lastTypingSentRef.current < 2000) return;
     lastTypingSentRef.current = now;
     const name =
-      role === "admin" ? "Kyle" : (names.get(userId) ?? "Someone");
+      role === "admin" ? (staffNames[userId] ?? HARTWELL.name) : (names.get(userId) ?? "Someone");
     void channelRef.current?.send({
       type: "broadcast",
       event: "typing",
@@ -705,7 +709,7 @@ export function ChatThread({
 
   function senderLabel(m: Message): string {
     if (m.sender_user_id === userId) return "You";
-    if (m.sender_role === "admin") return "Kyle";
+    if (m.sender_role === "admin") return staffNames[m.sender_user_id] ?? HARTWELL.name;
     return names.get(m.sender_user_id) ?? peerName;
   }
 
@@ -728,7 +732,7 @@ export function ChatThread({
     if (seen.length === 0) return null;
     if (kind === "direct") return "Seen";
     return `Seen by ${seen
-      .map((s) => names.get(s.clerk_user_id) ?? "Kyle")
+      .map((s) => staffNames[s.clerk_user_id] ?? names.get(s.clerk_user_id) ?? HARTWELL.name)
       .join(", ")}`;
   }
 

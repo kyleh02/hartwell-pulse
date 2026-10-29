@@ -63,10 +63,12 @@ export function AdminMessages({
   conversations,
   startableDirects,
   groupableClients,
+  staffNames,
 }: {
   conversations: ConversationRow[];
   startableDirects: StartableDirect[];
   groupableClients: GroupableClient[];
+  staffNames?: Record<string, string>;
 }) {
   const supabase = useSupabaseClient();
   const router = useRouter();
@@ -419,6 +421,7 @@ export function AdminMessages({
             kind={current.kind}
             role="admin"
             peerName={subLabel(current)}
+            staffNames={staffNames}
           />
         ) : (
           <p className="text-sm text-pulse-text-dim">

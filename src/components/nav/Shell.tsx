@@ -37,6 +37,8 @@ interface ShellProps {
   hasCopy?: boolean;
   /** The client assistant is on (0059): the chat panel gets a Quick answers tab. */
   assistant?: boolean;
+  /** Team first names for the chat bubble's sender labels (src/lib/staff.ts). */
+  staffNames?: Record<string, string>;
   /** The client's threads, for the chat bubble. Client variant only. */
   conversations?: ClientConversationRow[];
   clientId?: string | null;
@@ -128,6 +130,7 @@ export function Shell({
   hasPreview = false,
   hasCopy = false,
   assistant = false,
+  staffNames,
   conversations = [],
   clientId = null,
   children,
@@ -281,7 +284,7 @@ export function Shell({
       </div>
 
       {showChat && clientId && (
-        <ChatLauncher conversations={conversations} clientId={clientId} assistant={assistant} />
+        <ChatLauncher conversations={conversations} clientId={clientId} assistant={assistant} staffNames={staffNames} />
       )}
 
       {/* ---------- client bottom tab bar (mobile only) ---------- */}

@@ -3,6 +3,7 @@
 import { getPulseSession } from "@/lib/auth/session";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { pushToUsers, pushConfigured } from "@/lib/push";
+import { firstName } from "@/lib/staff";
 
 interface SubscriptionInput {
   endpoint: string;
@@ -141,9 +142,11 @@ export async function notifyNewMessage(messageId: string) {
       | { clerk_user_id: string; full_name: string | null; role: string }[]
       | null) ?? [];
   const senderRow = users.find((u) => u.clerk_user_id === session.clerkUserId);
+  // A team member by first name only (clients never see a surname); a
+  // client by their full name, which only the team sees.
   const senderName =
     message.sender_role === "admin"
-      ? "Kyle"
+      ? firstName(senderRow?.full_name)
       : (senderRow?.full_name ?? "Your client");
 
   const title =

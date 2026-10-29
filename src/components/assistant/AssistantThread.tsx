@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Sparkles } from "lucide-react";
-import { HARTWELL } from "@/lib/brand";
 import { cn } from "@/lib/utils/cn";
 
 type Msg = { role: "user" | "assistant"; content: string; handed_off?: boolean };
@@ -53,7 +52,7 @@ export function AssistantThread({ onMessageKyle }: { onMessageKyle: () => void }
       if (!res.ok || !res.body) {
         const t = await res.text().catch(() => "");
         setMessages((m) => m.slice(0, -1));
-        setError(t || "That didn't send. Try again, or message Kyle.");
+        setError(t || "That didn't send. Try again, or message our team.");
         return;
       }
       const reader = res.body.getReader();
@@ -71,7 +70,7 @@ export function AssistantThread({ onMessageKyle }: { onMessageKyle: () => void }
       }
       await load();
     } catch {
-      setError("The connection dropped. Try again, or message Kyle.");
+      setError("The connection dropped. Try again, or message our team.");
     } finally {
       setBusy(false);
       box.current?.focus();
@@ -84,8 +83,8 @@ export function AssistantThread({ onMessageKyle }: { onMessageKyle: () => void }
         {messages.length === 0 ? (
           <div className="pt-2">
             <p className="text-sm leading-relaxed text-pulse-text-dim">
-              Ask about the portal, your account or how {HARTWELL.personFirst} works, and get an answer straight away. Anything about prices or
-              changes goes to {HARTWELL.personFirst}, who reads every conversation.
+              Ask about the portal, your account or how we work, and get an answer straight away. Anything about prices or changes goes to
+              our team, who read every conversation.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               {STARTERS.map((s) => (
@@ -119,7 +118,7 @@ export function AssistantThread({ onMessageKyle }: { onMessageKyle: () => void }
                   ) : (
                     m.content
                   )}
-                  {m.handed_off && <span className="mt-2 block text-xs font-semibold text-pulse-gold">Passed to {HARTWELL.personFirst}</span>}
+                  {m.handed_off && <span className="mt-2 block text-xs font-semibold text-pulse-gold">Passed to our team</span>}
                 </div>
               </li>
             ))}
@@ -165,7 +164,7 @@ export function AssistantThread({ onMessageKyle }: { onMessageKyle: () => void }
         <p className="mt-2 flex items-center gap-1.5 px-1 text-[11px] text-pulse-text-mute">
           <Sparkles size={11} aria-hidden="true" /> An AI assistant.{" "}
           <button type="button" onClick={onMessageKyle} className="text-pulse-gold underline-offset-2 hover:underline">
-            Message {HARTWELL.personFirst} instead
+            Message our team instead
           </button>
         </p>
       </div>

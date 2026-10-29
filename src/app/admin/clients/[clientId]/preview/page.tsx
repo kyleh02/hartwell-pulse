@@ -7,6 +7,7 @@ import { getClientHome } from "@/lib/client-home";
 import type { Client } from "@/lib/types/database";
 import { DashboardView } from "@/components/dashboard/DashboardView";
 import { ClientHome } from "@/components/home/ClientHome";
+import { staffNames } from "@/lib/staff";
 
 export const metadata = { title: "Client preview" };
 
@@ -40,6 +41,7 @@ export default async function ClientPreviewPage({
   const [home, data] = await Promise.all([
     getClientHome(supabase, clientId, {
       firstName: (firstUser as { full_name: string | null } | null)?.full_name,
+      staffNames: await staffNames(),
     }),
     getClientDashboardData(supabase, clientId),
   ]);

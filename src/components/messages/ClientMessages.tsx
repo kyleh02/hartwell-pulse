@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils/cn";
 export interface ClientConversationRow {
   id: string;
   kind: ConversationKind;
-  label: string; // "Kyle" for the direct thread, the title for group chats
+  label: string; // "Our team" for the direct thread, the title for group chats
 }
 
 /**
@@ -20,9 +20,11 @@ export interface ClientConversationRow {
 export function ClientMessages({
   conversations,
   clientId,
+  staffNames,
 }: {
   conversations: ClientConversationRow[];
   clientId: string;
+  staffNames?: Record<string, string>;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(
     conversations[0]?.id ?? null,
@@ -32,7 +34,7 @@ export function ClientMessages({
   if (conversations.length === 0) {
     return (
       <p className="text-sm text-pulse-text-dim">
-        No conversation yet — Kyle will open one for you shortly.
+        No conversation yet. Our team will open one for you shortly.
       </p>
     );
   }
@@ -71,7 +73,8 @@ export function ClientMessages({
           clientId={clientId}
           kind={current.kind}
           role="client"
-          peerName={current.label}
+          peerName={current.kind === "group" ? current.label : "our team"}
+          staffNames={staffNames}
         />
       )}
     </div>
