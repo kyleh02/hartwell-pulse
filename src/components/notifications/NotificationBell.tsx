@@ -68,14 +68,14 @@ export function NotificationBell() {
           // audio unavailable / blocked — stay silent
         }
       }
-      // Desktop pop-up specifically for new messages.
+      // Desktop pop-up for new messages and new leads: someone waiting either way.
       if (
         typeof window !== "undefined" &&
         "Notification" in window &&
         window.Notification.permission === "granted"
       ) {
         for (const n of newOnes) {
-          if (n.type !== "message") continue;
+          if (n.type !== "message" && n.type !== "lead") continue;
           try {
             const dn = new window.Notification(n.title, {
               body: n.body ?? undefined,

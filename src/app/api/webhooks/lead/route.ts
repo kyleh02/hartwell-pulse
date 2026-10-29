@@ -3,6 +3,8 @@ import { type NextRequest } from "next/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { businessToday } from "@/lib/business-time";
 import type { LeadSource } from "@/lib/pipeline-shared";
+import { notifyAdmins } from "@/lib/notify";
+import { pushToUsers } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +33,31 @@ function authorised(req: NextRequest): boolean | null {
   return given.length === want.length && timingSafeEqual(given, want);
 }
 
+/** How the alert names what came in. */
+const ARRIVED: Record<string, string> = { website: "Enquiry", quiz: "Quiz result", audit: "Audit request" };
+
 const text = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "") || null;
+
+/**
+ * Tell Kyle a lead has landed: a bell notification (with a desktop pop-up while
+ * the portal is open) and a push to every device he has switched push on for.
+ * The bell entry is `in_portal` because the website has already emailed him;
+ * a second email for the same enquiry would be noise. Never allowed to fail
+ * the request: the lead is saved whatever happens here.
+ */
+async function tellKyle(sb: ReturnType<typeof createAdminSupabase>, n: { title: string; body: string; id: string }) {
+  try {
+    const link = `/admin/pipeline/${n.id}`;
+    const { data } = await sb.from("client_users").select("clerk_user_id").eq("role", "admin");
+    const admins = ((data as { clerk_user_id: string }[] | null) ?? []).map((a) => a.clerk_user_id);
+    await Promise.all([
+      notifyAdmins(null, "lead", { title: n.title, body: n.body, link }, "in_portal"),
+      pushToUsers(admins, { title: n.title, body: n.body, url: link, tag: `lead-${n.id}` }),
+    ]);
+  } catch (e) {
+    console.error("[lead] could not notify:", e);
+  }
+}
 
 export async function POST(req: NextRequest) {
   const auth = authorised(req);
@@ -86,6 +112,11 @@ export async function POST(req: NextRequest) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", existing.id);
+    await tellKyle(supabase, {
+      id: existing.id,
+      title: `${text(body.business, 160) ?? name} enquired again`,
+      body: message ? message.slice(0, 140) : "Another enquiry through the website. It's on their lead.",
+    });
     return Response.json({ ok: true, id: existing.id, merged: true });
   }
 
@@ -114,6 +145,13 @@ export async function POST(req: NextRequest) {
     kind: "created",
     body: source === "audit" ? "Asked for an audit on the website" : "Enquired through the website",
     created_by: "website",
+  });
+  const business = text(body.business, 160);
+  const service = text(body.service, 200);
+  await tellKyle(supabase, {
+    id,
+    title: `New lead: ${business ?? name}`,
+    body: `${ARRIVED[source] ?? "Enquiry"} from ${name}${business ? ` at ${business}` : ""}${service ? `, about ${service}` : ""}. Due today.`,
   });
   return Response.json({ ok: true, id });
 }

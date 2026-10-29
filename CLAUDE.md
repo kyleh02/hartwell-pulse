@@ -550,6 +550,13 @@ Live at https://portal.hartwelldigital.com
   which must equal `PULSE_LEAD_SECRET` in Cloudflare Pages. Likely spam stays off
   the board. A second enquiry from someone with an open lead becomes a note on
   it, not a second card. A new enquiry is due today.
+- **Each website lead alerts Kyle** (0060 adds the `lead` notification type): a
+  bell notification on `in_portal`, because the website has already emailed him
+  and a second email would be noise; a desktop pop-up while the portal is open
+  (the bell pops up `message` and `lead`); and a push to every device he has
+  switched on with "Turn on notifications" on Messages, opening the lead. A
+  repeat enquiry alerts too. Likely spam never does. Leads Kyle or Claude add
+  themselves do not alert anyone.
 
 ## Claude connector (0057)
 - **Claude works the pipeline from Kyle's own chats** through an MCP server at
