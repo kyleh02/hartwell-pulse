@@ -31,6 +31,8 @@ export const HARTWELL = {
   personFirst: "Kyle",
   email: "admin@hartwelldigital.com",
   site: "portal.hartwelldigital.com",
+  /** The public website, for the footer of anything a client keeps. */
+  web: "hartwelldigital.com",
 } as const;
 
 export function isIronpeak(brand: Brand | string | null | undefined): boolean {

@@ -56,5 +56,8 @@ export async function renderInvoicePdf(
     fallbackName: "Invoice",
     previousPath: invoice.pdf_path,
     origin,
+    // An invoice that spills a few lines onto a second page is shrunk a
+    // touch to fit on one. See fitToFewerPages.
+    fit: true,
   });
 }

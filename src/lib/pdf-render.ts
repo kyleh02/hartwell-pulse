@@ -46,6 +46,42 @@ export function documentNames(raw: string, fallback: string) {
   return { fileName: `${displayName}.pdf`, keyName };
 }
 
+/**
+ * Count the pages in a PDF Chromium wrote. Its PDFs keep every page object in
+ * plain text as "/Type /Page" ("/Pages" is the tree above them, not a page).
+ * Zero means it could not tell, and the caller leaves the document alone.
+ */
+export function countPdfPages(pdf: Uint8Array): number {
+  const text = Buffer.from(pdf).toString("latin1");
+  return (text.match(/\/Type\s*\/Page(?![A-Za-z])/g) ?? []).length;
+}
+
+/**
+ * How far a document may shrink to lose its last page. 90% is the floor: past
+ * that the text gets small enough to be a different document.
+ */
+const FIT_SCALES = [0.96, 0.92, 0.9];
+
+/**
+ * When a document runs onto one more page than it needs (the notes spilling
+ * over by three lines, the totals by a few millimetres), print it again a
+ * touch smaller and keep the first size that saves a page. Anything that needs
+ * more than 10% to fit is genuinely two pages long and is left at full size.
+ */
+async function fitToFewerPages(
+  pdf: Uint8Array,
+  printAt: (scale: number) => Promise<Uint8Array>,
+): Promise<Uint8Array> {
+  const pages = countPdfPages(pdf);
+  if (pages < 2) return pdf;
+  for (const scale of FIT_SCALES) {
+    const smaller = await printAt(scale);
+    const n = countPdfPages(smaller);
+    if (n > 0 && n < pages) return smaller;
+  }
+  return pdf;
+}
+
 export async function renderAndAttach({
   supabase,
   kind,
@@ -56,6 +92,7 @@ export async function renderAndAttach({
   fallbackName,
   previousPath,
   origin,
+  fit = false,
 }: {
   supabase: SupabaseClient;
   kind: PrintKind;
@@ -68,6 +105,11 @@ export async function renderAndAttach({
   fallbackName: string;
   previousPath: string | null;
   origin: string;
+  /**
+   * Shrink slightly to lose a nearly empty last page. Invoices only: a report
+   * breaks its own pages on purpose, section by section.
+   */
+  fit?: boolean;
 }): Promise<RenderPdfResult> {
   const token = printTokenFor(kind, id);
   if (!token) {
@@ -124,16 +166,21 @@ export async function renderAndAttach({
           message: `The print page returned ${res?.status() ?? "no response"}. It may not be saved yet.`,
         };
       }
-      pdf = await page.pdf({
-        format: "A4",
-        // The document draws its own letterhead and colours, and a PDF that
-        // drops them is not the document.
-        printBackground: true,
-        // globals.css already sets `@page { margin: 18mm 16mm }`, which is the
-        // print design the portal was built with. Passing a second set of
-        // numbers here would give the document two answers to one question.
-        preferCSSPageSize: true,
-      });
+      const printAt = (scale: number) =>
+        page.pdf({
+          format: "A4",
+          // The document draws its own letterhead and colours, and a PDF that
+          // drops them is not the document.
+          printBackground: true,
+          // The page size and margins come from the document's own @page
+          // rules (globals.css, and the invoice's named page). Passing a
+          // second set of numbers here would give the document two answers to
+          // one question.
+          preferCSSPageSize: true,
+          scale,
+        });
+      pdf = await printAt(1);
+      if (fit) pdf = await fitToFewerPages(pdf, printAt);
     } finally {
       await browser.close();
     }

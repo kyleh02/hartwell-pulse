@@ -157,12 +157,14 @@ Live at https://portal.hartwelldigital.com
   both pass through, and an email cannot be taken back.
 
 ## Documents (invoices and reports)
-- Both carry a `brand` column, `hartwell` or `ironpeak`, and both dress in
-  `doc-light brand-ironpeak` for Ironpeak. Shared identity lives in
-  `src/lib/brand.ts`; never re-declare the Ironpeak details in a component.
+- Both carry a `brand` column, `hartwell` or `ironpeak`. Reports dress in
+  `doc-light brand-ironpeak` for Ironpeak; the invoice has its own tokens (see
+  "The invoice document" below). Shared identity lives in `src/lib/brand.ts`;
+  never re-declare the Ironpeak details in a component.
 - **A document must never hardcode a colour.** Chart strokes, bars and fills all
   read `--pulse-gold`, which `doc-light` swaps for steel. That is what lets one
-  component serve both brands without a prop threaded down to it.
+  component serve both brands without a prop threaded down to it. The invoice
+  does the same with its `--inv-*` tokens, which `.is-ironpeak` swaps.
 - The letterhead renders on screen AND in print, deliberately. A print-only
   letterhead means the first time anyone sees the branded document is after it
   has been sent.
@@ -312,6 +314,42 @@ Live at https://portal.hartwelldigital.com
 - The tab title on a report viewer is the suggested PDF filename, so it is
   `{client} - {title}`, and the admin preview uses the same one as the client
   page. A file called "Report preview.pdf" reaching a client is a mistake.
+- **The invoice document** (`InvoiceDocument.tsx`, redesigned 2 November
+  2026; Kyle chose "Midnight" from three pitched concepts). It is always a
+  white sheet, in both portal themes, under a full-bleed masthead: the
+  website's black, the flat HD monogram in foil gold with HARTWELL DIGITAL,
+  seeded gold dust and glints, the number, dates and amount due in gold. The
+  totals close on a black Amount due bar. Ironpeak wears the same layout in
+  near-black and steel under its DOT mountain mark (`IronpeakDotMark.tsx`,
+  copied exactly from the brand kit's `09 Dot mark` SVG, which says never to
+  redraw it), with no dust and no Hartwell anywhere. Styles live in
+  globals.css under "Invoice document", unlayered, all colours as opaque
+  tokens: a colour at some opacity becomes a soft mask in a PDF and some
+  viewers paint it with a coloured cast (pdf.js showed a pink one).
+- **Why it was redesigned:** it was one bordered card, so every page break cut
+  the box, and nothing held its parts together. Totals and bank details were
+  stranded alone on page two or three, a phase heading sat at the foot of a
+  page, the top said HARTWELL PULSE, and money was in the code font.
+- **How it paginates.** The sheet prints on the named page `invoice`, whose
+  `@page` rule the component writes (its margin boxes carry the invoice
+  number): "Page x of y" and the business line in every footer, and "Tax
+  invoice INV-0042, continued" atop every page after the first. The page has
+  no side margins and page one no top margin, so the masthead bleeds to the
+  edges; the sheet pads itself (`--inv-pad`, 18mm in print). Chrome clips
+  content at the page margin, which is why a negative margin cannot do it. A
+  tbody per phase; a phase heading keeps with its first line and its subtotal
+  with its last; payment and totals are ONE block that never splits and, when
+  it has to move, takes the last line or two with it.
+- **Shrink to fit** (`fitToFewerPages` in `pdf-render.ts`, invoices only):
+  when the rendered PDF has two or more pages, it prints again at 96%, 92% and
+  then 90%, and keeps the first that saves a page. Anything needing more is
+  genuinely longer and stays at full size. The client's "Download PDF" button
+  is `window.print()`, which gets the same pagination but not the shrink.
+- Narrow widths are a container query (`invoice`, under 600px), because the
+  admin preview sits in half the editor. Screen only: size containment in
+  print would stop the sheet fragmenting. The masthead has a second, small
+  dust field for the narrow layout, since the wide field put specks inside
+  the stacked words.
 - Print pagination lives in the `@media print` block in globals.css. Headings
   keep with their text, table headers repeat per page, rows and cards never
   split, paragraphs use orphans/widows rather than `break-inside: avoid` so a
@@ -507,7 +545,8 @@ Live at https://portal.hartwelldigital.com
   gold with a sparkle, after a liquid-chrome reference video: large on
   `/sign-in` and `/welcome-in` (`<HdMark size={112} />`), small at the top left
   of every portal page (`<Wordmark mark="hd" />` in `Shell`: sidebar, phone
-  header, phone menu). Printed documents keep the flat pulse glyph.
+  header, phone menu). Reports keep the flat pulse glyph; the invoice carries
+  the flat HD monogram (see "The invoice document").
 - **The only master of the logo is raster** (the website's
   `images/logo-mark.png`). `src/lib/brand/hd-path.ts` is a potrace of it,
   checked by rendering it back over the original (99.5% of pixels agree). It is
