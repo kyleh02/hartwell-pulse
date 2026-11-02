@@ -715,10 +715,13 @@ kind means a token minted for a report cannot be pointed at an invoice.
 
 ### Recurring billing
 
-`/api/cron/recurring`, daily at 06:00 UTC.
+`/api/cron/recurring`, twice daily: 22:00 UTC sends (9am in Melbourne on
+daylight saving, 8am in winter) and 06:00 UTC (5pm or 4pm) is a same-day
+second try that does nothing unless the morning run failed. Until 2 November
+2026 the 06:00 run was the only one, so invoices went out at 5pm.
 
-- Evaluated in **Australia/Brisbane** time, so a billing day matches what Kyle
-  set regardless of the cron's UTC runtime.
+- Evaluated in **Australia/Melbourne** time (`src/lib/business-time.ts`), so a
+  billing day matches what Kyle set regardless of the cron's UTC runtime.
 - Due once the billing day has arrived this month (`today >= anchor`), so a
   missed cron day self-heals on a later run, and never back-bills a period whose
   billing day predates the template's issue date.
@@ -741,8 +744,12 @@ monthly" ticked shows "auto-sends monthly" where the Send button would be. The
 template is a pattern; the cron makes and sends copies.
 
 `ScheduledInvoices` (a card above the invoice list) pulls every active template
-out of the list, showing the billing day, the terms, the next issue date, the
-due date and the monthly total across all retainers. A standing arrangement that
+out of the list, showing the billing day, the terms, the next issue date and
+hour, the due date and the monthly total across all retainers. On the billing
+day it reads "today" until that month's invoice has actually gone (a generated
+draft still counts as not gone), then moves to next month. Before 2 November
+2026 it jumped to next month at midnight, so on the day it looked as if the
+invoice had already been sent. A standing arrangement that
 will quietly charge a client next Tuesday looks identical to a one-off from
 March in a list sorted by creation date.
 
@@ -1391,13 +1398,13 @@ cron-job.org hitting the same endpoint with `CRON_SECRET` as a bearer token.
 
 | Endpoint | Schedule | In `vercel.json`? | What it does |
 |---|---|---|---|
-| `/api/cron/recurring` | 06:00 UTC daily | yes | Materialise and auto-send recurring invoices |
+| `/api/cron/recurring` | 22:00 and 06:00 UTC daily | yes (two entries) | Materialise and auto-send recurring invoices |
 | `/api/cron/email` | 07:00 UTC daily | yes | Instant notification emails plus the 30-minute admin nudge |
 | `/api/cron/overdue` | 08:00 UTC daily | yes | Due-soon heads-up and the overdue nudge |
 | `/api/cron/digest` | Mon 08:00 UTC | yes | The weekly digest |
 | `/api/cron/purge-clients` | 04:00 UTC daily | yes | Purge clients and conversations past the 30-day window |
 | `/api/cron/crm-reminders` | 22:00 UTC daily | yes | Book re-verify tasks |
-| `/api/cron/brief` | 21:00 UTC daily (7am Brisbane) | yes | The morning brief |
+| `/api/cron/brief` | 21:00 UTC daily (8am Melbourne, 7am in winter) | yes | The morning brief |
 | `/api/cron/work` | hourly, intended | **no** | Generate work items, materialise recurrences, nudge timed items |
 | `/api/cron/crm-send` | every few minutes | **no** | Put approved outreach into Outlook Drafts |
 

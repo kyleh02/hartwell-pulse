@@ -3,7 +3,7 @@ import { CalendarClock } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { formatMoney } from "@/lib/invoices-shared";
 import type { AdminInvoiceRow } from "@/lib/invoices";
-import { BUSINESS_TZ } from "@/lib/business-time";
+import { BUSINESS_TZ, businessDateParts, businessToday } from "@/lib/business-time";
 
 /**
  * What is queued to bill itself, and when.
@@ -13,20 +13,91 @@ import { BUSINESS_TZ } from "@/lib/business-time";
  * one-off from March. This pulls them out so the standing arrangements can be
  * seen at a glance.
  */
-function nextIssue(anchor: number): Date {
-  // Brisbane, matching the cron that actually does the billing.
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: BUSINESS_TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
-  const y = get("year");
-  const m = get("month");
-  const d = get("day");
-  // The billing day has passed this month, so the next one is next month.
-  return d >= anchor ? new Date(y, m, anchor) : new Date(y, m - 1, anchor);
+
+// The recurring cron's two runs, in UTC hours, as vercel.json has them: the
+// morning send and the afternoon second try. The local hour is worked out per
+// date rather than written in, because Melbourne's offset moves twice a year.
+const SEND_RUN_UTC = 22;
+const RETRY_RUN_UTC = 6;
+
+function ymd(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function melbourneHour(at: Date) {
+  return Number(
+    new Intl.DateTimeFormat("en-AU", {
+      timeZone: BUSINESS_TZ,
+      hour: "numeric",
+      hourCycle: "h23",
+    }).format(at),
+  );
+}
+
+/** The Melbourne hour a run lands in on a given Melbourne date. */
+function runHour(utcHour: number, day: Date) {
+  const want = ymd(day);
+  // Ahead of UTC, so a late UTC hour lands on the next local day.
+  for (const back of [0, 1]) {
+    const at = new Date(
+      Date.UTC(day.getFullYear(), day.getMonth(), day.getDate() - back, utcHour),
+    );
+    if (businessToday(at) === want) return melbourneHour(at);
+  }
+  return utcHour;
+}
+
+function ampm(h: number) {
+  return `${h % 12 || 12}${h < 12 ? "am" : "pm"}`;
+}
+
+/**
+ * The next invoice a template will send, by the cron's own rules.
+ *
+ * This month's billing day counts until this month's invoice has actually gone,
+ * so on the day itself the card says today rather than jumping to next month
+ * before anything was sent. A billing day before the template's own issue date
+ * is skipped, because the cron never back-bills. A generated invoice still in
+ * draft is a send that broke halfway, and the next run finishes it, so it is
+ * still pending.
+ */
+function nextBilling(
+  t: AdminInvoiceRow & { anchor: number },
+  invoices: AdminInvoiceRow[],
+): { day: Date; pending: boolean } {
+  const { y, m, d } = businessDateParts();
+  const setUp = t.issue_date.slice(0, 10);
+  const period = ymd(new Date(y, m - 1, 1));
+  const billed = invoices.some(
+    (i) =>
+      i.recurring_source_id === t.id &&
+      i.recurring_period?.slice(0, 10) === period &&
+      i.status !== "draft",
+  );
+  const thisMonth = new Date(y, m - 1, t.anchor);
+  if (!billed && ymd(thisMonth) >= setUp) {
+    // On or after the billing day it goes at the next run, dated that day.
+    return d >= t.anchor
+      ? { day: new Date(y, m - 1, d), pending: true }
+      : { day: thisMonth, pending: false };
+  }
+  for (let k = 1; k <= 24; k++) {
+    const next = new Date(y, m - 1 + k, t.anchor);
+    if (ymd(next) >= setUp) return { day: next, pending: false };
+  }
+  return { day: new Date(y, m, t.anchor), pending: false };
+}
+
+/** When a pending invoice goes, read against the clock. */
+function pendingWhen(day: Date) {
+  const now = melbourneHour(new Date());
+  // Hobby fires anywhere in the hour, so the hour itself still counts.
+  const send = runHour(SEND_RUN_UTC, day);
+  if (now <= send) return `today, ${ampm(send)}`;
+  const retry = runHour(RETRY_RUN_UTC, day);
+  if (now <= retry) return `today, ${ampm(retry)}`;
+  const tomorrow = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1);
+  return `not sent yet, next try tomorrow ${ampm(runHour(SEND_RUN_UTC, tomorrow))}`;
 }
 
 function pretty(d: Date) {
@@ -50,13 +121,16 @@ export function ScheduledInvoices({
       ...i,
       anchor: i.recurring_anchor_day ?? Number(i.issue_date.slice(8, 10)),
     }))
-    .sort(
-      (a, b) => nextIssue(a.anchor).getTime() - nextIssue(b.anchor).getTime(),
-    );
+    .map((t) => ({ ...t, next: nextBilling(t, invoices) }))
+    .sort((a, b) => a.next.day.getTime() - b.next.day.getTime());
 
   if (templates.length === 0) return null;
 
   const monthly = templates.reduce((sum, t) => sum + Number(t.total), 0);
+  const { y, m, d } = businessDateParts();
+  const today = new Date(y, m - 1, d);
+  const sendAt = runHour(SEND_RUN_UTC, today);
+  const retryAt = runHour(RETRY_RUN_UTC, today);
 
   return (
     <Card className="mb-5 p-4">
@@ -72,9 +146,9 @@ export function ScheduledInvoices({
 
       <ul className="space-y-2">
         {templates.map((t) => {
-          const next = nextIssue(t.anchor);
+          const { day, pending } = t.next;
           const terms = t.recurring_terms_days ?? defaultTerms;
-          const due = new Date(next);
+          const due = new Date(day);
           due.setDate(due.getDate() + terms);
           return (
             <li key={t.id}>
@@ -95,7 +169,9 @@ export function ScheduledInvoices({
                     {formatMoney(Number(t.total))}
                   </span>
                   <span className="data-mono block text-[11px] text-pulse-gold">
-                    next {pretty(next)}
+                    {pending
+                      ? pendingWhen(day)
+                      : `next ${pretty(day)}, ${ampm(runHour(SEND_RUN_UTC, day))}`}
                   </span>
                   <span className="data-mono block text-[10px] text-pulse-text-mute">
                     due {pretty(due)}
@@ -108,8 +184,10 @@ export function ScheduledInvoices({
       </ul>
 
       <p className="mt-2.5 text-[11px] text-pulse-text-mute">
-        These generate and email themselves on their billing day. Paused or
-        deleted clients are skipped automatically.
+        Each one makes and emails itself on its billing day, some time between{" "}
+        {ampm(sendAt)} and {ampm((sendAt + 1) % 24)}. If that run misses, a second
+        one between {ampm(retryAt)} and {ampm((retryAt + 1) % 24)} sends it. Paused
+        or deleted clients are skipped automatically.
       </p>
     </Card>
   );

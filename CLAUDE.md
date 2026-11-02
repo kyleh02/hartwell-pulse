@@ -130,6 +130,10 @@ Live at https://portal.hartwelldigital.com
 - Recurring billing: template invoices with `recurring_active`; the daily cron
   materialises + auto-sends one invoice per template per month (unique index
   dedup).
+  It runs twice a day: 22:00 UTC is the send (9am Melbourne, 8am in winter),
+  06:00 UTC a same-day second try. The Scheduled card works out the local hour
+  per date from those two UTC hours (`SEND_RUN_UTC` / `RETRY_RUN_UTC` in
+  `ScheduledInvoices.tsx`), so change both places together.
 - **Dates are Australia/MELBOURNE, from `src/lib/business-time.ts`.** Kyle moved
   there in 2026 and Melbourne observes daylight saving where Queensland does
   not, so the offset is no longer a constant. One constant, imported; never

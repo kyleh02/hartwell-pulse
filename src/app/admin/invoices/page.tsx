@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { buttonClasses } from "@/components/ui/Button";
 import { InvoicesLibrary } from "@/components/invoices/InvoicesLibrary";
 import { ScheduledInvoices } from "@/components/invoices/ScheduledInvoices";
+import { businessToday } from "@/lib/business-time";
 
 export const metadata = { title: "Invoices" };
 
@@ -17,8 +18,10 @@ export default async function AdminInvoicesPage() {
     getBusinessSettings(supabase),
   ]);
 
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  // Melbourne's date, not the server's. The server is on UTC, which until 10 or
+  // 11am local is still on yesterday, so an invoice due yesterday did not read
+  // as overdue until late morning.
+  const today = businessToday();
 
   return (
     <div>

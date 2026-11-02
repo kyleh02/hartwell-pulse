@@ -77,6 +77,13 @@ function fill(text: string | null, vars: Record<string, string>): string | null 
 // the billing day has arrived (anchor <= today), so a missed cron day self-heals on
 // the next run; the unique (recurring_source_id, recurring_period) index keeps it to
 // exactly one invoice per template per month.
+//
+// It runs twice a day (vercel.json). 22:00 UTC is the send: 9am in Melbourne
+// on daylight saving, 8am in winter, and Hobby fires anywhere in that hour.
+// 06:00 UTC, 5pm or 4pm, is a second try the same day. It finds everything
+// already billed and does nothing, unless the morning run failed, which on
+// this plan has meant a Supabase freeze or a cold start running out of time.
+// It used to be the only run, so invoices went out at 5pm.
 export async function GET(req: NextRequest) {
   const auth = cronAuthorized(req);
   if (!auth.ok) {
