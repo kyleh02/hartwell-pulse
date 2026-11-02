@@ -18,7 +18,7 @@ import { isMissingColumn } from "@/lib/db-errors";
  */
 
 export type RenderPdfResult =
-  | { ok: true; name: string }
+  | { ok: true; name: string; path: string }
   | { ok: false; message: string };
 
 /**
@@ -93,6 +93,7 @@ export async function renderAndAttach({
   previousPath,
   origin,
   fit = false,
+  folder,
 }: {
   supabase: SupabaseClient;
   kind: PrintKind;
@@ -110,6 +111,11 @@ export async function renderAndAttach({
    * breaks its own pages on purpose, section by section.
    */
   fit?: boolean;
+  /**
+   * A folder under pdf/ for the file. The invoice puts its revision here, so
+   * the file itself says which version of the invoice it shows.
+   */
+  folder?: string;
 }): Promise<RenderPdfResult> {
   const token = printTokenFor(kind, id);
   if (!token) {
@@ -191,7 +197,7 @@ export async function renderAndAttach({
     };
   }
 
-  const path = `${clientId}/${id}/pdf/${Date.now()}-${keyName}.pdf`;
+  const path = `${clientId}/${id}/pdf/${folder ? `${folder}/` : ""}${Date.now()}-${keyName}.pdf`;
   const { error: upErr } = await supabase.storage
     .from("pulse-reports")
     .upload(path, Buffer.from(pdf), {
@@ -234,5 +240,5 @@ export async function renderAndAttach({
     await supabase.storage.from("pulse-reports").remove([previousPath]);
   }
 
-  return { ok: true, name: fileName };
+  return { ok: true, name: fileName, path };
 }

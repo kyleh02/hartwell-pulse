@@ -252,6 +252,9 @@
     --pulse-text-mute: rgba(14, 15, 18, 0.5);
     --pulse-gold: #4a6c96;
     --pulse-gold-light: #7fa0c8;
+    /* The Ironpeak kit's steel-deep, its accent on light backgrounds, where
+       plain steel fails contrast. It colours the dot mountain on a report. */
+    --pulse-steel: #35587f;
     background-color: #ffffff;
     color: #0e0f12;
   }

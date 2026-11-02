@@ -4,7 +4,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { getInvoiceBundle, getBusinessSettings } from "@/lib/invoices";
 import { InvoiceDocument } from "@/components/invoices/InvoiceDocument";
-import { PrintButton } from "@/components/invoices/PrintButton";
+import { InvoicePdfButton } from "@/components/invoices/InvoicePdfButton";
 import { InvoiceAttachments } from "@/components/invoices/InvoiceAttachments";
 import { Badge } from "@/components/ui/Badge";
 
@@ -49,7 +49,7 @@ export default async function ClientInvoicePage({
           <Badge tone={bundle.invoice.status === "paid" ? "success" : "gold"}>
             {bundle.invoice.status}
           </Badge>
-          <PrintButton />
+          <InvoicePdfButton invoiceId={bundle.invoice.id} />
         </div>
       </div>
       {/* The documents that came in the email are here too, for the person who

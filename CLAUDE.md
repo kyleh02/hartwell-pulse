@@ -343,8 +343,21 @@ Live at https://portal.hartwelldigital.com
 - **Shrink to fit** (`fitToFewerPages` in `pdf-render.ts`, invoices only):
   when the rendered PDF has two or more pages, it prints again at 96%, 92% and
   then 90%, and keeps the first that saves a page. Anything needing more is
-  genuinely longer and stays at full size. The client's "Download PDF" button
-  is `window.print()`, which gets the same pagination but not the shrink.
+  genuinely longer and stays at full size.
+- **The client's Download PDF** (`InvoicePdfButton`, since 2 November 2026)
+  hands over the portal's own PDF, the file the email carried, through
+  `POST /invoices/[id]/pdf`: RLS check as the client, then a one-minute signed
+  URL. If the stored file is not current it renders one first, the way the
+  editor does (up to 60 seconds; the button says "Preparing PDF"). Any failure
+  falls back to `window.print()`. The admin preview keeps `PrintButton`.
+- **Which revision a generated invoice PDF shows is in its path**
+  (`pdf/r{revision}/...`, written by `renderInvoicePdf`), and
+  `invoicePdfIsCurrent` compares it with the invoice's `revision`. Saving a
+  correction to a sent invoice bumps the revision, so an unsent correction
+  makes the old file stale. `updated_at` cannot do this job: the send and
+  marking paid bump it too. Files with no `r` folder predate this and are
+  remade on the next download, which is also what retires the old-design PDFs.
+  A PDF uploaded by hand always counts and is never rendered over.
 - Narrow widths are a container query (`invoice`, under 600px), because the
   admin preview sits in half the editor. Screen only: size containment in
   print would stop the sheet fragmenting. The masthead has a second, small
@@ -753,6 +766,14 @@ Live at https://portal.hartwelldigital.com
   Hartwell is the parent; **client-facing output must not**: no "a business of
   Hartwell Digital", no dual logos. The bare ABN line is the only permitted
   expression of the parent. Invoices and reports carry it through `brand`.
+- **The marks are the October 2026 mountain**, copied exactly from the kit in
+  `Ventures/Ironpeak Consulting/Logo/Ironpeak Mountain Mark (Oct 2026)/`, never
+  redrawn. `IronpeakDotMark` (09 Dot mark) wherever the mark is 40px or more:
+  the invoice masthead and the report letterhead (`IronpeakWordmark size="lg"`,
+  steel dots and an ink word, the kit's two tone for light, at about the kit's
+  proportions). `IronpeakMark` (01 Mark SVG, solid) below that: the letterhead
+  switch, admin badges, the unsubscribe page. The arrow mark was retired on
+  5 October and is gone from the portal since 2 November.
 - **Do not resume Ironpeak cold outreach.** In August 2026 programmatic sends
   through Microsoft Graph drew `550 5.7.708` rejections and the Microsoft 365
   tenant was then blocked (`TenantAccessBlockedException`). The drafting

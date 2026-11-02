@@ -32,13 +32,14 @@ export async function renderInvoicePdf(
 ): Promise<RenderPdfResult> {
   const { data: row } = await supabase
     .from("invoices")
-    .select("client_id, invoice_number, pdf_path, clients(business_name)")
+    .select("client_id, invoice_number, revision, pdf_path, clients(business_name)")
     .eq("id", invoiceId)
     .maybeSingle();
   if (!row) return { ok: false, message: "That invoice no longer exists." };
   const invoice = row as {
     client_id: string;
     invoice_number: string | null;
+    revision: number | null;
     pdf_path: string | null;
     clients: { business_name: string } | { business_name: string }[] | null;
   };
@@ -59,5 +60,33 @@ export async function renderInvoicePdf(
     // An invoice that spills a few lines onto a second page is shrunk a
     // touch to fit on one. See fitToFewerPages.
     fit: true,
+    // Which version of the invoice the file shows. See invoicePdfIsCurrent.
+    folder: `r${invoice.revision ?? 0}`,
   });
+}
+
+/**
+ * Whether the stored PDF shows the invoice as it stands now, so the client's
+ * Download PDF can hand it over instead of making a new one.
+ *
+ * A PDF uploaded by hand is Kyle's own document and the one the email carried,
+ * and nothing ever renders over it, so it always counts. A generated one counts
+ * only when it was made from the current revision, which renderInvoicePdf
+ * records as a folder in its path (`pdf/r2/...`). Saving a correction to a sent
+ * invoice bumps the revision, so a correction saved without a resend leaves the
+ * file showing the old figures, and this catches it. updated_at cannot: the
+ * send and marking paid bump it too, so every PDF would look stale.
+ *
+ * A file made before the folder existed (2 November 2026) never counts, which
+ * also retires the PDFs made in the invoice's old design.
+ */
+export function invoicePdfIsCurrent(invoice: {
+  pdf_path: string | null;
+  pdf_source?: string | null;
+  revision: number | null;
+}): boolean {
+  if (!invoice.pdf_path) return false;
+  if (invoice.pdf_source === "uploaded") return true;
+  const made = invoice.pdf_path.match(/\/pdf\/r(\d+)\//);
+  return made !== null && Number(made[1]) === (invoice.revision ?? 0);
 }
