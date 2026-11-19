@@ -696,6 +696,19 @@ Live at https://portal.hartwelldigital.com
 - Settings lists what is connected and Disconnect revokes every token that app
   holds, effective on its next request.
 
+## Draper: automatic outreach (in progress, branch `draper-outreach`)
+- **Read `docs/DRAPER.md` before touching it**, then `docs/DRAPER-BRIEF.md`
+  (Kyle's brief, verbatim). DRAPER.md wins where they disagree: it holds the
+  nine decisions Kyle settled on 19 November 2026, the stage list with status,
+  and the branch workflow.
+- Planned 19 November 2026, nothing built yet. Each stage is built on the
+  branch, then fast-forwarded into `main` behind `OUTREACH_ENABLED` (off), and
+  tested on the live portal in test mode with the master switch off. No
+  preview-deploy testing: Clerk production only signs in on the portal domain.
+- Sends from its own Workspace user, kyle@hartwelldigital.com, through the
+  Gmail API. Never Resend. Claude never sends; every safety rule is in code.
+  The defence lane is left out (Ironpeak shares the ABN).
+
 ## Client feedback, NPS (0058)
 - One question, 0 to 10, "How likely are you to recommend Hartwell Digital to
   a friend or colleague?", then an optional reason. Asked of every person on a
