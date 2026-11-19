@@ -11,6 +11,7 @@ import {
   Receipt,
   PenLine,
   Target,
+  Send,
   TrendingUp,
   type LucideIcon,
   Smile,
@@ -23,6 +24,12 @@ export interface NavItem {
   icon: LucideIcon;
   /** Live indicator rendered next to the label (only "messages" so far). */
   badge?: "messages";
+  /**
+   * Only shown while a feature flag is on. "outreach" is Draper, behind
+   * OUTREACH_ENABLED (docs/DRAPER.md): the admin layout reads the flag on the
+   * server and the shell and command palette leave the entry out when it is off.
+   */
+  flag?: "outreach";
 }
 
 export const clientNav: NavItem[] = [
@@ -51,8 +58,14 @@ export const adminNav: NavItem[] = [
   { label: "Feedback", href: "/admin/feedback", icon: Smile },
   { label: "Assistant", href: "/admin/assistant", icon: Sparkles },
   { label: "Pipeline", href: "/admin/pipeline", icon: Target },
+  { label: "Draper", href: "/admin/outreach", icon: Send, flag: "outreach" },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
+
+/** The nav with any entry whose feature flag is off left out. */
+export function navFor(items: NavItem[], flags: { outreach?: boolean }): NavItem[] {
+  return items.filter((i) => i.flag !== "outreach" || !!flags.outreach);
+}
 
 /**
  * Exact match for the admin index, prefix match for the rest. The client Home

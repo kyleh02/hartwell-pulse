@@ -17,7 +17,7 @@ import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { UnreadMessagesBadge } from "@/components/messages/UnreadMessagesBadge";
 import { ChatLauncher } from "@/components/messages/ChatLauncher";
 import type { ClientConversationRow } from "@/components/messages/ClientMessages";
-import { clientNav, adminNav, isNavActive, type NavItem } from "@/lib/nav";
+import { clientNav, adminNav, isNavActive, navFor, type NavItem } from "@/lib/nav";
 import { cn } from "@/lib/utils/cn";
 import { NavIcon } from "@/components/nav/NavIcon";
 
@@ -37,6 +37,8 @@ interface ShellProps {
   hasCopy?: boolean;
   /** The client assistant is on (0059): the chat panel gets a Quick answers tab. */
   assistant?: boolean;
+  /** Draper's flag (OUTREACH_ENABLED) is on: the admin nav shows its entry. */
+  outreach?: boolean;
   /** Team first names for the chat bubble's sender labels (src/lib/staff.ts). */
   staffNames?: Record<string, string>;
   /** The client's threads, for the chat bubble. Client variant only. */
@@ -130,6 +132,7 @@ export function Shell({
   hasPreview = false,
   hasCopy = false,
   assistant = false,
+  outreach = false,
   staffNames,
   conversations = [],
   clientId = null,
@@ -144,7 +147,7 @@ export function Shell({
     !pathname.startsWith("/messages/");
   // A tab that is always empty is noise, and on a six-item nav it is a
   // sizeable fraction of the noise.
-  const items = (variant === "admin" ? adminNav : clientNav).filter(
+  const items = navFor(variant === "admin" ? adminNav : clientNav, { outreach }).filter(
     (i) => (i.href !== "/website" || hasPreview) && (i.href !== "/copy" || hasCopy),
   );
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -182,7 +185,7 @@ export function Shell({
     <div className="min-h-screen bg-pulse-bg">
       <TabUnreadBadge />
       <WelcomeFlash name={user.name} />
-      <CommandPalette variant={variant} />
+      <CommandPalette variant={variant} outreach={outreach} />
       {/* ---------- desktop sidebar ---------- */}
       <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-pulse-border bg-pulse-bg pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] lg:flex">
         <div className="flex h-16 items-center border-b border-pulse-border px-5">

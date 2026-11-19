@@ -1,7 +1,9 @@
 # Draper: automatic outreach (handover)
 
-**Status, 19 November 2026: planned, nothing built.** Branch `draper-outreach`,
-cut from `main` at 80fbe0b. Next step: Stage 1.
+**Status, 19 November 2026: Stage 1 (data) built and tested, waiting for
+Kyle to paste migration 0062 and run its probe.** Branch `draper` (renamed
+from `draper-outreach` the same day, at Kyle's request), cut from `main` at
+80fbe0b. Next step: Stage 2, the no-repeat rule.
 
 Read this file first, then `docs/DRAPER-BRIEF.md` (Kyle's brief, word for word).
 **Where the two disagree, this file wins**: it records what Kyle settled after
@@ -52,7 +54,7 @@ others, and he asked about the mailbox (decision 1).
    - Cost: one more Workspace licence. A second domain was offered and
      declined.
 2. **Branch, then dark launch. No preview deploy testing.** Work happens on
-   `draper-outreach`. Each stage passes the build and its own tests, then
+   `draper`. Each stage passes the build and its own tests, then
    fast-forwards into `main` with the feature flag off. The end-to-end test
    runs on the live portal with **test mode on and the master switch off**.
    - Why: Clerk's production instance only signs in on
@@ -198,16 +200,61 @@ others, and he asked about the mailbox (decision 1).
 
 ## Build stages
 
-Each stage is its own commit on `draper-outreach`, with its migration (Kyle
+Each stage is its own commit on `draper`, with its migration (Kyle
 pastes it), a probe that the migration landed, and its own tests. Then it
 fast-forwards into `main`.
 
 - [x] **Stage 0: plan and handover.** This file, the brief, the CLAUDE.md
       pointer. (19 Nov 2026)
-- [ ] **Stage 1: data.** Every table, admin-only RLS, the feature flag,
+- [x] **Stage 1: data.** (19 Nov 2026, built and tested; **migration 0062 not
+      yet pasted**.) Every table, admin-only RLS, the feature flag,
       versioned settings, templates and run instructions (v1 of each from the
       brief), lanes 1, 2, 3 and 5, the `npm test` runner. Test: a client login
       reads nothing, an admin reads everything, a fingerprint cannot be deleted.
+      - `supabase/migrations/0062_draper.sql`: 21 `outreach_*` tables. What
+        the database itself refuses: changing or deleting a fingerprint
+        (trigger, TRUNCATE too, even the service role); changing a recorded
+        settings, template, run instructions or lessons version; deleting a
+        message that really went out (test-mode sends can be cleared); a
+        second first email or follow-up for one business (unique on
+        prospect and kind); a second prospect for one domain; a slider past
+        25; lane 4. `outreach_gmail` has no grants and no policies at all.
+      - `supabase/probes/0062_draper_probe.sql`: Kyle pastes it after 0062.
+        36 checks, every one should say pass = true; it changes nothing.
+        Before shipping it ran against Postgres 16 (PGlite, with Supabase's
+        roles and `auth.jwt()` stubbed): 36 of 36 passed, the migration ran
+        twice cleanly, and with a fingerprint trigger dropped and a leaky
+        policy added the probe failed the three checks it should.
+      - `src/lib/outreach/`: `flag.ts` (`OUTREACH_ENABLED`, only "true"
+        counts), `rules.ts` (every fixed list, mirrored from 0062's
+        constraints), `limits.ts` (25, 50, the ramp, follow-ups first,
+        "Check these" from the 13th), `types.ts`. Modules here import each
+        other with a `.ts` extension so Node can run them;
+        `allowImportingTsExtensions` is on in tsconfig for that.
+      - `npm test` runs `src/**/*.test.ts` with Node's own runner (type
+        stripping, Node 22.18 or later; this PC has 24). 15 tests:
+        `limits.test.ts`, `flag.test.ts`, and `schema.test.ts`, which reads
+        0062 and fails if a list in `rules.ts` drifts from its constraint.
+      - The menu: `NavItem.flag = "outreach"`, filtered by `navFor()` in the
+        shell and the command palette; the admin layout reads the flag.
+      - `/admin/outreach` (404 with the flag off): a read-only page of the
+        switches, how the flow fits Pulse, the lanes, template v1 with
+        Claude's slots in gold, the run instructions and the build list.
+        Reads through the RLS client. Stage 8 replaces it.
+      - Template v1's slot names, settled here: Claude writes `{finding}`,
+        `{why_and_fix}` and `{second_finding}`; Pulse fills `{page_name}`,
+        `{first_name_or_there}`, `{other_things}`, `{it_or_them}`,
+        `{opt_out_line}` and `{subject}`. The figure tokens inside Claude's
+        slots are still Stage 4's; if they need words in the slot rules,
+        Stage 4 adds template v2 (versions are never edited).
+      - The run's "never" list is `outreach_settings.never_list` (returned
+        to Claude); Kyle's private categories are `exclusion_categories`
+        (never returned). Both versioned with the settings.
+      - Left for later on purpose: `leads.source = 'outreach'` (Stage 6, so
+        the pipeline's Add lead menu doesn't offer it early),
+        `notifications.type = 'outreach'` (Stage 5), the wider
+        `do_not_contact` (Stage 2), postcode and holiday data (Stages 2
+        and 5).
 - [ ] **Stage 2: the no-repeat rule.** Normalising and hashing, matching
       against fingerprints, leads, clients, do-not-contact, exclusions and other
       prospects; widened do-not-contact; the CSV import; then the Ironpeak lists
@@ -247,19 +294,19 @@ Same two-copy setup as everything else in CLAUDE.md, on the branch:
 
 ```
 cd C:\Users\kylea\pulse-verify
-git checkout draper-outreach
+git checkout draper
 git merge main                       # pick up anything shipped since
 # edit the Drive copy, then sync it across:
 robocopy "H:\My Drive\Website Code\hartwell-pulse" "C:\Users\kylea\pulse-verify" /E /XD node_modules .next .git /XF .env.local
 npm run build
 git add <the files, named>           # never git add -A
 git commit -F <message file>
-git push origin draper-outreach
+git push origin draper
 # Kyle pastes the stage's migration; probe it landed. Then merge the stage:
 git checkout main
-git merge --ff-only draper-outreach
+git merge --ff-only draper
 git push origin main                 # deploys, flag off
-git checkout draper-outreach
+git checkout draper
 ```
 
 - **While a stage is half done, the Drive copy holds Draper work in progress.**
@@ -267,7 +314,7 @@ git checkout draper-outreach
   half-built Draper files never ride along.
 - If a session has to stop mid-stage, commit the work in progress to the
   branch (never `main`) and push, so it is on GitHub and on the other PC.
-- On the other PC: `git fetch` then `git checkout draper-outreach` in its own
+- On the other PC: `git fetch` then `git checkout draper` in its own
   clone.
 
 ## Kyle's list
@@ -322,3 +369,9 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
   given with nine clashes; Kyle settled them (above) and asked for this branch
   and handover. Branch `draper-outreach` cut from `main` at 80fbe0b. Nothing
   built.
+- **19 November 2026, later.** Kyle said go, and asked for the branch to be
+  called Draper: renamed to `draper` (old name deleted on GitHub). Stage 1
+  built: migration 0062, its probe, the flag, the menu entry, the read-only
+  page, `npm test`. Build and tests pass; the probe passed 36 of 36 on
+  Postgres 16. Waiting on Kyle to paste 0062 and the probe. Not yet merged to
+  `main`.

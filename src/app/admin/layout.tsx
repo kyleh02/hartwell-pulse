@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getPulseSession } from "@/lib/auth/session";
 import { Shell } from "@/components/nav/Shell";
+import { outreachEnabled } from "@/lib/outreach/flag";
 
 export default async function AdminLayout({
   children,
@@ -18,6 +19,7 @@ export default async function AdminLayout({
     <Shell
       variant="admin"
       user={{ name, email: session.profile?.email ?? null }}
+      outreach={outreachEnabled()}
     >
       {children}
     </Shell>

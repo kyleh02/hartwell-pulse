@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, CornerDownLeft } from "lucide-react";
-import { clientNav, adminNav } from "@/lib/nav";
+import { clientNav, adminNav, navFor } from "@/lib/nav";
 import { searchEverything, type SearchHit } from "@/app/actions/search";
 import { cn } from "@/lib/utils/cn";
 
@@ -31,7 +31,14 @@ export function openCommandPalette() {
  * sidebar. Typing searches records. Searching happens on the server through
  * RLS, so a client account gets their own things and nothing else.
  */
-export function CommandPalette({ variant }: { variant: "client" | "admin" }) {
+export function CommandPalette({
+  variant,
+  outreach = false,
+}: {
+  variant: "client" | "admin";
+  /** Draper's flag is on: its page is listed. */
+  outreach?: boolean;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -43,7 +50,7 @@ export function CommandPalette({ variant }: { variant: "client" | "admin" }) {
   // repainting the list with results for a query you have already changed.
   const seq = useRef(0);
 
-  const nav = variant === "admin" ? adminNav : clientNav;
+  const nav = navFor(variant === "admin" ? adminNav : clientNav, { outreach });
 
   const pages: SearchHit[] = nav
     .filter((n) =>
