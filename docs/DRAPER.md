@@ -55,23 +55,13 @@ others, and he asked about the mailbox (decision 1).
      watch the domain in Google Postmaster Tools (free).
    - Cost: one more Workspace licence. A second domain was offered and
      declined.
-   - **Changed 20 November 2026, by Kyle: kyle@ is an alias on admin@, not
-     its own user**, to save the licence. Emails still go out as "Kyle
-     Hartwell <kyle@hartwelldigital.com>", through Gmail's send-as.
-     Replies to kyle@ land in admin@'s inbox, and admin@ is set to reply
-     from the address a message was sent to. What this costs, accepted:
-     - Connect Gmail (Stage 5) signs in as **admin@**, so the token can read
-       all of admin@'s mail, client threads and invoice replies included.
-       Gmail has no narrower scope that still shows reply text. So **the
-       code reads only threads Draper started (by stored thread id), never
-       lists or searches the inbox**, and Stage 5 tests that.
-     - Outreach replies arrive among client mail. A Gmail filter on
-       "to: kyle@hartwelldigital.com" labels them.
-     - Moving to a separate user later means disconnecting and reconnecting
-       Gmail, and doing it only when no follow-up is due, so no thread
-       breaks.
-     - The name "Draper" is never the address: the brief keeps it out of
-       every email, and the From line is the first thing a business sees.
+   - **20 November 2026:** Kyle first chose an alias on admin@ to save the
+     licence, then found kyle@ already existed as its own Workspace user
+     (active, never signed in). An address can't be both a user and an
+     alias, so he licensed that user instead. **The plan above stands as
+     first written:** its own user, so Draper's Gmail connection reaches only
+     outreach mail. The address is never "draper@": the name stays out of
+     every email.
 2. **Branch, then dark launch. No preview deploy testing.** Work happens on
    `draper`. Each stage passes the build and its own tests, then
    fast-forwards into `main` with the feature flag off. The end-to-end test
@@ -340,12 +330,12 @@ git checkout draper
 
 Can start now:
 
-1. ~~Create kyle@ as its own user.~~ **Changed 20 Nov:** add
-   **kyle@hartwelldigital.com** as an alias on admin@ in Google Admin, add it
-   under Gmail's "Send mail as" with the name "Kyle Hartwell", and set
-   "Reply from the same address the message was sent to". Send some normal
-   mail from it while Draper is built: an address whose first act is cold
-   email looks worse to Gmail and Outlook.
+1. **kyle@hartwelldigital.com** already exists as its own user, display name
+   "Kyle Hartwell", licensed on 20 Nov. Sign in to it, turn on 2-step
+   verification, read what's already in its inbox, add a signature, add it
+   to the Gmail app on the phone, and send some normal mail from it while
+   Draper is built: an address whose first act is cold email looks worse to
+   Gmail and Outlook.
 2. Register for an **ABR web services GUID** (free) on abr.business.gov.au
    (Web services). It goes in Vercel as `ABR_GUID` when Stage 3 asks.
 3. Add hartwelldigital.com to **Google Postmaster Tools** (free) to watch the
@@ -400,6 +390,6 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
   fast-forwarded into `main` and deployed, flag off. Still to confirm: the
   probe (`supabase/probes/0062_draper_probe.sql`) shows pass = true on all
   36 rows. Next: Stage 2.
-- **20 November 2026, later.** Kyle chose an alias instead of a second
-  Workspace user: kyle@ sends as an alias on admin@. Decision 1 and Kyle's
-  list updated with what that costs (the Gmail token can read admin@).
+- **20 November 2026, later.** Kyle asked for an alias instead of a second
+  user, then found kyle@ already existed as its own user and licensed it.
+  Decision 1 stands as first written; the alias plan is dropped.
