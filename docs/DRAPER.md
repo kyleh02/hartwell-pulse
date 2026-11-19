@@ -6,9 +6,9 @@ with `OUTREACH_ENABLED` unset (Draper hidden). Stage 2 (the no-repeat rule)
 done too: Kyle pasted 0063 and its probe passed 5 of 5; merged into `main`.
 The flag is ON in Vercel since 20 November (Config, Production): Draper's
 page shows to admins; nothing can send. Stage 3 (the measuring tool) and the
-client-area radius built and tested on the branch, waiting for Kyle to paste
-0064 and its probe; not yet merged. The speed test needs PAGESPEED_API_KEY
-and the ABN check needs ABR_GUID, both Kyle's to create.**
+client-area radius done: Kyle pasted 0064, its probe passed 3 of 3, merged
+into `main` 20 November. The speed test still needs PAGESPEED_API_KEY and
+the ABN check ABR_GUID, both Kyle's to create. Next: Stage 4.**
 Branch `draper` (renamed
 from `draper-outreach` the same day, at Kyle's request), cut from `main` at
 80fbe0b. Next step: Stage 2, the no-repeat rule.
@@ -329,8 +329,9 @@ fast-forwards into `main`.
         (Stage 7) must require one. A match is private, like exclusions:
         the connector gets no reason. Kyle enters areas on the Draper page
         ("Your clients' areas").
-- [x] **Stage 3: the measuring tool.** (Built 20 Nov 2026; **0064 not yet
-      pasted**; the speed test and ABN check wait on Kyle's keys.) PageSpeed
+- [x] **Stage 3: the measuring tool.** (Built 20 Nov 2026; 0064 pasted and
+      verified 3 of 3, merged the same day; the speed test and ABN check
+      wait on Kyle's keys.) PageSpeed
       mobile, HTTP and HTTPS
       fetches, menu links, the tags, Meta Pixel PageView counts, phone and
       `tel:` checks, the screenshot to storage, raw JSON, the six faults, the
@@ -511,3 +512,6 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
   empty script-built menu placeholder that would have lent body links to the
   menu. Waiting on Kyle: 0064 and its probe, PAGESPEED_API_KEY, ABR_GUID, and
   the Ironpeak import.
+- **20 November 2026, later.** 0064's probe passed 3 of 3. Stage 3
+  fast-forwarded into `main` and deployed. Neither PAGESPEED_API_KEY nor
+  ABR_GUID was in Vercel yet.
