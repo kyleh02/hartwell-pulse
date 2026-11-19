@@ -1,7 +1,9 @@
 # Draper: automatic outreach (handover)
 
-**Status, 19 November 2026: Stage 1 (data) built and tested, waiting for
-Kyle to paste migration 0062 and run its probe.** Branch `draper` (renamed
+**Status, 20 November 2026: Stage 1 (data) done. Kyle pasted migration 0062
+on 20 November and Stage 1 is merged into `main` with `OUTREACH_ENABLED`
+unset (Draper hidden). The probe's 36 rows are still to be confirmed.**
+Branch `draper` (renamed
 from `draper-outreach` the same day, at Kyle's request), cut from `main` at
 80fbe0b. Next step: Stage 2, the no-repeat rule.
 
@@ -206,8 +208,8 @@ fast-forwards into `main`.
 
 - [x] **Stage 0: plan and handover.** This file, the brief, the CLAUDE.md
       pointer. (19 Nov 2026)
-- [x] **Stage 1: data.** (19 Nov 2026, built and tested; **migration 0062 not
-      yet pasted**.) Every table, admin-only RLS, the feature flag,
+- [x] **Stage 1: data.** (Built 19 Nov 2026; 0062 pasted by Kyle and merged
+      into `main` 20 Nov.) Every table, admin-only RLS, the feature flag,
       versioned settings, templates and run instructions (v1 of each from the
       brief), lanes 1, 2, 3 and 5, the `npm test` runner. Test: a client login
       reads nothing, an admin reads everything, a fingerprint cannot be deleted.
@@ -375,3 +377,7 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
   page, `npm test`. Build and tests pass; the probe passed 36 of 36 on
   Postgres 16. Waiting on Kyle to paste 0062 and the probe. Not yet merged to
   `main`.
+- **20 November 2026.** Kyle pasted 0062 ("The SQL has been added"). Stage 1
+  fast-forwarded into `main` and deployed, flag off. Still to confirm: the
+  probe (`supabase/probes/0062_draper_probe.sql`) shows pass = true on all
+  36 rows. Next: Stage 2.
