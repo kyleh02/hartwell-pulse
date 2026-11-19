@@ -55,6 +55,23 @@ others, and he asked about the mailbox (decision 1).
      watch the domain in Google Postmaster Tools (free).
    - Cost: one more Workspace licence. A second domain was offered and
      declined.
+   - **Changed 20 November 2026, by Kyle: kyle@ is an alias on admin@, not
+     its own user**, to save the licence. Emails still go out as "Kyle
+     Hartwell <kyle@hartwelldigital.com>", through Gmail's send-as.
+     Replies to kyle@ land in admin@'s inbox, and admin@ is set to reply
+     from the address a message was sent to. What this costs, accepted:
+     - Connect Gmail (Stage 5) signs in as **admin@**, so the token can read
+       all of admin@'s mail, client threads and invoice replies included.
+       Gmail has no narrower scope that still shows reply text. So **the
+       code reads only threads Draper started (by stored thread id), never
+       lists or searches the inbox**, and Stage 5 tests that.
+     - Outreach replies arrive among client mail. A Gmail filter on
+       "to: kyle@hartwelldigital.com" labels them.
+     - Moving to a separate user later means disconnecting and reconnecting
+       Gmail, and doing it only when no follow-up is due, so no thread
+       breaks.
+     - The name "Draper" is never the address: the brief keeps it out of
+       every email, and the From line is the first thing a business sees.
 2. **Branch, then dark launch. No preview deploy testing.** Work happens on
    `draper`. Each stage passes the build and its own tests, then
    fast-forwards into `main` with the feature flag off. The end-to-end test
@@ -323,10 +340,12 @@ git checkout draper
 
 Can start now:
 
-1. In Google Admin, create **kyle@hartwelldigital.com** as its own user, display
-   name "Kyle Hartwell". Use it for some normal mail while Draper is built: a
-   brand new mailbox whose first act is cold email looks worse to Gmail and
-   Outlook.
+1. ~~Create kyle@ as its own user.~~ **Changed 20 Nov:** add
+   **kyle@hartwelldigital.com** as an alias on admin@ in Google Admin, add it
+   under Gmail's "Send mail as" with the name "Kyle Hartwell", and set
+   "Reply from the same address the message was sent to". Send some normal
+   mail from it while Draper is built: an address whose first act is cold
+   email looks worse to Gmail and Outlook.
 2. Register for an **ABR web services GUID** (free) on abr.business.gov.au
    (Web services). It goes in Vercel as `ABR_GUID` when Stage 3 asks.
 3. Add hartwelldigital.com to **Google Postmaster Tools** (free) to watch the
@@ -381,3 +400,6 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
   fast-forwarded into `main` and deployed, flag off. Still to confirm: the
   probe (`supabase/probes/0062_draper_probe.sql`) shows pass = true on all
   36 rows. Next: Stage 2.
+- **20 November 2026, later.** Kyle chose an alias instead of a second
+  Workspace user: kyle@ sends as an alias on admin@. Decision 1 and Kyle's
+  list updated with what that costs (the Gmail token can read admin@).

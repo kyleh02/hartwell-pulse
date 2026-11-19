@@ -706,8 +706,9 @@ Live at https://portal.hartwelldigital.com
   branch, then fast-forwarded into `main` behind `OUTREACH_ENABLED` (off), and
   tested on the live portal in test mode with the master switch off. No
   preview-deploy testing: Clerk production only signs in on the portal domain.
-- Sends from its own Workspace user, kyle@hartwelldigital.com, through the
-  Gmail API. Never Resend. Claude never sends; every safety rule is in code.
+- Sends as kyle@hartwelldigital.com, an alias on admin@ (Kyle's choice, 20 Nov
+  2026), through the Gmail API. The token is admin@'s, so Draper's code reads
+  only threads it started, never the inbox. Never Resend. Claude never sends; every safety rule is in code.
   The defence lane is left out (Ironpeak shares the ABN).
 - `npm test` (Node's own runner, `src/**/*.test.ts`) covers Draper's pure
   rules, and `schema.test.ts` fails if `src/lib/outreach/rules.ts` drifts from
