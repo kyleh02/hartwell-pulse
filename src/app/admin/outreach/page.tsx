@@ -8,6 +8,7 @@ import type { DraperSettings, DraperState, Lane, RunInstructions, Template } fro
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { NoRepeatTools } from "@/components/outreach/NoRepeatTools";
 import { cn } from "@/lib/utils/cn";
 
 export const metadata = { title: "Draper" };
@@ -73,7 +74,7 @@ const STAGES: { name: string; what: string }[] = [
   { name: "Pages", what: "The queue, prospect cards, Settings, Lists, Numbers" },
   { name: "End-to-end test", what: "The nine checks in test mode, then your setup list" },
 ];
-const STAGES_DONE = 1;
+const STAGES_DONE = 2;
 
 function clock(t: string) {
   const [h, m] = t.split(":").map(Number);
@@ -212,6 +213,18 @@ export default async function DraperPage() {
               Settings v{settings.version} · template v{template?.version ?? "?"} · run instructions v
               {run?.version ?? "?"} · {prospectsRes.count ?? 0} prospects · {prints.count ?? 0} fingerprints
             </p>
+          </Card>
+
+          {/* ---------- the no-repeat rule ---------- */}
+          <Card className="p-4">
+            <p className="mono-label mb-1">One approach per business, ever</p>
+            <p className="mb-3 text-[12px] leading-relaxed text-pulse-text-mute">
+              Every business is checked when it&apos;s found, when its email is submitted and again just before
+              it sends: against {prints.count ?? 0} fingerprints, the pipeline, your clients, do-not-contact,
+              your exclusions and every other prospect. A match on any domain, email, business name, ABN or phone
+              blocks it.
+            </p>
+            <NoRepeatTools />
           </Card>
 
           {/* ---------- how it fits ---------- */}

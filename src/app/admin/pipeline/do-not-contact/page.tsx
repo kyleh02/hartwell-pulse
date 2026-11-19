@@ -4,6 +4,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { BUSINESS_TZ } from "@/lib/business-time";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { AddDoNotContact } from "@/components/pipeline/AddDoNotContact";
+import { isMissingColumn } from "@/lib/db-errors";
 
 export const metadata = { title: "Do not contact" };
 
@@ -11,13 +12,23 @@ export const metadata = { title: "Do not contact" };
  * Everyone who has asked not to be contacted. Kept when the old outreach
  * pipeline was deleted, and checked whenever a lead is added, because an
  * opt-out has to be honoured for good, not until the next clear-out.
+ *
+ * For outreach (Draper) an entry covers the whole business: its email's
+ * domain, its website, business name, ABN and phone (0063 adds the last two).
  */
 export default async function DoNotContactPage() {
   const supabase = await createServerSupabase();
-  const { data, error } = await supabase
+  // Typed as plain strings so both selects give the same row type.
+  const base: string = "id, email, name, business, website, reason, source, recorded_at";
+  const withAbn: string = `${base}, abn, phone`;
+  let { data, error } = await supabase
     .from("do_not_contact")
-    .select("id, email, name, business, website, reason, source, recorded_at")
+    .select(withAbn)
     .order("recorded_at", { ascending: false });
+  // Before 0063 there is no ABN or phone column.
+  if (isMissingColumn(error)) {
+    ({ data, error } = await supabase.from("do_not_contact").select(base).order("recorded_at", { ascending: false }));
+  }
   const rows =
     (data as {
       id: string;
@@ -25,6 +36,8 @@ export default async function DoNotContactPage() {
       name: string | null;
       business: string | null;
       website: string | null;
+      abn?: string | null;
+      phone?: string | null;
       reason: string;
       source: string | null;
       recorded_at: string;
@@ -38,7 +51,7 @@ export default async function DoNotContactPage() {
       <PageHeader
         label={["Pipeline", "Do not contact"]}
         title="Do not contact"
-        description="People who opted out or asked not to be contacted. A lead with one of these addresses is flagged, so nobody who said no hears from you again."
+        description="People who opted out or asked not to be contacted. A lead with one of these addresses is flagged, and outreach treats a no as covering the whole business: its website, name, ABN and phone, not only the address."
       />
       {error ? (
         <p className="text-sm text-pulse-text-dim">Run migration 0056 in the Supabase SQL Editor first.</p>
@@ -51,7 +64,7 @@ export default async function DoNotContactPage() {
               <li key={r.id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-5 py-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-pulse-text">{r.business || r.name || r.email || "Unknown"}</p>
-                  <p className="truncate text-xs text-pulse-text-dim">{[r.name, r.email, r.website].filter(Boolean).join(" · ")}</p>
+                  <p className="truncate text-xs text-pulse-text-dim">{[r.name, r.email, r.website, r.abn ? `ABN ${r.abn}` : null, r.phone].filter(Boolean).join(" · ")}</p>
                 </div>
                 <p className="shrink-0 text-xs text-pulse-text-mute">
                   {r.reason}

@@ -1,8 +1,10 @@
 # Draper: automatic outreach (handover)
 
-**Status, 20 November 2026: Stage 1 (data) done. Kyle pasted migration 0062
-on 20 November and Stage 1 is merged into `main` with `OUTREACH_ENABLED`
-unset (Draper hidden). The probe's 36 rows are still to be confirmed.**
+**Status, 20 November 2026: Stage 1 (data) done and verified: Kyle pasted
+0062 and its probe passed 36 of 36 on the live database; merged into `main`
+with `OUTREACH_ENABLED` unset (Draper hidden). Stage 2 (the no-repeat rule)
+built and tested on the branch, waiting for Kyle to paste migration 0063 and
+its probe; not yet merged.**
 Branch `draper` (renamed
 from `draper-outreach` the same day, at Kyle's request), cut from `main` at
 80fbe0b. Next step: Stage 2, the no-repeat rule.
@@ -264,13 +266,57 @@ fast-forwards into `main`.
         `notifications.type = 'outreach'` (Stage 5), the wider
         `do_not_contact` (Stage 2), postcode and holiday data (Stages 2
         and 5).
-- [ ] **Stage 2: the no-repeat rule.** Normalising and hashing, matching
+- [x] **Stage 2: the no-repeat rule.** (Built 20 Nov 2026; **0063 not yet
+      pasted**.) Normalising and hashing, matching
       against fingerprints, leads, clients, do-not-contact, exclusions and other
       prospects; widened do-not-contact; the CSV import; then the Ironpeak lists
       (`H:\My Drive\Ventures\Ironpeak Consulting\Leads\contact-register.csv` and
       `Defence outreach, ready to send, 21 Oct 2026.xlsx`, converted by Claude).
       Test: each kind of block, including a "no" from one address blocking its
       business.
+      - `normalise.ts`: one key per domain (from a website, URL or email; no
+        `www.`, subdomains kept whole), email (lower case, no `+tag`, Gmail
+        dots dropped), ABN (ATO check digit), business name (no case,
+        punctuation, "Pty Ltd" or leading "The"; "t/a" gives both names;
+        exact match only) and phone (ten digits with area code, or a 13
+        number; eight digits give no key). Webmail and ISP domains
+        (`FREE_MAIL_DOMAINS`) and shared hosts like facebook.com
+        (`SHARED_HOSTS`) never give a domain key. **The outputs are pinned
+        in `normalise.test.ts` and the hash in `fingerprint.test.ts`
+        (SHA-256 of `kind:value`): changing either silently stops old
+        fingerprints matching.**
+      - `match.ts`: the verdict, pure. `publicVerdict()` is what a connector
+        may be told: reasons without names, and no reason at all when Kyle's
+        exclusions matched. No keys at all means not allowed.
+      - `check.ts`: reads leads (business, email, phone, website), clients
+        (name, legal name, ABN, their people's emails), do-not-contact,
+        exclusions, prospects and their contacts, a page of 1,000 at a time,
+        and fingerprints by hash. Fails closed: anything unreadable means not
+        allowed. `recordFingerprints()` adds hashes, leaving any already on
+        file. It loads every table on each check, fine at today's sizes;
+        cache per run if prospects reach the tens of thousands.
+      - Do-not-contact (`/admin/pipeline/do-not-contact`) takes website, ABN
+        and phone as well as email, any one of email, website or business
+        will do, and every entry is also written as fingerprints. 0063 adds
+        the `abn` and `phone` columns (written in their own update, so the
+        form works before 0063 too).
+      - `POST /api/outreach/fingerprints` (admins, flag on): a CSV upload,
+        or `{"from":"do_not_contact"}` to copy the whole list in. Logged in
+        `outreach_change_log`.
+      - The Draper page's "One approach per business, ever" card: Check a
+        business (with the names behind a block, and exactly what the
+        connector would be told), Import, and Copy it in.
+      - The Ironpeak lists were converted to one file, kept in Kyle's Drive
+        and never in the repo: `H:\My Drive\Ventures\Ironpeak Consulting\Leads\Ironpeak lists for Draper, 20 Nov 2026.csv`.
+        170 rows (107 from the register, 63 from the spreadsheet's six
+        sheets), 372 keys: 123 domains, 119 emails, 130 names. Kyle imports
+        it on the Draper page.
+      - Tests: 41 in all, including each kind of block and a no from one
+        address at a business blocking a different address there.
+      - **Not in Stage 2: the client-area radius** (a prospect offering an
+        overlapping service within 15 km of a client). It needs postcode
+        locations, and the dataset needs Kyle's OK to download. Until it
+        lands, keep clients' own businesses safe through Lists > exclusions.
 - [ ] **Stage 3: the measuring tool.** PageSpeed mobile, HTTP and HTTPS
       fetches, menu links, the tags, Meta Pixel PageView counts, phone and
       `tel:` checks, the screenshot to storage, raw JSON, the six faults, the
@@ -393,3 +439,9 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
 - **20 November 2026, later.** Kyle asked for an alias instead of a second
   user, then found kyle@ already existed as its own user and licensed it.
   Decision 1 stands as first written; the alias plan is dropped.
+- **20 November 2026, Stage 2.** Kyle's probe for 0062 passed 36 of 36 on
+  the live database. Stage 2 built on the branch: normalising and hashing,
+  matching, the widened do-not-contact list, the import, the Ironpeak file.
+  41 tests pass; 0063 and its probe passed on Postgres 16, and 0062's probe
+  still passes on top of it. Waiting on Kyle to paste 0063 and its probe,
+  then to import the Ironpeak file and copy the do-not-contact list in.

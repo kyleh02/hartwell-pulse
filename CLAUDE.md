@@ -712,6 +712,11 @@ Live at https://portal.hartwelldigital.com
 - `npm test` (Node's own runner, `src/**/*.test.ts`) covers Draper's pure
   rules, and `schema.test.ts` fails if `src/lib/outreach/rules.ts` drifts from
   0062's check constraints. Each migration has a probe in `supabase/probes/`.
+- **The no-repeat rule (Stage 2) matches on keys from `normalise.ts`, and
+  fingerprints store only their SHA-256.** Never change how an existing key is
+  made or hashed: the tests pin both, because a change would quietly stop old
+  fingerprints matching and a business that said no could be emailed again.
+  A do-not-contact entry covers its whole business for outreach.
 
 ## Client feedback, NPS (0058)
 - One question, 0 to 10, "How likely are you to recommend Hartwell Digital to
