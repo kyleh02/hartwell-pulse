@@ -3,8 +3,8 @@
 **Status, 20 November 2026: Stage 1 (data) done and verified: Kyle pasted
 0062 and its probe passed 36 of 36 on the live database; merged into `main`
 with `OUTREACH_ENABLED` unset (Draper hidden). Stage 2 (the no-repeat rule)
-built and tested on the branch, waiting for Kyle to paste migration 0063 and
-its probe; not yet merged.**
+done too: Kyle pasted 0063 and its probe passed 5 of 5; merged into `main`.
+Next: Kyle switches the flag on and imports the Ironpeak file; then Stage 3.**
 Branch `draper` (renamed
 from `draper-outreach` the same day, at Kyle's request), cut from `main` at
 80fbe0b. Next step: Stage 2, the no-repeat rule.
@@ -266,8 +266,8 @@ fast-forwards into `main`.
         `notifications.type = 'outreach'` (Stage 5), the wider
         `do_not_contact` (Stage 2), postcode and holiday data (Stages 2
         and 5).
-- [x] **Stage 2: the no-repeat rule.** (Built 20 Nov 2026; **0063 not yet
-      pasted**.) Normalising and hashing, matching
+- [x] **Stage 2: the no-repeat rule.** (Built 20 Nov 2026; 0063 pasted and
+      verified, 5 of 5, and merged into `main` the same day.) Normalising and hashing, matching
       against fingerprints, leads, clients, do-not-contact, exclusions and other
       prospects; widened do-not-contact; the CSV import; then the Ironpeak lists
       (`H:\My Drive\Ventures\Ironpeak Consulting\Leads\contact-register.csv` and
@@ -445,3 +445,8 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
   41 tests pass; 0063 and its probe passed on Postgres 16, and 0062's probe
   still passes on top of it. Waiting on Kyle to paste 0063 and its probe,
   then to import the Ironpeak file and copy the do-not-contact list in.
+- **20 November 2026, later.** Kyle pasted 0063; its probe passed 5 of 5 (the
+  live do-not-contact list has 1 entry). Stage 2 fast-forwarded into `main`
+  and deployed, flag off. Still to do: the flag on, the Ironpeak import and
+  Copy it in; Kyle's OK to download the GeoNames postcode list for the
+  client-area radius.
