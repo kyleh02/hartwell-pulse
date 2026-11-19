@@ -4,7 +4,11 @@
 0062 and its probe passed 36 of 36 on the live database; merged into `main`
 with `OUTREACH_ENABLED` unset (Draper hidden). Stage 2 (the no-repeat rule)
 done too: Kyle pasted 0063 and its probe passed 5 of 5; merged into `main`.
-Next: Kyle switches the flag on and imports the Ironpeak file; then Stage 3.**
+The flag is ON in Vercel since 20 November (Config, Production): Draper's
+page shows to admins; nothing can send. Stage 3 (the measuring tool) and the
+client-area radius built and tested on the branch, waiting for Kyle to paste
+0064 and its probe; not yet merged. The speed test needs PAGESPEED_API_KEY
+and the ABN check needs ABR_GUID, both Kyle's to create.**
 Branch `draper` (renamed
 from `draper-outreach` the same day, at Kyle's request), cut from `main` at
 80fbe0b. Next step: Stage 2, the no-repeat rule.
@@ -313,14 +317,58 @@ fast-forwards into `main`.
         it on the Draper page.
       - Tests: 41 in all, including each kind of block and a no from one
         address at a business blocking a different address there.
-      - **Not in Stage 2: the client-area radius** (a prospect offering an
-        overlapping service within 15 km of a client). It needs postcode
-        locations, and the dataset needs Kyle's OK to download. Until it
-        lands, keep clients' own businesses safe through Lists > exclusions.
-- [ ] **Stage 3: the measuring tool.** PageSpeed mobile, HTTP and HTTPS
+      - **The client-area radius, added 20 Nov with Stage 3** (Kyle OK'd the
+        download): `data/au-postcodes.ts` is generated from GeoNames' AU
+        postal codes (CC BY 4.0, credit GeoNames; 18,566 localities averaged
+        into 3,170 postcodes, 79 KB). `geo.ts`: haversine between postcodes;
+        services overlap when they share a meaningful word (generic words
+        like hire, studio, repairs and plurals dropped); a client area with
+        no services covers every business in its radius; an unknown
+        prospect postcode is blocked while any client area exists. The
+        check only runs when a postcode is passed, so `outreach_add_prospect`
+        (Stage 7) must require one. A match is private, like exclusions:
+        the connector gets no reason. Kyle enters areas on the Draper page
+        ("Your clients' areas").
+- [x] **Stage 3: the measuring tool.** (Built 20 Nov 2026; **0064 not yet
+      pasted**; the speed test and ABN check wait on Kyle's keys.) PageSpeed
+      mobile, HTTP and HTTPS
       fetches, menu links, the tags, Meta Pixel PageView counts, phone and
       `tel:` checks, the screenshot to storage, raw JSON, the six faults, the
       confirmation re-run. ABR check. Test: known sites, Kyle's own included.
+      - `measure-rules.ts` (pure): tags from the source AND PageSpeed's
+        network requests (so Tag Manager tags count), PageView counts per
+        pixel, visible-text phone numbers, `tel:` links, script-built pages,
+        block pages (403/429 always; otherwise a challenge marker AND an
+        error or under 80 words, because normal pages carry reCAPTCHA and
+        Cloudflare's background script), main-menu links (`<nav>`/`<header>`,
+        else an element whose class or id says nav or menu, its own contents
+        only), the six fault rules, `confirmedFaults()` (two ok runs at least
+        60 minutes apart), `qualifies()` (ad signal and two faults).
+      - `measure.ts`: `measureSite(url)`, never throws, about 25 to 45
+        seconds. HTTPS then HTTP **one after the other** (neverssl.com drops
+        a second connection while the first is open, and read as down),
+        with one retry on a connection timeout; PageSpeed runs alongside;
+        up to 12 menu links, six at a time, bodies not downloaded.
+        `setDefaultResultOrder("ipv4first")` because fetch otherwise spends
+        its connect timeout on unroutable IPv6. It identifies itself as
+        `HartwellPulse/1.0` and never gets around a block.
+      - `store.ts`: `storeMeasurement()` writes `outreach_measurements` and
+        the screenshot to the private `outreach` bucket (0064, no storage
+        policies, service role only). First used by the connector (Stage 7).
+      - `abr.ts`: the ABR JSON service (JSONP), status, entity and business
+        names, GST, state and postcode; the name must match exactly
+        (normalised). No `ABR_GUID`: nothing fetched, "not checked by Pulse".
+      - `POST /api/outreach/measure` and "Measure a site" on the Draper page:
+        a measurement shown, not stored.
+      - Live test, 20 Nov from Kyle's PC: hartwelldigital.com read fine, its
+        phone tappable, no ad tracking, and its menu is built by script so
+        none was found (correct: missed, never invented). expired.badssl.com
+        was a certificate failure. neverssl.com answered differently on two
+        runs, which is the case the hour-apart rule exists for. **PageSpeed
+        refused every call without a key ("Queries per day" exceeded on
+        Google's shared quota), so the speed test is untested until
+        PAGESPEED_API_KEY is in Vercel.** The ABR check is untested until
+        ABR_GUID is. Tests: 70 in all.
 - [ ] **Stage 4: submit, verify, lint.** Template v1 rendering with Pulse-filled
       figures, claim checks, contact page re-fetch, every lint rule. Test: every
       refusal case in brief test 3, and a good draft passes.
@@ -389,6 +437,11 @@ Can start now:
 4. Check **SPF, DKIM and DMARC** for hartwelldigital.com in Google Admin
    (brief step 4).
 5. Decide **where the 5:30am task runs** (decision 9).
+6. **Now needed for Stage 3:** a Google Cloud project with the **PageSpeed
+   Insights API** turned on and an **API key** restricted to that API, in
+   Vercel as `PAGESPEED_API_KEY` (Secret, Production). Without it Google's
+   shared quota refuses the speed test. The same project serves the Gmail
+   API in Stage 5.
 
 When a stage asks: the Google Cloud project, Gmail and PageSpeed APIs, the
 Internal OAuth screen, the OAuth client and API key (Stage 5 gives the clicks);
@@ -450,3 +503,11 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
   and deployed, flag off. Still to do: the flag on, the Ironpeak import and
   Copy it in; Kyle's OK to download the GeoNames postcode list for the
   client-area radius.
+- **20 November 2026, Stage 3.** Kyle switched the flag on (Config,
+  Production, redeployed), OK'd the GeoNames download and asked for Stage 3.
+  Built: the client-area radius and the measuring tool, 0064 (screenshot
+  bucket). 70 tests pass. Live test found three real-world problems, fixed:
+  IPv6 connect timeouts, a server dropping parallel connections, and an
+  empty script-built menu placeholder that would have lent body links to the
+  menu. Waiting on Kyle: 0064 and its probe, PAGESPEED_API_KEY, ABR_GUID, and
+  the Ironpeak import.

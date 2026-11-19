@@ -9,6 +9,8 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { NoRepeatTools } from "@/components/outreach/NoRepeatTools";
+import { ClientAreas, type AreaRow } from "@/components/outreach/ClientAreas";
+import { MeasureSite } from "@/components/outreach/MeasureSite";
 import { cn } from "@/lib/utils/cn";
 
 export const metadata = { title: "Draper" };
@@ -74,7 +76,7 @@ const STAGES: { name: string; what: string }[] = [
   { name: "Pages", what: "The queue, prospect cards, Settings, Lists, Numbers" },
   { name: "End-to-end test", what: "The nine checks in test mode, then your setup list" },
 ];
-const STAGES_DONE = 2;
+const STAGES_DONE = 3;
 
 function clock(t: string) {
   const [h, m] = t.split(":").map(Number);
@@ -129,7 +131,7 @@ export default async function DraperPage() {
   if (!outreachEnabled()) notFound();
 
   const supabase = await createServerSupabase();
-  const [lanesRes, settingsRes, templatesRes, runRes, stateRes, prospectsRes, prints] = await Promise.all([
+  const [lanesRes, settingsRes, templatesRes, runRes, stateRes, prospectsRes, prints, areasRes, clientsRes] = await Promise.all([
     supabase.from("outreach_lanes").select("*").order("id"),
     supabase.from("outreach_settings").select("*").order("version", { ascending: false }).limit(1).maybeSingle(),
     supabase.from("outreach_templates").select("*").order("version"),
@@ -137,6 +139,8 @@ export default async function DraperPage() {
     supabase.from("outreach_state").select("*").maybeSingle(),
     supabase.from("outreach_prospects").select("id", { count: "exact", head: true }),
     supabase.from("outreach_fingerprints").select("id", { count: "exact", head: true }),
+    supabase.from("outreach_client_areas").select("id, client_id, place, postcode, services, radius_km").order("created_at"),
+    supabase.from("clients").select("id, business_name, deleted_at").order("business_name"),
   ]);
 
   const errors = [lanesRes, settingsRes, templatesRes, runRes, stateRes].map((r) => r.error).filter(Boolean);
@@ -148,6 +152,12 @@ export default async function DraperPage() {
   const run = runRes.data as RunInstructions | null;
   const state = stateRes.data as DraperState | null;
   const active = lanes.find((l) => l.active) ?? null;
+  const clientRows = (clientsRes.data as { id: string; business_name: string; deleted_at: string | null }[] | null) ?? [];
+  const clientName = new Map(clientRows.map((c) => [c.id, c.business_name]));
+  const areas: AreaRow[] = (
+    (areasRes.data as { id: string; client_id: string; place: string; postcode: string | null; services: string[]; radius_km: number }[] | null) ?? []
+  ).map((a) => ({ ...a, client: clientName.get(a.client_id) ?? "Unknown client" }));
+  const clientOptions = clientRows.filter((c) => !c.deleted_at).map((c) => ({ id: c.id, name: c.business_name }));
   const template =
     templates.find((t) => t.version === active?.template_version) ?? templates[templates.length - 1] ?? null;
 
@@ -225,6 +235,28 @@ export default async function DraperPage() {
               blocks it.
             </p>
             <NoRepeatTools />
+          </Card>
+
+          {/* ---------- client areas ---------- */}
+          <Card className="p-4">
+            <p className="mono-label mb-1">Your clients&apos; areas</p>
+            <p className="mb-3 text-[12px] leading-relaxed text-pulse-text-mute">
+              Draper skips any business offering what a client sells within that client&apos;s radius, so it never
+              pitches a competitor down the road. The morning run is never told why. Postcode locations: GeoNames,
+              CC BY 4.0.
+            </p>
+            <ClientAreas areas={areas} clients={clientOptions} />
+          </Card>
+
+          {/* ---------- the measuring tool ---------- */}
+          <Card className="p-4">
+            <p className="mono-label mb-1">Measure a site</p>
+            <p className="mb-3 text-[12px] leading-relaxed text-pulse-text-mute">
+              What the morning run will ask Pulse for: Google&apos;s phone speed test, ad tracking, HTTPS, the main
+              menu&apos;s links and whether the phone number can be tapped.
+              {process.env.PAGESPEED_API_KEY ? "" : " PAGESPEED_API_KEY isn't set yet, so the speed test will be refused."}
+            </p>
+            <MeasureSite />
           </Card>
 
           {/* ---------- how it fits ---------- */}

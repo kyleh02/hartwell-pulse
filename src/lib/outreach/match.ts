@@ -15,11 +15,22 @@
 import type { FingerprintKind, FingerprintReason } from "./rules.ts";
 import type { Key } from "./normalise.ts";
 
-export type BlockSource = "fingerprint" | "lead" | "client" | "do_not_contact" | "exclusion" | "prospect";
+export type BlockSource =
+  | "fingerprint"
+  | "lead"
+  | "client"
+  | "do_not_contact"
+  | "exclusion"
+  | "prospect"
+  | "client_area";
+
+/** Kyle's private lists. A connector is never told when one of these matched. */
+const PRIVATE: BlockSource[] = ["exclusion", "client_area"];
 
 export interface Block {
   source: BlockSource;
-  kind: FingerprintKind;
+  /** Which key matched, or "area" for the client-area radius (geo.ts). */
+  kind: FingerprintKind | "area";
   /** Who or what it matched, for Kyle's eyes only. */
   label: string;
 }
@@ -33,7 +44,7 @@ export interface Verdict {
 
 /** Something Pulse already knows about, with its keys worked out. */
 export interface KnownRecord {
-  source: Exclude<BlockSource, "fingerprint">;
+  source: Exclude<BlockSource, "fingerprint" | "client_area">;
   label: string;
   keys: Key[];
 }
@@ -83,7 +94,7 @@ export function matchBusiness(
   return { allowed: blocks.length === 0, blocks };
 }
 
-const PUBLIC_REASON: Record<Exclude<BlockSource, "exclusion">, string> = {
+const PUBLIC_REASON: Record<Exclude<BlockSource, "exclusion" | "client_area">, string> = {
   fingerprint: "contacted before, or asked not to be",
   lead: "already in the pipeline",
   client: "a current or past client",
@@ -93,13 +104,15 @@ const PUBLIC_REASON: Record<Exclude<BlockSource, "exclusion">, string> = {
 
 /**
  * What the morning run's connector may be told: allowed or blocked, and why,
- * EXCEPT that a match on Kyle's private exclusions gives no reason at all, so
- * the list can't be learnt by probing it. No names, ever.
+ * EXCEPT that a match on Kyle's private lists (exclusions, client areas) gives
+ * no reason at all, so they can't be learnt by probing. No names, ever.
  */
 export function publicVerdict(v: Verdict): { allowed: boolean; reasons: string[] } {
   if (v.allowed) return { allowed: true, reasons: [] };
   if (v.problem) return { allowed: false, reasons: [v.problem] };
-  if (v.blocks.some((b) => b.source === "exclusion")) return { allowed: false, reasons: [] };
-  const reasons = [...new Set(v.blocks.map((b) => PUBLIC_REASON[b.source as Exclude<BlockSource, "exclusion">]))];
+  if (v.blocks.some((b) => PRIVATE.includes(b.source))) return { allowed: false, reasons: [] };
+  const reasons = [
+    ...new Set(v.blocks.map((b) => PUBLIC_REASON[b.source as Exclude<BlockSource, "exclusion" | "client_area">])),
+  ];
   return { allowed: false, reasons };
 }

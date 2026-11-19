@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils/cn";
 const field =
   "w-full rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2 px-3 py-2 text-sm text-pulse-text placeholder:text-pulse-text-mute focus:border-pulse-border-strong focus:outline-none";
 
-const EMPTY = { website: "", name: "", email: "", abn: "", phone: "" };
+const EMPTY = { website: "", name: "", email: "", abn: "", phone: "", postcode: "", services: "" };
 
 const SOURCE: Record<string, string> = {
   fingerprint: "Fingerprint",
@@ -18,6 +18,7 @@ const SOURCE: Record<string, string> = {
   do_not_contact: "Do not contact",
   exclusion: "Your exclusions",
   prospect: "Prospects",
+  client_area: "Near a client",
 };
 
 type ImportReply =
@@ -90,7 +91,8 @@ export function NoRepeatTools() {
       <form onSubmit={check} className="rounded-[var(--radius-input)] border border-pulse-border p-3">
         <p className="text-sm font-semibold text-pulse-text">Check a business</p>
         <p className="mt-0.5 mb-3 text-[12px] text-pulse-text-mute">
-          The same check the morning run gets. Any one field will do.
+          The same check the morning run gets. Any one field will do; add a postcode and what they do to
+          check the distance from your clients too.
         </p>
         <div className="grid gap-2 sm:grid-cols-2">
           <input className={field} placeholder="Website" value={f.website} onChange={set("website")} />
@@ -98,6 +100,8 @@ export function NoRepeatTools() {
           <input className={field} placeholder="Email" type="email" value={f.email} onChange={set("email")} />
           <input className={field} placeholder="ABN" inputMode="numeric" value={f.abn} onChange={set("abn")} />
           <input className={field} placeholder="Phone" inputMode="tel" value={f.phone} onChange={set("phone")} />
+          <input className={field} placeholder="Postcode" inputMode="numeric" value={f.postcode} onChange={set("postcode")} />
+          <input className={field} placeholder="What they do" value={f.services} onChange={set("services")} />
           <Button type="submit" disabled={checking}>
             {checking ? "Checking" : "Check"}
           </Button>
@@ -113,7 +117,10 @@ export function NoRepeatTools() {
               <ul className="space-y-0.5 text-pulse-text-dim">
                 {result.blocks.map((b, i) => (
                   <li key={i}>
-                    <span className="text-pulse-text-mute">{SOURCE[b.source] ?? b.source}, by {b.kind}: </span>
+                    <span className="text-pulse-text-mute">
+                      {SOURCE[b.source] ?? b.source}
+                      {b.kind === "area" ? "" : `, by ${b.kind}`}:{" "}
+                    </span>
                     {b.label}
                   </li>
                 ))}

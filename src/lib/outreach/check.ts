@@ -3,7 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { isMissingColumn } from "@/lib/db-errors";
 import { businessKeys, type Key } from "./normalise.ts";
 import { hashKey } from "./fingerprint.ts";
-import { matchBusiness, type FingerprintHit, type KnownRecord, type Verdict } from "./match.ts";
+import { matchBusiness, type Block, type FingerprintHit, type KnownRecord, type Verdict } from "./match.ts";
+import { clientAreaBlocks, type ClientArea } from "./geo.ts";
 import type { FingerprintKind, FingerprintReason } from "./rules.ts";
 
 /**
@@ -23,6 +24,13 @@ export interface CheckInput {
   abn?: string | null;
   email?: string | null;
   phone?: string | null;
+  /**
+   * Where they are and what they do, for the client-area radius. Without a
+   * postcode the radius isn't checked, so every caller that has one (adding
+   * a prospect, submit, before a send) must pass it.
+   */
+  postcode?: string | null;
+  services?: (string | null | undefined)[];
 }
 
 const PAGE = 1000;
@@ -130,6 +138,25 @@ export async function knownRecords(db: SupabaseClient, exceptProspectId?: string
   return known;
 }
 
+/** Each client's areas, labelled with the client's name. */
+export async function clientAreas(db: SupabaseClient): Promise<ClientArea[]> {
+  const [areas, clientRows] = await Promise.all([
+    every<{ client_id: string; place: string; postcode: string | null; services: string[]; radius_km: number }>(
+      db,
+      "outreach_client_areas",
+      "client_id, place, postcode, services, radius_km",
+    ),
+    every<Row>(db, "clients", "id, business_name"),
+  ]);
+  const names = new Map(clientRows.map((c) => [c.id, c.business_name]));
+  return areas.map((a) => ({
+    label: `Client: ${names.get(a.client_id) ?? "unknown"}, ${a.place}`,
+    postcode: a.postcode ?? "",
+    services: a.services ?? [],
+    radiusKm: Number(a.radius_km),
+  }));
+}
+
 /** Fingerprints matching any of these keys. */
 export async function fingerprintHits(db: SupabaseClient, keys: Key[]): Promise<FingerprintHit[]> {
   if (keys.length === 0) return [];
@@ -156,8 +183,18 @@ export async function checkBusiness(
   const keys = businessKeys(input);
   if (keys.length === 0) return { ...matchBusiness([], [], []), keys };
   try {
-    const [known, hits] = await Promise.all([knownRecords(db, opts.exceptProspectId), fingerprintHits(db, keys)]);
-    return { ...matchBusiness(keys, known, hits), keys };
+    const [known, hits, areas] = await Promise.all([
+      knownRecords(db, opts.exceptProspectId),
+      fingerprintHits(db, keys),
+      input.postcode === undefined || input.postcode === null || input.postcode === ""
+        ? Promise.resolve([] as ClientArea[])
+        : clientAreas(db),
+    ]);
+    const v = matchBusiness(keys, known, hits);
+    const near: Block[] = clientAreaBlocks({ postcode: input.postcode, services: input.services ?? [] }, areas).map(
+      (b) => ({ source: "client_area", kind: "area", label: b.label }),
+    );
+    return { allowed: v.allowed && near.length === 0, blocks: [...v.blocks, ...near], problem: v.problem, keys };
   } catch (e) {
     return {
       allowed: false,

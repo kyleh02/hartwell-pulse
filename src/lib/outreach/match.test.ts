@@ -102,3 +102,8 @@ test("nothing to check against means not allowed", () => {
   assert.ok(v.problem);
   assert.equal(publicVerdict(v).allowed, false);
 });
+
+test("a client-area match blocks, and the connector is given no reason", () => {
+  const v = { allowed: false, blocks: [{ source: "client_area" as const, kind: "area" as const, label: "Client: Core (3 km away)" }] };
+  assert.deepEqual(publicVerdict(v), { allowed: false, reasons: [] });
+});
