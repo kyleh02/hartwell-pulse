@@ -13,7 +13,7 @@ import { requestOrigin } from "@/lib/mcp/http";
  */
 export async function decideConnector(input: AuthorizeParams, allow: boolean): Promise<{ url: string } | { message: string }> {
   const session = await getPulseSession();
-  if (session?.role !== "admin") return { message: "Only Kyle's admin account can connect Claude to the pipeline." };
+  if (session?.role !== "admin") return { message: "Only Kyle's admin account can connect Claude to the portal." };
   const origin = await requestOrigin();
   const sb = createAdminSupabase();
   const p = readAuthorizeParams((k) => {
@@ -32,6 +32,7 @@ export async function decideConnector(input: AuthorizeParams, allow: boolean): P
     redirectUri: p.redirect_uri,
     codeChallenge: p.code_challenge,
     resource: check.resource,
+    scope: check.def.scope,
   });
   return { url: withQuery(p.redirect_uri, { code, state: p.state, iss: origin }) };
 }

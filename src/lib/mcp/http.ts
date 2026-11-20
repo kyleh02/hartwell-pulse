@@ -1,6 +1,7 @@
 import "server-only";
 import { headers } from "next/headers";
-import { SCOPE, mcpResource } from "@/lib/mcp/oauth";
+import { outreachEnabled } from "@/lib/outreach/flag";
+import { PIPELINE, resourceUrl, resources, type McpResourceDef } from "@/lib/mcp/resources";
 
 /**
  * The portal's public origin for the request in hand. Route handlers read it
@@ -37,13 +38,13 @@ export function preflight(): Response {
   return new Response(null, { status: 204, headers: CORS });
 }
 
-export function protectedResourceMetadata(origin: string) {
+export function protectedResourceMetadata(origin: string, def: McpResourceDef = PIPELINE) {
   return {
-    resource: mcpResource(origin),
+    resource: resourceUrl(origin, def),
     authorization_servers: [origin],
-    scopes_supported: [SCOPE],
+    scopes_supported: [def.scope],
     bearer_methods_supported: ["header"],
-    resource_name: "Hartwell Pulse pipeline",
+    resource_name: def.name,
   };
 }
 
@@ -53,7 +54,7 @@ export function authorizationServerMetadata(origin: string) {
     authorization_endpoint: `${origin}/oauth/authorize`,
     token_endpoint: `${origin}/api/oauth/token`,
     registration_endpoint: `${origin}/api/oauth/register`,
-    scopes_supported: [SCOPE],
+    scopes_supported: resources(outreachEnabled()).map((r) => r.scope),
     response_types_supported: ["code"],
     response_modes_supported: ["query"],
     grant_types_supported: ["authorization_code", "refresh_token"],

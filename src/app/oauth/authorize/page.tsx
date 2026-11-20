@@ -30,6 +30,7 @@ export default async function AuthorizePage({ searchParams }: { searchParams: Pr
       body = <Notice title="Connection stopped" text={check.message} />;
     } else {
       const to = new URL(params.redirect_uri).host;
+      const copy = CONSENT[check.def.scope] ?? CONSENT.pipeline;
       body = (
         <>
           <h1 className="text-[26px] leading-[1.05] font-extrabold tracking-[-0.01em] text-pulse-text uppercase">
@@ -37,16 +38,17 @@ export default async function AuthorizePage({ searchParams }: { searchParams: Pr
           </h1>
           <div className="gold-rule mt-4 mb-5" aria-hidden="true" />
           <p className="text-[15px] leading-relaxed text-pulse-text-dim">
-            <strong className="text-pulse-text">{check.client.name}</strong> is asking to work with your sales pipeline. After you allow
-            it, your answer goes back to <strong className="text-pulse-text">{to}</strong>.
+            <strong className="text-pulse-text">{check.client.name}</strong> is asking to connect as{" "}
+            <strong className="text-pulse-text">{check.def.name}</strong>: {copy.what} After you allow it, your answer goes back to{" "}
+            <strong className="text-pulse-text">{to}</strong>.
           </p>
           <ul className="mt-5 space-y-2 text-sm">
-            {["Read your leads, notes and follow-ups", "Add leads and update their details", "Move leads along and log calls, emails and meetings"].map((t) => (
+            {copy.can.map((t) => (
               <li key={t} className="flex gap-2 text-pulse-text">
                 <Check size={16} className="mt-0.5 shrink-0 text-pulse-gold" aria-hidden="true" /> {t}
               </li>
             ))}
-            {["Mark a lead won, delete one, or email anyone", "See clients, invoices, reports or messages"].map((t) => (
+            {copy.cannot.map((t) => (
               <li key={t} className="flex gap-2 text-pulse-text-dim">
                 <X size={16} className="mt-0.5 shrink-0 text-pulse-text-mute" aria-hidden="true" /> Can&apos;t {t.charAt(0).toLowerCase() + t.slice(1)}
               </li>
@@ -72,6 +74,33 @@ export default async function AuthorizePage({ searchParams }: { searchParams: Pr
     </main>
   );
 }
+
+/** What each connector can and can't do, in Kyle's words. */
+const CONSENT: Record<string, { what: string; can: string[]; cannot: string[] }> = {
+  pipeline: {
+    what: "your sales pipeline.",
+    can: ["Read your leads, notes and follow-ups", "Add leads and update their details", "Move leads along and log calls, emails and meetings"],
+    cannot: ["Mark a lead won, delete one, or email anyone", "See clients, invoices, reports or messages"],
+  },
+  outreach: {
+    what: "the morning run for automatic outreach.",
+    can: [
+      "Read Draper's brief: the lane, the template, the target",
+      "Check whether a business may be approached (yes or no only)",
+      "Add businesses, measure their sites and submit drafts for Pulse to check",
+      "Label replies (an interested one becomes a lead, due today)",
+    ],
+    cannot: ["Send any email: Pulse sends, after its own checks", "See clients, invoices or your exclusions list", "Delete anything, or move or win a lead"],
+  },
+  "outreach-advisor": {
+    what: "the advisory chat for automatic outreach.",
+    can: [
+      "Everything the morning run's connector can",
+      "Change the lessons, the run instructions and the test register, after you say yes",
+    ],
+    cannot: ["Send any email: Pulse sends, after its own checks", "See clients, invoices or your exclusions list", "Change the caps, the template or anything Pulse enforces"],
+  },
+};
 
 function Notice({ title, text }: { title: string; text: string }) {
   return (

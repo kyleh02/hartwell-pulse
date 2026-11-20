@@ -17,6 +17,9 @@ import { SettingsForm } from "@/components/outreach/SettingsForm";
 import { QueueList, type QueueRow } from "@/components/outreach/QueueList";
 import { RepliesPanel, type LaterRow, type ReplyRow } from "@/components/outreach/RepliesPanel";
 import { gmailThreadUrl } from "@/lib/outreach/replies-rules";
+import { DraperConnectors, type ConnectorRow } from "@/components/outreach/DraperConnectors";
+import { requestOrigin } from "@/lib/mcp/http";
+import { OUTREACH, OUTREACH_ADVISOR, resourceUrl } from "@/lib/mcp/resources";
 import { getPulseSession } from "@/lib/auth/session";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { gmailConnection, type GmailConnection } from "@/lib/outreach/gmail-access";
@@ -89,7 +92,7 @@ const STAGES: { name: string; what: string }[] = [
   { name: "Pages", what: "The queue, prospect cards, Settings, Lists, Numbers" },
   { name: "End-to-end test", what: "The nine checks in test mode, then your setup list" },
 ];
-const STAGES_DONE = 6;
+const STAGES_DONE = 7;
 
 function clock(t: string) {
   const [h, m] = t.split(":").map(Number);
@@ -248,6 +251,30 @@ export default async function DraperPage({
     return { prospect_id: l.id, business: l.business_name ?? "A business", later_on: l.later_on, due: l.later_on <= todayMel, thread_url: t ? gmailThreadUrl(t) : null };
   });
 
+  // ---------- Stage 7: the two connectors ----------
+  const origin = await requestOrigin();
+  const conDefs = [
+    { def: OUTREACH, what: "For the 5:30am morning run. Add it in claude.ai as a custom connector named Draper." },
+    { def: OUTREACH_ADVISOR, what: "For the advisory chat: the same, plus the lessons, run instructions and tests, after you say yes. Add it only when you want it." },
+  ];
+  let connectors: ConnectorRow[] = conDefs.map(({ def, what }) => ({ scope: def.scope, name: def.name, url: resourceUrl(origin, def), what, connectedSince: null, lastUsed: null }));
+  if (session?.role === "admin") {
+    const { data: toks } = await createAdminSupabase()
+      .from("mcp_tokens")
+      .select("resource, kind, created_at, last_used_at")
+      .in("resource", connectors.map((c) => c.url))
+      .is("revoked_at", null)
+      .gt("expires_at", new Date().toISOString());
+    const rows = (toks as { resource: string; kind: string; created_at: string; last_used_at: string | null }[] | null) ?? [];
+    connectors = connectors.map((c) => {
+      const mine = rows.filter((r) => r.resource === c.url);
+      if (!mine.some((r) => r.kind === "refresh")) return c;
+      const since = mine.map((r) => r.created_at).sort()[0] ?? null;
+      const used = mine.map((r) => r.last_used_at).filter((x): x is string => !!x).sort().pop() ?? null;
+      return { ...c, connectedSince: since, lastUsed: used };
+    });
+  }
+
   const years = Object.keys(AU_HOLIDAYS).sort();
   const holidays = years.length ? `${AU_HOLIDAYS_SOURCE}, ${years.join(" and ")}` : "not loaded yet, so nothing can be scheduled";
   const template =
@@ -387,6 +414,15 @@ export default async function DraperPage({
           <Card className="p-4">
             <p className="mono-label mb-3">Queue</p>
             <QueueList rows={queue} />
+          </Card>
+
+          <Card className="p-4">
+            <p className="mono-label mb-1">Connectors</p>
+            <p className="mb-3 text-[12px] leading-relaxed text-pulse-text-mute">
+              In claude.ai: Settings, Connectors, Add custom connector, paste the address, then approve it here on the portal. Each
+              one&apos;s sign-in works only at its own address, never at the pipeline connector or the other one.
+            </p>
+            <DraperConnectors rows={connectors} />
           </Card>
 
           <Card className="scroll-mt-20 p-4" id="replies">

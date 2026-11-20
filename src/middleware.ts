@@ -26,6 +26,9 @@ const isPublicRoute = createRouteMatcher([
   // tell it where they are. None of them can hold a Clerk session. The
   // approval page itself, /oauth/authorize, is NOT here: Kyle signs in first.
   "/api/mcp",
+  // Draper's two connectors (Stage 7): same rule, their own tokens, and a 404
+  // while OUTREACH_ENABLED is off.
+  "/api/mcp/(.*)",
   "/api/oauth/(.*)",
   "/.well-known/(.*)",
   // The feedback email's number buttons. The token in the address is the

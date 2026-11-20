@@ -1,11 +1,14 @@
 import "server-only";
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { outreachEnabled } from "@/lib/outreach/flag";
+import { PIPELINE, resourceFor, resourceUrl, tokenFits, type McpResourceDef } from "@/lib/mcp/resources";
 
 /**
- * The portal as an OAuth 2.1 server, for exactly one resource: Claude's
- * connector to the pipeline at /api/mcp (0057). Kyle approves Claude once on
- * /oauth/authorize while signed in as admin; after that Claude holds a token.
+ * The portal as an OAuth 2.1 server for its MCP connectors: the pipeline at
+ * /api/mcp (0057) and, while OUTREACH_ENABLED is on, Draper's two
+ * (resources.ts). Kyle approves each once on /oauth/authorize while signed in
+ * as admin; after that Claude holds a token good for that one address only.
  *
  * Deliberately narrow:
  * - Authorization code with PKCE (S256) only. No implicit grant, no password
@@ -18,7 +21,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * - Every use re-checks that the person behind the token is still an admin.
  */
 
-export const SCOPE = "pipeline";
+/** The pipeline connector's scope. Draper's are in resources.ts. */
+export const SCOPE = PIPELINE.scope;
 export const ACCESS_TTL_S = 60 * 60;
 export const REFRESH_TTL_S = 90 * 24 * 60 * 60;
 export const CODE_TTL_S = 5 * 60;
@@ -26,7 +30,7 @@ export const CODE_TTL_S = 5 * 60;
 const REPLAY_GRACE_MS = 60_000;
 
 export function mcpResource(origin: string): string {
-  return `${origin}/api/mcp`;
+  return resourceUrl(origin, PIPELINE);
 }
 
 export function sha256hex(s: string): string {
@@ -151,7 +155,7 @@ export function withQuery(base: string, q: Record<string, string>): string {
 }
 
 export type AuthorizeCheck =
-  | { kind: "ok"; client: OAuthClient; resource: string }
+  | { kind: "ok"; client: OAuthClient; resource: string; def: McpResourceDef }
   /** Something about the client or redirect is wrong: say so, never redirect. */
   | { kind: "show"; message: string }
   /** The redirect is trusted but the request is not: hand the error back to Claude. */
@@ -174,18 +178,15 @@ export async function checkAuthorize(sb: SupabaseClient, p: AuthorizeParams, ori
   });
   if (p.response_type !== "code") return back("unsupported_response_type", "Only the authorization code flow is supported.");
   if (!p.code_challenge || p.code_challenge_method !== "S256") return back("invalid_request", "PKCE with S256 is required.");
-  if (p.scope && !p.scope.split(/\s+/).every((s) => s === SCOPE)) return back("invalid_scope", `The only scope is "${SCOPE}".`);
-  const resource = mcpResource(origin);
-  if (p.resource && p.resource.replace(/\/$/, "") !== resource && p.resource.replace(/\/$/, "") !== origin) {
-    return back("invalid_target", "This server only issues tokens for its own MCP endpoint.");
-  }
-  return { kind: "ok", client, resource };
+  const def = resourceFor(origin, { resource: p.resource, scope: p.scope }, outreachEnabled());
+  if (!def) return back("invalid_target", "This server only issues tokens for its own connector addresses, each with its own scope.");
+  return { kind: "ok", client, resource: resourceUrl(origin, def), def };
 }
 
 /** The approval, as a single-use code good for five minutes. */
 export async function createCode(
   sb: SupabaseClient,
-  args: { client: OAuthClient; userId: string; redirectUri: string; codeChallenge: string; resource: string },
+  args: { client: OAuthClient; userId: string; redirectUri: string; codeChallenge: string; resource: string; scope: string },
 ): Promise<string> {
   const code = randomToken("hpc");
   const { error } = await sb.from("mcp_codes").insert({
@@ -195,7 +196,7 @@ export async function createCode(
     user_id: args.userId,
     redirect_uri: args.redirectUri,
     code_challenge: args.codeChallenge,
-    scope: SCOPE,
+    scope: args.scope,
     resource: args.resource,
     family: randomUUID(),
     expires_at: new Date(Date.now() + CODE_TTL_S * 1000).toISOString(),
@@ -214,18 +215,18 @@ export interface TokenPair {
 
 export async function issueTokens(
   sb: SupabaseClient,
-  a: { clientId: string; clientName: string | null; userId: string; resource: string; family: string },
+  a: { clientId: string; clientName: string | null; userId: string; resource: string; scope: string; family: string },
 ): Promise<TokenPair> {
   const access = randomToken("hpa");
   const refresh = randomToken("hpr");
   const now = Date.now();
-  const base = { client_id: a.clientId, client_name: a.clientName, user_id: a.userId, scope: SCOPE, resource: a.resource, family: a.family };
+  const base = { client_id: a.clientId, client_name: a.clientName, user_id: a.userId, scope: a.scope, resource: a.resource, family: a.family };
   const { error } = await sb.from("mcp_tokens").insert([
     { ...base, token_hash: sha256hex(access), kind: "access", expires_at: new Date(now + ACCESS_TTL_S * 1000).toISOString() },
     { ...base, token_hash: sha256hex(refresh), kind: "refresh", expires_at: new Date(now + REFRESH_TTL_S * 1000).toISOString() },
   ]);
   if (error) throw new Error(error.message);
-  return { access_token: access, token_type: "Bearer", expires_in: ACCESS_TTL_S, refresh_token: refresh, scope: SCOPE };
+  return { access_token: access, token_type: "Bearer", expires_in: ACCESS_TTL_S, refresh_token: refresh, scope: a.scope };
 }
 
 export async function revokeFamily(sb: SupabaseClient, family: string) {
@@ -242,26 +243,36 @@ type TokenRow = {
   client_id: string;
   client_name: string | null;
   user_id: string;
+  scope: string | null;
   resource: string;
   family: string;
   expires_at: string;
   revoked_at: string | null;
 };
 
-/** The person and app behind an MCP request, or null for a 401. */
-export async function authenticateBearer(sb: SupabaseClient, header: string | null, origin: string): Promise<{ userId: string; clientId: string } | null> {
+/**
+ * The person and app behind an MCP request at `def`'s address, or null for a
+ * 401. A token issued for any other address is refused here.
+ */
+export async function authenticateBearer(
+  sb: SupabaseClient,
+  header: string | null,
+  origin: string,
+  def: McpResourceDef = PIPELINE,
+): Promise<{ userId: string; clientId: string } | null> {
   const m = /^Bearer\s+(\S+)$/i.exec(header ?? "");
   if (!m) return null;
   const hash = sha256hex(m[1]);
   const { data } = await sb
     .from("mcp_tokens")
-    .select("kind, client_id, client_name, user_id, resource, family, expires_at, revoked_at")
+    .select("kind, client_id, client_name, user_id, scope, resource, family, expires_at, revoked_at")
     .eq("token_hash", hash)
     .maybeSingle();
   const t = data as TokenRow | null;
   if (!t || t.kind !== "access" || t.revoked_at || new Date(t.expires_at).getTime() <= Date.now()) return null;
   // Audience: a token is only good for the resource it was issued for.
-  if (t.resource !== mcpResource(origin)) return null;
+  if (!tokenFits(t.resource, origin, def)) return null;
+  if (def.draper && !outreachEnabled()) return null;
   if (!(await isAdminUser(sb, t.user_id))) return null;
   await sb.from("mcp_tokens").update({ last_used_at: new Date().toISOString() }).eq("token_hash", hash);
   return { userId: t.user_id, clientId: t.client_id };
@@ -285,10 +296,13 @@ export async function exchange(
       return { error: "invalid_client", error_description: "Client authentication failed.", status: 401 };
     }
   }
-  const resource = mcpResource(origin);
-  if (form.resource && form.resource.replace(/\/$/, "") !== resource && form.resource.replace(/\/$/, "") !== origin) {
-    return { error: "invalid_target", error_description: "This server only issues tokens for its own MCP endpoint." };
-  }
+  // A resource named at the token endpoint must be the one the grant was for.
+  const sameTarget = (granted: string) => {
+    if (!form.resource) return true;
+    const asked = form.resource.trim().replace(/\/+$/, "");
+    return asked === granted || asked === origin;
+  };
+  const wrongTarget: TokenError = { error: "invalid_target", error_description: "That grant was for a different connector address." };
 
   if (form.grant_type === "authorization_code") {
     const hash = sha256hex(form.code ?? "");
@@ -299,6 +313,7 @@ export async function exchange(
       user_id: string;
       redirect_uri: string;
       code_challenge: string;
+      scope: string | null;
       resource: string;
       family: string;
       expires_at: string;
@@ -314,6 +329,7 @@ export async function exchange(
     if (c.client_id !== client.clientId) return { error: "invalid_grant", error_description: "That code was issued to another client." };
     if ((form.redirect_uri ?? "") !== c.redirect_uri) return { error: "invalid_grant", error_description: "redirect_uri does not match." };
     if (!pkceOk(form.code_verifier ?? "", c.code_challenge)) return { error: "invalid_grant", error_description: "PKCE verification failed." };
+    if (!sameTarget(c.resource)) return wrongTarget;
     // Claim it: of two simultaneous exchanges, only one finds used_at still null.
     const { data: claimed } = await sb
       .from("mcp_codes")
@@ -323,18 +339,19 @@ export async function exchange(
       .select("code_hash");
     if (!claimed?.length) return { error: "invalid_grant", error_description: "That code has already been used." };
     if (!(await isAdminUser(sb, c.user_id))) return { error: "invalid_grant", error_description: "That account can no longer connect." };
-    return issueTokens(sb, { clientId: c.client_id, clientName: c.client_name, userId: c.user_id, resource: c.resource, family: c.family });
+    return issueTokens(sb, { clientId: c.client_id, clientName: c.client_name, userId: c.user_id, resource: c.resource, scope: c.scope ?? SCOPE, family: c.family });
   }
 
   if (form.grant_type === "refresh_token") {
     const hash = sha256hex(form.refresh_token ?? "");
     const { data } = await sb
       .from("mcp_tokens")
-      .select("kind, client_id, client_name, user_id, resource, family, expires_at, revoked_at")
+      .select("kind, client_id, client_name, user_id, scope, resource, family, expires_at, revoked_at")
       .eq("token_hash", hash)
       .maybeSingle();
     const t = data as TokenRow | null;
     if (!t || t.kind !== "refresh") return { error: "invalid_grant", error_description: "Unknown refresh token." };
+    if (!sameTarget(t.resource)) return wrongTarget;
     if (t.client_id !== client.clientId) return { error: "invalid_grant", error_description: "That token was issued to another client." };
     if (t.revoked_at) {
       // Replayed after rotation. A quick retry is a network hiccup; anything
@@ -354,7 +371,7 @@ export async function exchange(
       await revokeFamily(sb, t.family);
       return { error: "invalid_grant", error_description: "That account can no longer connect." };
     }
-    return issueTokens(sb, { clientId: t.client_id, clientName: t.client_name, userId: t.user_id, resource: t.resource, family: t.family });
+    return issueTokens(sb, { clientId: t.client_id, clientName: t.client_name, userId: t.user_id, resource: t.resource, scope: t.scope ?? SCOPE, family: t.family });
   }
 
   return { error: "unsupported_grant_type", error_description: "Use authorization_code or refresh_token." };

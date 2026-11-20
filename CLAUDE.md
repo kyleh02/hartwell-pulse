@@ -695,6 +695,13 @@ Live at https://portal.hartwelldigital.com
   can read, never a crash.
 - Settings lists what is connected and Disconnect revokes every token that app
   holds, effective on its next request.
+- **Draper's two connectors share this OAuth server** (Stage 7):
+  `/api/mcp/outreach` (scope "outreach") and `/api/mcp/outreach-advisor`
+  ("outreach-advisor"), defined in `src/lib/mcp/resources.ts`. A token works
+  only at the address it was issued for. All three routes run through
+  `src/lib/mcp/server.ts`. Never widen what a Draper tool can read:
+  `connector-safety.test.ts` fails if `mcp-tools.ts` touches a table outside
+  Draper's own.
 
 ## Draper: automatic outreach (in progress, branch `draper`)
 - **Read `docs/DRAPER.md` before touching it**, then `docs/DRAPER-BRIEF.md`

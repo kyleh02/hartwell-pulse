@@ -16,8 +16,11 @@ the test pair arrives clean (emails now carry a bare HTML copy, Kyle's
 choice). Holiday dates: Kyle said yes, but data.gov.au refuses automated
 downloads, so they are not loaded yet and nothing schedules. Stage 6
 (replies, and Send on weekends) done: Kyle pasted 0066, its probe passed 6
-of 6, merged into `main` 20 November. Next: Stage 7, the connectors, which
-is what first puts real businesses into Draper.**
+of 6, merged into `main` 20 November. Stage 7 (the two connectors) done, no
+migration, merged into `main` 20 November: Kyle adds Draper in claude.ai and
+approves it on the portal. Real sends still wait on the holiday dates (none
+loaded, so no sending day exists and the brief's target reads 0). Next:
+Stage 8, pages, then Stage 9, the end-to-end test.**
 Branch `draper` (renamed
 from `draper-outreach` the same day, at Kyle's request), cut from `main` at
 80fbe0b. Next step: Stage 2, the no-repeat rule.
@@ -547,9 +550,55 @@ fast-forwards into `main`.
         `leads.source` gains outreach, an index. Passed on Postgres twice
         over, with 0062's and 0065's probes still passing. Code tolerates
         0066 missing (new columns read and written apart).
-- [ ] **Stage 7: the two connectors.** OAuth resources and every tool. Test: a
+- [x] **Stage 7: the two connectors.** (Built and merged 20 Nov 2026, no
+      migration.) OAuth resources and every tool. Test: a
       Draper token is refused by `/api/mcp` and by the advisor endpoint, and
       can reach no client, invoice or exclusion detail.
+      - `src/lib/mcp/resources.ts` (pure, 6 tests): the three resources
+        (`/api/mcp` "pipeline", `/api/mcp/outreach` "outreach", named Draper,
+        `/api/mcp/outreach-advisor` "outreach-advisor"), which one a request
+        is for (a named address decides; its scope only has to be among those
+        asked for, since some clients ask for every listed scope; no address
+        means the scope decides; nothing at all is the pipeline, as before),
+        and `tokenFits`: a token works only at the exact address it was
+        issued for. Draper's two exist only with the flag on.
+      - `oauth.ts`: codes and tokens carry their resource's scope; the
+        audience check is per address; the token endpoint refuses a resource
+        other than the grant's. The pipeline connector is unchanged
+        (same scope, same address, same server name).
+      - `src/lib/mcp/server.ts`: the JSON-RPC handler, shared by all three
+        routes; `/api/mcp` now calls it. The well-known protected-resource
+        document answers per address (the bare one is the pipeline's) and is
+        a 404 for anything else; the authorization-server document lists
+        every live scope. Middleware makes `/api/mcp/(.*)` public (each
+        checks its own token).
+      - `src/lib/outreach/mcp-tools.ts`: outreach_brief (date, mode, the
+        target: the next sending day's cap from slider, ramp and follow-ups,
+        less every first email waiting; 0 with the reason when paused, both
+        switches off, or no sending day), outreach_check_business
+        (publicVerdict only), outreach_add_prospect (postcode, ABN, the
+        published address and its page all required; blocked businesses
+        refused; the ABN checked by the ABR when ABR_GUID is set, else
+        Claude's reading must say active; MX provider looked up; test flag
+        from test mode; 100 a day at most), outreach_measure (own site only,
+        4 pages a prospect, stored as `initial`, returns the measurement_id,
+        faults, ad signal, page names [[page]] may use, broken menu pages,
+        and whether it qualifies), outreach_submit (submitDraft from Stage
+        4), outreach_drop, outreach_replies_to_label, outreach_label_reply
+        (applyLabel), outreach_numbers (events between Melbourne dates, by
+        lane and fault, test apart, rates only from 30 sends). Advisor only:
+        outreach_set_lessons, outreach_set_run_instructions (new versions,
+        change log), outreach_set_test (plan, start, end; one live test).
+      - `connector-safety.test.ts` reads the tools' own source: Draper's
+        tables only (never clients, invoices, exclusions, do-not-contact,
+        leads, tokens or the Gmail table), no sending path, block details
+        never returned, one delete (its own half-saved prospect), and the
+        three writes advisor only.
+      - The consent page names the connector and what it can and can't do.
+        The Draper page has a Connectors section: both addresses with Copy,
+        whether each is connected, and a Disconnect that revokes only that
+        address's tokens. Settings' Disconnect still cuts off a whole app,
+        which for claude.ai may mean every connector at once.
 - [ ] **Stage 8: pages.** Outreach, prospect card, Settings, Lists, Numbers,
       checked at phone width.
 - [ ] **Stage 9: end-to-end test** in test mode (the brief's nine checks), then
@@ -620,6 +669,12 @@ Can start now:
    shared quota refuses the speed test. The same project serves the Gmail
    API in Stage 5.
 
+10. **For Stage 7:** in claude.ai, Settings, Connectors, Add custom
+   connector: name Draper, address
+   `https://portal.hartwelldigital.com/api/mcp/outreach`; connect and press
+   Allow on the portal. Then in a chat with it on, ask for outreach_brief.
+   The advisor connector waits until it's wanted. Then the 5:30am task
+   (decision 9: where it runs).
 8. **For Stage 6:** paste 0066, then its probe (6 checks). Then in Settings
    tick Send on weekends if wanted; Send a test pair, and reply to it from
    the test inbox: "Sounds good, tell me more" should show under Replies
@@ -749,3 +804,11 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
 - **20 November 2026, later that night.** Kyle pasted 0066; its probe
   passed 6 of 6. Stage 6 fast-forwarded into `main` and deployed. Next for
   Kyle: tick Send on weekends if wanted, then the two test-pair replies.
+- **20 November 2026, Stage 7.** Kyle said "start on stage 7, let's get
+  Draper connected". Built the two connectors on the existing OAuth server
+  (no migration), the shared MCP handler, every tool, the consent wording
+  and the Connectors section; 118 tests. Reviewed the shared OAuth path
+  before shipping, since the pipeline connector runs through it: relaxed
+  the scope rule for clients that ask for every listed scope. Merged and
+  deployed. The Drive mount dropped once mid-session (H: vanished, came
+  back); no files were lost.
