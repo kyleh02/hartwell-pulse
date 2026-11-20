@@ -4,7 +4,7 @@
  *
  * Scopes: gmail.send to send, gmail.readonly to read the threads Draper
  * started (replies, Stage 6) and to check whether a send that errored went
- * after all. The building of a message is pure and tested in gmail.test.ts;
+ * after all. The building of a message is pure and tested in schedule.test.ts;
  * the rest is plain fetch. Reading the stored token is gmail-access.ts.
  */
 import { randomUUID } from "node:crypto";
@@ -147,17 +147,18 @@ export interface Outgoing {
   /** The first email's Message-ID, for a follow-up. */
   inReplyTo?: string | null;
   date?: Date;
+  /** Fixed only in tests; random otherwise. */
+  boundary?: string;
 }
 
 const hexByte = (b: number) => `=${b.toString(16).toUpperCase().padStart(2, "0")}`;
 
 /**
- * Quoted-printable (RFC 2045), so a paragraph stays one line wherever it's
- * read. Sent as 8bit, Gmail hard-wraps every line near 76 characters, and a
- * phone then wraps those lines again: the first test pair came out ragged
- * (20 Nov 2026). Here a long line is cut with soft breaks ("=" at the end),
- * which every mail app removes when it shows the email. No encoded line runs
- * over 76 characters, an =XX is never split, and trailing spaces are encoded.
+ * Quoted-printable (RFC 2045). A long line is cut with soft breaks ("=" at
+ * the end), which every mail app removes when it shows the email. No encoded
+ * line runs over 76 characters, an =XX is never split, and trailing spaces
+ * are encoded. On its own this did NOT stop Gmail's API re-wrapping a
+ * text/plain body (second test pair, 20 Nov 2026); the HTML part does that.
  */
 export function quotedPrintable(text: string): string {
   return text
@@ -183,12 +184,30 @@ export function quotedPrintable(text: string): string {
     .join("\r\n");
 }
 
+const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
 /**
- * A plain-text email as Gmail's API wants it: RFC 5322, CRLF line ends,
- * UTF-8, quoted-printable, base64url. No HTML part, no links, no tracking:
- * just the words.
+ * The same words as bare HTML, the way Gmail's own composer writes a typed
+ * email: a div a line, an empty line as <div><br></div>. No links, images,
+ * styles, fonts or tracking. It exists only so paragraphs reflow to the
+ * screen: Gmail's API re-wraps any text/plain body near 70 to 78 characters
+ * whatever encoding it's sent in (tried 8bit, then quoted-printable, 20 Nov
+ * 2026), and a phone then wraps those lines again. Kyle chose this over
+ * plain text only, 20 Nov 2026.
+ */
+export function bodyHtml(text: string): string {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  return `<div dir="ltr">\n${lines.map((l) => (l.trim() ? `<div>${escapeHtml(l)}</div>` : "<div><br></div>")).join("\n")}\n</div>`;
+}
+
+/**
+ * An email as Gmail's API wants it: RFC 5322, CRLF line ends, UTF-8,
+ * base64url. multipart/alternative: the words as plain text, then the same
+ * words as bare HTML (see bodyHtml), both quoted-printable. No links, no
+ * attachments, no tracking: just the words.
  */
 export function buildMessage(m: Outgoing): string {
+  const boundary = m.boundary ?? `=_${randomUUID().replace(/-/g, "")}`;
   const headers = [
     `From: ${address(SENDER_NAME, SENDER_EMAIL)}`,
     `To: ${address(null, m.to)}`,
@@ -197,8 +216,10 @@ export function buildMessage(m: Outgoing): string {
     `Message-ID: ${m.messageId}`,
     ...(m.inReplyTo ? [`In-Reply-To: ${m.inReplyTo}`, `References: ${m.inReplyTo}`] : []),
     "MIME-Version: 1.0",
-    "Content-Type: text/plain; charset=UTF-8",
-    "Content-Transfer-Encoding: quoted-printable",
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
   ];
-  return Buffer.from(`${headers.join("\r\n")}\r\n\r\n${quotedPrintable(m.body)}\r\n`, "utf8").toString("base64url");
+  const part = (type: string, content: string) =>
+    [`--${boundary}`, `Content-Type: ${type}; charset=UTF-8`, "Content-Transfer-Encoding: quoted-printable", "", quotedPrintable(content)].join("\r\n");
+  const body = [part("text/plain", m.body), part("text/html", bodyHtml(m.body)), `--${boundary}--`].join("\r\n");
+  return Buffer.from(`${headers.join("\r\n")}\r\n\r\n${body}\r\n`, "utf8").toString("base64url");
 }

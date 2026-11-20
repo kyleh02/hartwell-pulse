@@ -445,7 +445,9 @@ fast-forwards into `main`.
       - `crypto.ts`: AES-256-GCM sealing of the refresh token under
         `OUTREACH_TOKEN_KEY`. `gmail.ts`: OAuth URL (offline, consent,
         login_hint kyle@), code exchange, refresh, revoke, profile, send,
-        find-by-Message-ID, and `buildMessage()` (plain text, CRLF, UTF-8,
+        find-by-Message-ID, and `buildMessage()` (CRLF, UTF-8,
+        multipart/alternative: plain text plus the same words as bare HTML,
+        both quoted-printable, since 20 Nov;
         "Kyle Hartwell" <kyle@>, our own Message-ID, In-Reply-To and
         References for the follow-up; header values can't be split).
         `gmail-access.ts` stores and reads the sealed token (service role).
@@ -575,8 +577,13 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
 ## Rules that still apply
 
 - Never Resend for outreach: its terms forbid it, and client email depends on it.
-- Plain text only, no links, no attachments, no tracking. Nothing replies to a
-  person automatically. Claude never sends.
+- The words only: no links, no attachments, no tracking, no images, no
+  styling. Each email carries the words twice, as plain text and as bare HTML
+  (a div a line, as Gmail's composer writes a typed email), because Gmail's
+  API re-wraps any plain-text-only body near 70 to 78 characters and phones
+  then show ragged lines. **Kyle chose this on 20 November 2026** over his
+  brief's "plain text only", after two test pairs came out ragged. Nothing
+  replies to a person automatically. Claude never sends.
 - Australian English, no em dashes, none of the banned words, in emails and in
   every page label. Follow `docs/BRAND-DIRECTION.md` in `hartwell-digital-v6_21`
   for any Hartwell copy: speak as "we", never describe the team, no fees or
@@ -647,3 +654,15 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
 - **20 November 2026, later.** 0065's probe passed 4 of 4. Stage 5
   fast-forwarded into `main` and deployed. Still inert: no Gmail connection,
   no cron job, no holiday dates.
+- **20 November 2026, evening.** Kyle did the Google setup (Gmail API on,
+  Auth Platform Internal, both scopes, the Web client and its redirect) and
+  added the three Vercel variables. His redeploy failed on an unrelated
+  `next/font` Google Fonts fetch; `vercel redeploy` of the same build went
+  Ready. Gmail connected as kyle@. The first test pair arrived with ragged
+  lines: Gmail's API hard-wraps a text/plain body (sent as 8bit). Sending it
+  quoted-printable (4d3c473) did not stop it: Gmail re-serialises plain text
+  whatever encoding it's given. Kyle chose a bare HTML copy of the same
+  words; the email is now multipart/alternative. Kyle added the cron-job.org
+  job (`/api/cron/outreach-tick`, every 5 minutes, same header, GET).
+  Still waiting: a clean test pair, his OK to download the holiday dates,
+  and ABR_GUID.

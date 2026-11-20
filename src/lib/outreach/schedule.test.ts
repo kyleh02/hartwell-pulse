@@ -116,20 +116,49 @@ test("the Gmail token is sealed, and a tampered or wrong-key token won't open", 
   assert.equal(tokenKey(undefined), null);
 });
 
-test("the email: plain text from Kyle Hartwell, CRLF, threaded when it's a follow-up", () => {
+const qpDecode = (s: string) =>
+  Buffer.from(
+    s.replace(/=\r\n/g, "").replace(/=([0-9A-F]{2})/g, (_, h: string) => String.fromCharCode(parseInt(h, 16))),
+    "latin1",
+  ).toString("utf8");
+
+/** The two parts of a built message, still encoded, with their headers. */
+function parts(raw: string): { headers: string; plain: string; html: string; plainHead: string; htmlHead: string } {
+  const boundary = /boundary="([^"]+)"/.exec(raw)![1];
+  const [headers, ...rest] = raw.split(`--${boundary}`);
+  assert.equal(rest.length, 3, "two parts and the closing boundary");
+  assert.equal(rest[2], "--\r\n");
+  const split = (p: string) => {
+    const i = p.indexOf("\r\n\r\n");
+    return { head: p.slice(0, i), body: p.slice(i + 4).replace(/\r\n$/, "") };
+  };
+  const a = split(rest[0]);
+  const b = split(rest[1]);
+  return { headers, plain: a.body, html: b.body, plainHead: a.head, htmlHead: b.head };
+}
+
+test("the email: from Kyle Hartwell, CRLF, the words as plain text then bare HTML, threaded when it's a follow-up", () => {
   const raw = buildMessage({
     to: "sam@catten.com.au",
     subject: "your canopy page",
-    body: "Hi Sam,\n\nOne line.\n\nKyle Hartwell",
+    body: "Hi Sam,\n\nOne line & <two>.\n\nKyle Hartwell",
     messageId: "<abc@hartwelldigital.com>",
     date: new Date("2026-11-23T22:31:00Z"),
   });
   const text = Buffer.from(raw, "base64url").toString("utf8");
   assert.match(text, /^From: "Kyle Hartwell" <kyle@hartwelldigital\.com>\r\nTo: sam@catten\.com\.au\r\nSubject: your canopy page\r\n/);
   assert.match(text, /Date: Mon, 23 Nov 2026 22:31:00 \+0000\r\n/);
-  assert.match(text, /Content-Type: text\/plain; charset=UTF-8\r\n/);
-  assert.ok(text.endsWith("\r\n\r\nHi Sam,\r\n\r\nOne line.\r\n\r\nKyle Hartwell\r\n"));
-  assert.ok(!/text\/html|<a |http/.test(text));
+  assert.match(text, /Content-Type: multipart\/alternative; boundary="=_[0-9a-f]{32}"\r\n/);
+  const p = parts(text);
+  assert.match(p.plainHead, /Content-Type: text\/plain; charset=UTF-8\r\nContent-Transfer-Encoding: quoted-printable$/);
+  assert.match(p.htmlHead, /Content-Type: text\/html; charset=UTF-8\r\nContent-Transfer-Encoding: quoted-printable$/);
+  assert.equal(qpDecode(p.plain), "Hi Sam,\r\n\r\nOne line & <two>.\r\n\r\nKyle Hartwell");
+  assert.equal(
+    qpDecode(p.html),
+    '<div dir="ltr">\r\n<div>Hi Sam,</div>\r\n<div><br></div>\r\n<div>One line &amp; &lt;two&gt;.</div>\r\n<div><br></div>\r\n<div>Kyle Hartwell</div>\r\n</div>',
+  );
+  // Just the words: no links, images, styles or tracking, and Draper's name nowhere.
+  assert.ok(!/<a |<img|style=|http|draper/i.test(text));
 
   const reply = Buffer.from(
     buildMessage({ to: "sam@catten.com.au", subject: "Re: your canopy page", body: "x", messageId: "<def@hartwelldigital.com>", inReplyTo: "<abc@hartwelldigital.com>" }),
@@ -141,27 +170,27 @@ test("the email: plain text from Kyle Hartwell, CRLF, threaded when it's a follo
   assert.equal(encodeHeader("café"), "=?UTF-8?B?Y2Fmw6k=?=");
 });
 
-const qpDecode = (s: string) =>
-  Buffer.from(
-    s.replace(/=\r\n/g, "").replace(/=([0-9A-F]{2})/g, (_, h: string) => String.fromCharCode(parseInt(h, 16))),
-    "latin1",
-  ).toString("utf8");
-
-test("the body is quoted-printable: a paragraph arrives as one line, so Gmail can't hard-wrap it", () => {
+test("both parts are quoted-printable, and in the HTML a paragraph is one element that reflows to the screen", () => {
   const para =
     "We were looking at 4WD fit-out shops around the Sunshine Coast on Tuesday and had a look at your site. On a phone, your canopy page took a little over six seconds to show anything on Google’s own speed test. 1 = 1 ";
   const body = `Hi Sam,\n\n${para}\n\nKyle Hartwell`;
-  const raw = Buffer.from(buildMessage({ to: "sam@catten.com.au", subject: "your canopy page", body, messageId: "<abc@hartwelldigital.com>" }), "base64url").toString("utf8");
-  assert.match(raw, /Content-Transfer-Encoding: quoted-printable\r\n/);
-  const encoded = raw.slice(raw.indexOf("\r\n\r\n") + 4);
-  assert.ok(/^[\x20-\x7e\r\n]*$/.test(encoded), "plain ASCII on the wire");
-  for (const line of encoded.split("\r\n")) {
-    assert.ok(line.length <= 76, `over 76: ${line}`);
-    assert.match(line, /^(?:[^=]|=[0-9A-F]{2})*=?$/, `a split escape: ${line}`);
+  const raw = Buffer.from(
+    buildMessage({ to: "sam@catten.com.au", subject: "your canopy page", body, messageId: "<abc@hartwelldigital.com>", boundary: "=_test" }),
+    "base64url",
+  ).toString("utf8");
+  const p = parts(raw);
+  for (const encoded of [p.plain, p.html]) {
+    assert.ok(/^[\x20-\x7e\r\n]*$/.test(encoded), "plain ASCII on the wire");
+    for (const line of encoded.split("\r\n")) {
+      assert.ok(line.length <= 76, `over 76: ${line}`);
+      assert.match(line, /^(?:[^=]|=[0-9A-F]{2})*=?$/, `a split escape: ${line}`);
+    }
   }
-  // Decoded, it's exactly what was written: the paragraph is one line again.
-  assert.equal(qpDecode(encoded), `${body.replace(/\n/g, "\r\n")}\r\n`);
-  assert.ok(qpDecode(encoded).includes("Sunshine Coast on Tuesday and had a look"));
+  // Decoded, each is exactly what was written.
+  assert.equal(qpDecode(p.plain), body.replace(/\n/g, "\r\n"));
+  assert.ok(qpDecode(p.html).includes(`<div>${para.replace(/&/g, "&amp;")}</div>`));
+  // The boundary can't occur inside quoted-printable ("=_" is never an escape).
+  assert.ok(!p.plain.includes("=_") && !p.html.includes("=_"));
 
   assert.equal(quotedPrintable("a=b"), "a=3Db");
   assert.equal(quotedPrintable("ends "), "ends=20");
