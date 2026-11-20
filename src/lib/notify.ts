@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 
-export type NoticeType = "approval" | "onboarding" | "nps" | "assistant" | "lead";
+export type NoticeType = "approval" | "onboarding" | "nps" | "assistant" | "lead" | "outreach";
 
 interface Notice {
   title: string;

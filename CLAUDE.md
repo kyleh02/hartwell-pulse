@@ -721,6 +721,13 @@ Live at https://portal.hartwelldigital.com
   `[[first_paint]]`, `[[page]]` and the rest, `src/lib/outreach/tokens.ts`),
   filled by Pulse from its own measurements. The lint refuses any number,
   weekday or month Claude types, so an email can never disagree with its proof.
+- **Sending is `tick()` in `src/lib/outreach/sender.ts`**, from
+  `/api/cron/outreach-tick` on cron-job.org every 5 minutes: one thing per
+  call (fix the 8am queue, send one, or confirm one draft). Every send is
+  claimed first and a retry asks Gmail for its Message-ID before resending.
+  Test mode sends everything to the test inboxes even with the master switch
+  off; a business is reached only with master ON and test mode OFF. No
+  holiday dates loaded for a year means nothing is scheduled in it.
 
 ## Client feedback, NPS (0058)
 - One question, 0 to 10, "How likely are you to recommend Hartwell Digital to

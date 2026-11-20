@@ -139,3 +139,40 @@ export function allowedAreas(prospect: { suburb: string | null; postcode: string
   out.delete("");
   return out;
 }
+
+/** What a stored draft's tokens are filled from when Pulse renders it again. */
+export interface TokenFacts {
+  measuredAt?: string | null;
+  fcpMs?: number | null;
+  lcpMs?: number | null;
+  pageviews?: number | null;
+  page?: string | null;
+  brokenPage?: string | null;
+  area?: string | null;
+}
+
+/**
+ * Fill a stored slot's tokens again, at confirmation (the lower of the two
+ * runs) or on the follow-up's morning (that day's run). A token the facts no
+ * longer back is reported, and the caller drops the message: a figure that
+ * didn't hold is never sent.
+ */
+export function fillTokens(raw: string, f: TokenFacts): { text: string; missing: string[] } {
+  const missing: string[] = [];
+  const text = raw.replace(/\[\[\s*([a-z_]+)\s*\]\]/g, (whole, name: string) => {
+    let v: string | null = null;
+    if (name === "day" && f.measuredAt) v = melbourneWeekday(f.measuredAt);
+    else if (name === "first_paint" && (f.fcpMs ?? 0) >= 4000) v = secondsWords(f.fcpMs!);
+    else if (name === "largest_paint" && (f.lcpMs ?? 0) >= 6000) v = secondsWords(f.lcpMs!);
+    else if (name === "pageviews" && (f.pageviews ?? 0) >= 2) v = timesWords(f.pageviews!);
+    else if (name === "page" && f.page) v = f.page;
+    else if (name === "broken_page" && f.brokenPage) v = f.brokenPage;
+    else if (name === "area" && f.area) v = f.area;
+    if (v === null) {
+      missing.push(name);
+      return whole;
+    }
+    return v;
+  });
+  return { text, missing };
+}

@@ -45,7 +45,8 @@ export type NotificationType =
   | "onboarding"
   | "nps"
   | "assistant"
-  | "lead";
+  | "lead"
+  | "outreach";
 
 export type NotificationChannel = "instant" | "digest" | "in_portal";
 

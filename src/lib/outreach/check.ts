@@ -157,17 +157,21 @@ export async function clientAreas(db: SupabaseClient): Promise<ClientArea[]> {
   }));
 }
 
-/** Fingerprints matching any of these keys. */
-export async function fingerprintHits(db: SupabaseClient, keys: Key[]): Promise<FingerprintHit[]> {
+/**
+ * Fingerprints matching any of these keys. `exceptSource` leaves out the ones
+ * a prospect's own first email wrote (source "prospect:<id>"), so its
+ * follow-up isn't blocked by itself; anything else still blocks it.
+ */
+export async function fingerprintHits(db: SupabaseClient, keys: Key[], exceptSource?: string): Promise<FingerprintHit[]> {
   if (keys.length === 0) return [];
   const byHash = new Map(keys.map((k) => [hashKey(k), k.kind]));
   const { data, error } = await db
     .from("outreach_fingerprints")
-    .select("kind, hash, reason")
+    .select("kind, hash, reason, source")
     .in("hash", [...byHash.keys()]);
   if (error) throw new Error(`outreach_fingerprints: ${error.message}`);
-  return ((data as { kind: FingerprintKind; hash: string; reason: FingerprintReason }[] | null) ?? [])
-    .filter((r) => byHash.get(r.hash) === r.kind)
+  return ((data as { kind: FingerprintKind; hash: string; reason: FingerprintReason; source: string | null }[] | null) ?? [])
+    .filter((r) => byHash.get(r.hash) === r.kind && !(exceptSource && r.source === exceptSource))
     .map((r) => ({ kind: r.kind, reason: r.reason }));
 }
 
@@ -178,14 +182,14 @@ export async function fingerprintHits(db: SupabaseClient, keys: Key[]): Promise<
 export async function checkBusiness(
   db: SupabaseClient,
   input: CheckInput,
-  opts: { exceptProspectId?: string } = {},
+  opts: { exceptProspectId?: string; exceptFingerprintSource?: string } = {},
 ): Promise<Verdict & { keys: Key[] }> {
   const keys = businessKeys(input);
   if (keys.length === 0) return { ...matchBusiness([], [], []), keys };
   try {
     const [known, hits, areas] = await Promise.all([
       knownRecords(db, opts.exceptProspectId),
-      fingerprintHits(db, keys),
+      fingerprintHits(db, keys, opts.exceptFingerprintSource),
       input.postcode === undefined || input.postcode === null || input.postcode === ""
         ? Promise.resolve([] as ClientArea[])
         : clientAreas(db),

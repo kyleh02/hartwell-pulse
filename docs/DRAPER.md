@@ -9,7 +9,10 @@ page shows to admins; nothing can send. Stage 3 (the measuring tool) and the
 client-area radius done: Kyle pasted 0064, its probe passed 3 of 3, merged
 into `main` 20 November. PAGESPEED_API_KEY is in Vercel (Secret, 20 Nov);
 ABR_GUID applied for, not yet issued. Stage 4 (submit, verify, lint) done:
-no migration, merged into `main` 20 November. Next: Stage 5, the sender.**
+no migration, merged into `main` 20 November. Stage 5 (the sender) built and
+tested on the branch, waiting for Kyle to paste 0065; then Kyle's Google,
+Vercel and cron-job.org setup, and his OK to download the public holiday
+dates (until they load, Draper schedules nothing).**
 Branch `draper` (renamed
 from `draper-outreach` the same day, at Kyle's request), cut from `main` at
 80fbe0b. Next step: Stage 2, the no-repeat rule.
@@ -412,12 +415,73 @@ fast-forwards into `main`.
         connector in Stage 7.
       - "Check wording" on the Draper page runs the lint in the browser.
       - Tests: 88 in all; `verify.test.ts` reads template v1 from 0062.
-- [ ] **Stage 5: sender.** Connect Gmail, the window and random gaps, holidays
+- [x] **Stage 5: sender.** (Built 20 Nov 2026; **0065 not yet pasted**; real
+      sends wait on Kyle's setup.) Connect Gmail, the window and random gaps, holidays
       and pause dates, the slider, ramp and hard ceilings, "Check these" past
       12 from 12:30pm, the 8am summary, the stop window, "Don't send", pause
       all, the pre-send re-check, the day-7 threaded follow-up, test mode, lane
       approval. Test: clock tests on the rules, then real sends to the test
       inboxes.
+      - `schedule.ts` (pure, clock-tested): Melbourne dates and times across
+        daylight saving; a sending day is a weekday, not a holiday in VIC or
+        the recipient's state, not in the pause dates, **and in a year the
+        holiday table covers**; day 7 or the next sending day; `planDay()`
+        (after the stop window from the 8am summary, or from a later fix,
+        plus up to ten minutes; random gaps; Check these from 12:30; what
+        won't fit by the window's close rolls over); `recipientFor()` (test
+        mode sends everything to the test inboxes whatever the master switch
+        says; a business only with master ON and test mode OFF).
+      - **Clash with the brief, raised with Kyle 20 Nov:** 20 to 45 minutes
+        between sends inside 9:30 to 3:30 fits about 11 to 18 a day, not 25
+        (19 at the 20-minute floor). Built as: the plan never squeezes the
+        gaps; what won't fit rolls to the next sending day. The ramp's first
+        weeks (5 and 10 a day) fit comfortably. Kyle to choose later: widen
+        the window, shorten the gaps, or accept roll-over.
+      - `data/au-holidays.ts` is **empty until Kyle OKs downloading the
+        official dates** (data.gov.au's Australian public holidays, CC BY);
+        until then every day reads "no public holiday dates are loaded" and
+        nothing is scheduled (decision 7: a missing year stops sending).
+      - `crypto.ts`: AES-256-GCM sealing of the refresh token under
+        `OUTREACH_TOKEN_KEY`. `gmail.ts`: OAuth URL (offline, consent,
+        login_hint kyle@), code exchange, refresh, revoke, profile, send,
+        find-by-Message-ID, and `buildMessage()` (plain text, CRLF, UTF-8,
+        "Kyle Hartwell" <kyle@>, our own Message-ID, In-Reply-To and
+        References for the follow-up; header values can't be split).
+        `gmail-access.ts` stores and reads the sealed token (service role).
+      - `/api/outreach/gmail/connect` and `/callback`: state cookie checked
+        in constant time; the account must be kyle@ and both scopes granted,
+        else the token is revoked and nothing stored.
+      - `sender.ts`, `tick()` from `/api/cron/outreach-tick` (cron-job.org,
+        every 5 minutes, CRON_SECRET): one thing per call. Expire approvals
+        held 3 days; at 8am on a sending day fix the queue (follow-ups due,
+        then first emails oldest first, capped by the slider, the ramp from
+        real sending days and the ceilings; 13th on in Check these) and send
+        the summary (`notifyAdmins`, type `outreach`, instant channel);
+        send the next due message (claimed queued to sending; no-repeat
+        check again, ignoring only its own `prospect:<id>` fingerprints; the
+        fault measured again and stored as pre_send or follow_up; fixed is
+        dropped, unreadable is retried; a follow-up's figures re-filled from
+        that morning; Gmail; a retry first asks Gmail for the Message-ID so
+        nothing goes twice; three failures and Kyle is told); or confirm one
+        draft (each claimed page measured again an hour or more after its
+        first run; both faults must repeat; the first email's figures
+        re-filled from the lower of the runs and "another thing" recounted
+        from confirmed faults; queued for the next sending day).
+      - A real first send writes fingerprints (`contacted`,
+        `prospect:<id>`) and books the follow-up's day. Test sends don't
+        fingerprint. **A follow-up goes wherever its first went**, and each
+        business keeps to one test inbox, so a test pair threads and a
+        business never gets a follow-up to a first it never received.
+      - Pages: Sending (Gmail, the mode, pause all, the tick's last word,
+        holiday status, "Send a test pair": the brief's reference email and
+        its threaded follow-up to the first test inbox), Queue (each email
+        readable; Don't send, Approve, Checked), Settings (versioned;
+        going live asks first).
+      - 0065: notification type `outreach`; messages `confirmed_at`,
+        `send_attempts`, `send_error`; state `queue_fixed_on`, `tick_at`,
+        `tick_note`. Passed on Postgres with 0062's probe still 36 of 36.
+      - **Untested until Kyle's setup:** the Google sign-in, real sends,
+        threading in a real inbox, the 8am email. The pure rules: 99 tests.
 - [ ] **Stage 6: replies.** Thread polling, opt-out words, bounces,
       out-of-office, labels, leads, "later" cards, every auto-pause rule. Test:
       real replies from the test inboxes.
@@ -477,6 +541,17 @@ Can start now:
 4. Check **SPF, DKIM and DMARC** for hartwelldigital.com in Google Admin
    (brief step 4).
 5. Decide **where the 5:30am task runs** (decision 9).
+7. **For Stage 5 (sending):** in the same Google Cloud project, turn on the
+   Gmail API; set up the Google Auth Platform as Internal, app name "Hartwell
+   Pulse", scopes gmail.send and gmail.readonly; make a Web application
+   OAuth client with redirect URI
+   `https://portal.hartwelldigital.com/api/outreach/gmail/callback`. In
+   Vercel: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` (Secret),
+   `OUTREACH_TOKEN_KEY` (Secret: 32 random bytes in base64, made on Kyle's PC;
+   losing it only means connecting Gmail again). Redeploy, then Connect
+   Gmail on the Draper page as kyle@, add the two test inboxes, Send a test
+   pair. On cron-job.org: a job like the email one, URL
+   `/api/cron/outreach-tick`, every 5 minutes, same Authorization header.
 6. **Now needed for Stage 3:** a Google Cloud project with the **PageSpeed
    Insights API** turned on and an **API key** restricted to that API, in
    Vercel as `PAGESPEED_API_KEY` (Secret, Production). Without it Google's
@@ -559,3 +634,12 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
   render, verify, submit, the contact re-fetch, "Check wording". 88 tests
   pass, including every refusal case in brief test 3 and a good draft that
   renders word for word like Kyle's reference example. No migration; merged.
+- **20 November 2026, Stage 5.** Kyle said go from his phone (Remote Control
+  on). Built the sender: schedule, Gmail, the tick, the queue, settings,
+  0065. 99 tests pass; 0065 passed on Postgres. A self-review before commit
+  caught three bugs: a test pair could split across two test inboxes, a
+  follow-up could reach a real business whose first email went to a test
+  inbox, and the 8am summary counted emails that had rolled over. Raised
+  with Kyle: the window holds 11 to 18 sends a day, not 25. Waiting on
+  Kyle: 0065, the Google and Vercel setup, the cron job, and his OK to
+  download the holiday dates.

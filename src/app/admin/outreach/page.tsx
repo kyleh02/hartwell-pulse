@@ -12,6 +12,16 @@ import { NoRepeatTools } from "@/components/outreach/NoRepeatTools";
 import { ClientAreas, type AreaRow } from "@/components/outreach/ClientAreas";
 import { MeasureSite } from "@/components/outreach/MeasureSite";
 import { WordingCheck } from "@/components/outreach/WordingCheck";
+import { SendingPanel } from "@/components/outreach/SendingPanel";
+import { SettingsForm } from "@/components/outreach/SettingsForm";
+import { QueueList, type QueueRow } from "@/components/outreach/QueueList";
+import { getPulseSession } from "@/lib/auth/session";
+import { createAdminSupabase } from "@/lib/supabase/admin";
+import { gmailConnection, type GmailConnection } from "@/lib/outreach/gmail-access";
+import { oauthClient } from "@/lib/outreach/gmail";
+import { tokenKey } from "@/lib/outreach/crypto";
+import { AU_HOLIDAYS, AU_HOLIDAYS_SOURCE } from "@/lib/outreach/data/au-holidays";
+import { melbourneDate, melbourneInstant } from "@/lib/outreach/schedule";
 import { cn } from "@/lib/utils/cn";
 
 export const metadata = { title: "Draper" };
@@ -77,7 +87,7 @@ const STAGES: { name: string; what: string }[] = [
   { name: "Pages", what: "The queue, prospect cards, Settings, Lists, Numbers" },
   { name: "End-to-end test", what: "The nine checks in test mode, then your setup list" },
 ];
-const STAGES_DONE = 4;
+const STAGES_DONE = 5;
 
 function clock(t: string) {
   const [h, m] = t.split(":").map(Number);
@@ -128,8 +138,14 @@ function Tile({ label, value, sub, warn }: { label: string; value: string; sub?:
   );
 }
 
-export default async function DraperPage() {
+export default async function DraperPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   if (!outreachEnabled()) notFound();
+  const sp = await searchParams;
+  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? null;
 
   const supabase = await createServerSupabase();
   const [lanesRes, settingsRes, templatesRes, runRes, stateRes, prospectsRes, prints, areasRes, clientsRes] = await Promise.all([
@@ -159,6 +175,33 @@ export default async function DraperPage() {
     (areasRes.data as { id: string; client_id: string; place: string; postcode: string | null; services: string[]; radius_km: number }[] | null) ?? []
   ).map((a) => ({ ...a, client: clientName.get(a.client_id) ?? "Unknown client" }));
   const clientOptions = clientRows.filter((c) => !c.deleted_at).map((c) => ({ id: c.id, name: c.business_name }));
+
+  // ---------- Stage 5: the sender ----------
+  // The Gmail table is service role only; read it only after the admin check.
+  const session = await getPulseSession();
+  let gmail: GmailConnection | null = null;
+  if (session?.role === "admin") gmail = await gmailConnection(createAdminSupabase()).catch(() => null);
+  const setupMissing = [
+    ...(oauthClient() ? [] : ["GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET"]),
+    ...(tokenKey() ? [] : ["OUTREACH_TOKEN_KEY"]),
+  ];
+  const st = stateRes.data as (DraperState & { tick_at?: string | null; tick_note?: string | null }) | null;
+  const todayStart = melbourneInstant(melbourneDate(new Date()), "00:00").toISOString();
+  const COLS = "id, prospect_id, kind, status, fault, subject, body, send_on, scheduled_for, sent_at, sent_to, test_mode, past_twelve, checked_at, needs_approval, approved_at";
+  const [waitingRes, sentRes] = await Promise.all([
+    supabase.from("outreach_messages").select(COLS).in("status", ["awaiting_confirmation", "queued", "sending"]).order("scheduled_for", { nullsFirst: false }).limit(60),
+    supabase.from("outreach_messages").select(COLS).eq("status", "sent").gte("sent_at", todayStart).order("sent_at").limit(60),
+  ]);
+  type QRaw = Omit<QueueRow, "business"> & { prospect_id: string };
+  const qRaw = [...((waitingRes.data as QRaw[] | null) ?? []), ...((sentRes.data as QRaw[] | null) ?? [])];
+  const pIds = [...new Set(qRaw.map((m) => m.prospect_id))];
+  const { data: pNames } = pIds.length
+    ? await supabase.from("outreach_prospects").select("id, business_name").in("id", pIds)
+    : { data: [] };
+  const names = new Map(((pNames as { id: string; business_name: string | null }[] | null) ?? []).map((p) => [p.id, p.business_name]));
+  const queue: QueueRow[] = qRaw.map((m) => ({ ...m, business: names.get(m.prospect_id) ?? "A business" }));
+  const years = Object.keys(AU_HOLIDAYS).sort();
+  const holidays = years.length ? `${AU_HOLIDAYS_SOURCE}, ${years.join(" and ")}` : "not loaded yet, so nothing can be scheduled";
   const template =
     templates.find((t) => t.version === active?.template_version) ?? templates[templates.length - 1] ?? null;
 
@@ -269,6 +312,38 @@ export default async function DraperPage() {
               measurements. Try some wording here; nothing is saved.
             </p>
             <WordingCheck />
+          </Card>
+
+          {/* ---------- sending ---------- */}
+          <Card className="p-4">
+            <p className="mono-label mb-3">Sending</p>
+            <SendingPanel
+              gmail={gmail}
+              setupMissing={setupMissing}
+              paused={!!state?.paused}
+              pausedReason={state?.paused_reason ?? null}
+              tickAt={st?.tick_at ?? null}
+              tickNote={st?.tick_note ?? null}
+              mode={
+                settings.test_mode
+                  ? `Test mode: every email goes to ${settings.test_inboxes.join(" or ") || "your test inboxes (none set)"}`
+                  : settings.master_on
+                    ? "Live: Draper emails businesses"
+                    : "Master switch off: nothing sends"
+              }
+              holidays={holidays}
+              flash={one(sp.gmail) ? { outcome: one(sp.gmail)!, why: one(sp.why) } : null}
+            />
+          </Card>
+
+          <Card className="p-4">
+            <p className="mono-label mb-3">Queue</p>
+            <QueueList rows={queue} />
+          </Card>
+
+          <Card className="p-4">
+            <p className="mono-label mb-3">Settings</p>
+            <SettingsForm s={settings} />
           </Card>
 
           {/* ---------- how it fits ---------- */}

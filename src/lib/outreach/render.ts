@@ -80,3 +80,24 @@ export function renderMessages(
   if (!first.body.includes(t.opt_out_a)) problems.push("The first email is missing its opt-out line.");
   return { first, followUp, problems };
 }
+
+/**
+ * The follow-up alone, rendered again on its morning with that day's figures
+ * (the brief: "the second fault, re-measured that morning").
+ */
+export function renderFollowUp(
+  t: TemplateText,
+  r: { firstName: string | null; optOut: "A" | "B"; secondFinding: string },
+): { body: string; problems: string[] } {
+  const optOutLine = r.optOut === "B" ? t.opt_out_b : t.opt_out_a;
+  const body = fill(t.followup_body, {
+    first_name_or_there: greeting(r.firstName),
+    second_finding: r.secondFinding.trim(),
+    opt_out_line: optOutLine,
+  });
+  const problems: string[] = [];
+  if (/\{[a-z_]+\}/.test(body)) problems.push("The follow-up still has a placeholder in it.");
+  for (const line of fixedLines(t.followup_body)) if (!body.includes(line)) problems.push(`The follow-up is missing Kyle's fixed text: "${line}"`);
+  if (!body.includes(optOutLine)) problems.push("The follow-up is missing its opt-out line.");
+  return { body, problems };
+}
