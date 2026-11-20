@@ -23,7 +23,8 @@ import {
 import { fillTokens } from "./tokens.ts";
 import { renderFollowUp, renderMessages, type TemplateText } from "./render.ts";
 import { gmailAccessToken } from "./gmail-access.ts";
-import { buildMessage, findByMessageId, newMessageId, sendRaw } from "./gmail.ts";
+import { buildMessage, findByMessageId, newMessageId, sendRaw, SENDER_EMAIL, threadSenders } from "./gmail.ts";
+import { checkReplies } from "./replies.ts";
 import { FAULT_LABEL, type Fault } from "./rules.ts";
 import type { DraperSettings } from "./types.ts";
 
@@ -34,10 +35,12 @@ import type { DraperSettings } from "./types.ts";
  *
  * In order:
  *   1. expire queued first emails a lane held for approval more than 3 days;
- *   2. at 8am on a sending day, fix the day's queue and send Kyle the summary;
- *   3. send the next message that is due, after the no-repeat check and a
- *      fresh measurement of its fault;
- *   4. otherwise confirm one submitted draft: measure its faults again an
+ *   2. every ten minutes, read replies (Stage 6, replies.ts), paused or not;
+ *   3. at 8am on a sending day, fix the day's queue and send Kyle the summary;
+ *   4. send the next message that is due, after the no-repeat check and a
+ *      fresh measurement of its fault (a follow-up first checks its thread
+ *      for a reply);
+ *   5. otherwise confirm one submitted draft: measure its faults again an
  *      hour or more after the first run, then queue it or drop it.
  *
  * Every send is CLAIMED first (status queued -> sending) so two ticks can't
@@ -288,6 +291,22 @@ async function sendClaimed(db: SupabaseClient, m: Msg, s: DraperSettings, cal: C
     return `Not sending: ${rcpt.blocked}`;
   }
 
+  // Anyone written in the thread? Read it before the follow-up can go: a
+  // reply, a bounce or an opt-out cancels it; an out-of-office doesn't.
+  if (m.kind === "follow_up") {
+    const t0 = await gmailAccessToken(db);
+    if ("error" in t0) throw new Error(t0.error);
+    const senders = await threadSenders(t0.token, first!.gmail_thread_id!);
+    if (senders.some((f) => f !== SENDER_EMAIL)) {
+      await checkReplies(db, now, { force: true });
+      const { data: heard } = await db.from("outreach_replies").select("id").eq("prospect_id", p.id).in("kind", ["reply", "opt_out", "bounce"]).limit(1);
+      if (heard?.length) {
+        await dropMessage(db, m, "A reply came in first");
+        return "Follow-up cancelled: a reply came in first";
+      }
+    }
+  }
+
   // The no-repeat rule, again, just before it goes.
   const verdict = await checkBusiness(
     db,
@@ -528,7 +547,7 @@ export async function tick(db: SupabaseClient, now = new Date()): Promise<string
   const s = await latestSettings(db);
   const { data: st } = await db.from("outreach_state").select("paused, queue_fixed_on").maybeSingle();
   const state = (st as { paused: boolean; queue_fixed_on: string | null } | null) ?? { paused: false, queue_fixed_on: null };
-  const cal = calendar(s.pause_from, s.pause_to);
+  const cal = calendar(s.pause_from, s.pause_to, s.send_weekends === true);
   const today = melbourneDate(now);
   const time = melbourneTime(now);
   const day = sendingDay(today, null, cal);
@@ -540,6 +559,17 @@ export async function tick(db: SupabaseClient, now = new Date()): Promise<string
 
   const expired = await expireApprovals(db, now);
   if (expired) return finish(`Expired ${expired} unapproved email${expired === 1 ? "" : "s"}`);
+
+  // Replies, whatever else is going on: an opt-out is honoured paused or not.
+  // If Gmail can't be read, say so and carry on; a follow-up checks its own
+  // thread before it goes, so it can't slip past an unread reply.
+  let replyTrouble = "";
+  try {
+    const heard = await checkReplies(db, now);
+    if (heard) return finish(heard);
+  } catch (e) {
+    replyTrouble = `; replies couldn't be read: ${e instanceof Error ? e.message : String(e)}`;
+  }
 
   const mode = recipientFor(s, "business@example.invalid", 0);
   const canSend = !state.paused && !("blocked" in mode);
@@ -553,5 +583,5 @@ export async function tick(db: SupabaseClient, now = new Date()): Promise<string
   const confirmed = await confirmNext(db, s, cal, now);
   if (confirmed) return finish(confirmed);
   const why = state.paused ? "paused" : "blocked" in mode ? mode.blocked : !day.ok ? `today is ${day.reason}` : "nothing due";
-  return finish(`Nothing to do (${why})`);
+  return finish(`Nothing to do (${why})${replyTrouble}`);
 }

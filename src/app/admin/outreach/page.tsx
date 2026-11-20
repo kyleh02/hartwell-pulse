@@ -15,6 +15,8 @@ import { WordingCheck } from "@/components/outreach/WordingCheck";
 import { SendingPanel } from "@/components/outreach/SendingPanel";
 import { SettingsForm } from "@/components/outreach/SettingsForm";
 import { QueueList, type QueueRow } from "@/components/outreach/QueueList";
+import { RepliesPanel, type LaterRow, type ReplyRow } from "@/components/outreach/RepliesPanel";
+import { gmailThreadUrl } from "@/lib/outreach/replies-rules";
 import { getPulseSession } from "@/lib/auth/session";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { gmailConnection, type GmailConnection } from "@/lib/outreach/gmail-access";
@@ -44,7 +46,7 @@ const CLAUDE_SLOTS = new Set(["finding", "why_and_fix", "second_finding"]);
 
 const FLOW: { when: string; what: string; where: string; href?: string }[] = [
   {
-    when: "5:30am, weekdays",
+    when: "5:30am, each sending day",
     what: "Claude's morning run finds businesses in the active lane, reads their sites and checks each one with Pulse first. Its connector can't send anything.",
     where: "Draper connector",
   },
@@ -87,7 +89,7 @@ const STAGES: { name: string; what: string }[] = [
   { name: "Pages", what: "The queue, prospect cards, Settings, Lists, Numbers" },
   { name: "End-to-end test", what: "The nine checks in test mode, then your setup list" },
 ];
-const STAGES_DONE = 5;
+const STAGES_DONE = 6;
 
 function clock(t: string) {
   const [h, m] = t.split(":").map(Number);
@@ -200,6 +202,52 @@ export default async function DraperPage({
     : { data: [] };
   const names = new Map(((pNames as { id: string; business_name: string | null }[] | null) ?? []).map((p) => [p.id, p.business_name]));
   const queue: QueueRow[] = qRaw.map((m) => ({ ...m, business: names.get(m.prospect_id) ?? "A business" }));
+  // ---------- Stage 6: replies ----------
+  const RCOLS = "id, prospect_id, message_id, kind, quote, label, later_on, received_at, lead_id";
+  const fortnight = new Date(Date.now() - 14 * 86_400_000).toISOString();
+  const [needsRes, recentRes, laterRes] = await Promise.all([
+    supabase.from("outreach_replies").select(RCOLS).eq("kind", "reply").is("label", null).order("received_at", { ascending: false }).limit(50),
+    supabase.from("outreach_replies").select(RCOLS).neq("kind", "auto_reply").gte("received_at", fortnight).or("label.not.is.null,kind.eq.bounce").order("received_at", { ascending: false }).limit(40),
+    supabase.from("outreach_prospects").select("id, business_name, later_on").eq("status", "later").order("later_on").limit(50),
+  ]);
+  type RRaw = { id: string; prospect_id: string; message_id: string | null; kind: ReplyRow["kind"]; quote: string | null; label: ReplyRow["label"]; later_on: string | null; received_at: string; lead_id: string | null };
+  const rRaw = [...((needsRes.data as RRaw[] | null) ?? []), ...((recentRes.data as RRaw[] | null) ?? [])];
+  const laterRaw = (laterRes.data as { id: string; business_name: string | null; later_on: string }[] | null) ?? [];
+  const rPids = [...new Set([...rRaw.map((r) => r.prospect_id), ...laterRaw.map((l) => l.id)])];
+  const [{ data: rNames }, { data: rMsgs }] = rPids.length
+    ? await Promise.all([
+        supabase.from("outreach_prospects").select("id, business_name").in("id", rPids),
+        supabase.from("outreach_messages").select("id, prospect_id, kind, test_mode, gmail_thread_id").in("prospect_id", rPids).eq("status", "sent"),
+      ])
+    : [{ data: [] }, { data: [] }];
+  const rName = new Map(((rNames as { id: string; business_name: string | null }[] | null) ?? []).map((p) => [p.id, p.business_name ?? "A business"]));
+  type MRaw = { id: string; prospect_id: string; kind: string; test_mode: boolean | null; gmail_thread_id: string | null };
+  const sentMsgs = (rMsgs as MRaw[] | null) ?? [];
+  const msgById = new Map(sentMsgs.map((m) => [m.id, m]));
+  const firstOf = new Map(sentMsgs.filter((m) => m.kind === "first").map((m) => [m.prospect_id, m]));
+  const toRow = (r: RRaw): ReplyRow => {
+    const m = (r.message_id ? msgById.get(r.message_id) : undefined) ?? firstOf.get(r.prospect_id);
+    return {
+      id: r.id,
+      business: rName.get(r.prospect_id) ?? "A business",
+      kind: r.kind,
+      quote: r.quote,
+      label: r.label,
+      later_on: r.later_on,
+      received_at: r.received_at,
+      test: !!m?.test_mode,
+      thread_url: m?.gmail_thread_id ? gmailThreadUrl(m.gmail_thread_id) : null,
+      lead_id: r.lead_id,
+    };
+  };
+  const needs = ((needsRes.data as RRaw[] | null) ?? []).map(toRow);
+  const recent = ((recentRes.data as RRaw[] | null) ?? []).map(toRow);
+  const todayMel = melbourneDate(new Date());
+  const laterRows: LaterRow[] = laterRaw.map((l) => {
+    const t = firstOf.get(l.id)?.gmail_thread_id;
+    return { prospect_id: l.id, business: l.business_name ?? "A business", later_on: l.later_on, due: l.later_on <= todayMel, thread_url: t ? gmailThreadUrl(t) : null };
+  });
+
   const years = Object.keys(AU_HOLIDAYS).sort();
   const holidays = years.length ? `${AU_HOLIDAYS_SOURCE}, ${years.join(" and ")}` : "not loaded yet, so nothing can be scheduled";
   const template =
@@ -254,7 +302,7 @@ export default async function DraperPage({
               <Tile
                 label="Send window"
                 value={`${clock(settings.window_start)} to ${clock(settings.window_end)}`}
-                sub={`Weekdays, ${settings.gap_min_minutes} to ${settings.gap_max_minutes} minutes apart`}
+                sub={`${settings.send_weekends ? "Every day" : "Weekdays"}, ${settings.gap_min_minutes} to ${settings.gap_max_minutes} minutes apart`}
               />
               <Tile
                 label="Stop window"
@@ -339,6 +387,11 @@ export default async function DraperPage({
           <Card className="p-4">
             <p className="mono-label mb-3">Queue</p>
             <QueueList rows={queue} />
+          </Card>
+
+          <Card className="scroll-mt-20 p-4" id="replies">
+            <p className="mono-label mb-3">Replies</p>
+            <RepliesPanel needs={needs} recent={recent} later={laterRows} faultsOff={state?.faults_off ?? []} />
           </Card>
 
           <Card className="p-4">

@@ -8,6 +8,7 @@
  * the rest is plain fetch. Reading the stored token is gmail-access.ts.
  */
 import { randomUUID } from "node:crypto";
+import type { GmailMessage } from "./replies-rules.ts";
 
 export const SENDER_EMAIL = "kyle@hartwelldigital.com";
 export const SENDER_NAME = "Kyle Hartwell";
@@ -108,6 +109,41 @@ export async function sendRaw(accessToken: string, raw: string, threadId?: strin
   return api(accessToken, "/messages/send", {
     method: "POST",
     body: JSON.stringify(threadId ? { raw, threadId } : { raw }),
+  });
+}
+
+/**
+ * Messages matching a Gmail search, newest first, spam included (an opt-out
+ * that landed in spam is still an opt-out). Ids only.
+ */
+export async function listMessageIds(accessToken: string, q: string, max = 100): Promise<{ id: string; threadId: string }[]> {
+  const out: { id: string; threadId: string }[] = [];
+  let pageToken: string | undefined;
+  while (out.length < max) {
+    const params = new URLSearchParams({ q, includeSpamTrash: "true", maxResults: String(Math.min(100, max - out.length)) });
+    if (pageToken) params.set("pageToken", pageToken);
+    const j = await api<{ messages?: { id: string; threadId: string }[]; nextPageToken?: string }>(accessToken, `/messages?${params}`);
+    out.push(...(j.messages ?? []));
+    if (!j.nextPageToken) break;
+    pageToken = j.nextPageToken;
+  }
+  return out;
+}
+
+/** One message in full, to be read by replies-rules.ts parseMessage(). */
+export async function getMessage(accessToken: string, id: string): Promise<GmailMessage> {
+  return api<GmailMessage>(accessToken, `/messages/${encodeURIComponent(id)}?format=full`);
+}
+
+/** The From address of every message in a thread, lower case: the check before a follow-up goes. */
+export async function threadSenders(accessToken: string, threadId: string): Promise<string[]> {
+  const j = await api<{ messages?: GmailMessage[] }>(
+    accessToken,
+    `/threads/${encodeURIComponent(threadId)}?format=metadata&metadataHeaders=From`,
+  );
+  return (j.messages ?? []).map((m) => {
+    const from = m.payload?.headers?.find((h) => h.name.toLowerCase() === "from")?.value ?? "";
+    return (/<([^>]+)>/.exec(from)?.[1] ?? from).trim().toLowerCase();
   });
 }
 

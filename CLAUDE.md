@@ -728,6 +728,12 @@ Live at https://portal.hartwelldigital.com
   Test mode sends everything to the test inboxes even with the master switch
   off; a business is reached only with master ON and test mode OFF. No
   holiday dates loaded for a year means nothing is scheduled in it.
+- **Replies are `checkReplies()` in `src/lib/outreach/replies.ts`**, from the
+  same tick every ten minutes, paused or not. Opt-out words match their own
+  words only (our template lines, quoted text and legal footers removed);
+  when in doubt it opts out. A test send never touches a business: no
+  do-not-contact, no fingerprints, no auto-pause from it. Labels go through
+  `applyLabel()`, which the Stage 7 connector must use too.
 
 ## Client feedback, NPS (0058)
 - One question, 0 to 10, "How likely are you to recommend Hartwell Digital to

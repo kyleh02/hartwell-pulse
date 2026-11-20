@@ -6,7 +6,7 @@
  */
 
 export type LeadStage = "new" | "contacted" | "meeting" | "proposal" | "won" | "lost";
-export type LeadSource = "website" | "quiz" | "audit" | "referral" | "manual" | "other";
+export type LeadSource = "website" | "quiz" | "audit" | "referral" | "manual" | "outreach" | "other";
 export type ActivityKind = "created" | "note" | "call" | "email" | "meeting" | "stage" | "won" | "lost";
 
 export interface Lead {
@@ -59,6 +59,8 @@ export const SOURCE_LABEL: Record<LeadSource, string> = {
   audit: "Audit page",
   referral: "Referral",
   manual: "Added by hand",
+  // Draper (0066): a business that replied to an outreach email and is keen.
+  outreach: "Outreach email",
   other: "Other",
 };
 

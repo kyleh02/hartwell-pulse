@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { getPulseSession } from "@/lib/auth/session";
 import { createAdminSupabase } from "@/lib/supabase/admin";
@@ -35,6 +36,8 @@ export interface SettingsInput {
   pause_from: string;
   pause_to: string;
   opt_out_line: "A" | "B";
+  /** 0066. Sent only when on, so a database without the column still saves. */
+  send_weekends: boolean;
 }
 
 const TIME = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
@@ -92,6 +95,7 @@ export async function saveSettings(input: SettingsInput, note: string): Promise<
       pause_from: from,
       pause_to: to,
       opt_out_line: input.opt_out_line === "B" ? "B" : "A",
+      ...(input.send_weekends ? { send_weekends: true } : {}),
       client_radius_km: prev.client_radius_km,
       never_list: prev.never_list,
       exclusion_categories: prev.exclusion_categories,
@@ -103,7 +107,9 @@ export async function saveSettings(input: SettingsInput, note: string): Promise<
       revalidatePath("/admin/outreach");
       return { ok: true };
     }
-    if (error.code !== "23505") return { ok: false, message: error.message };
+    if (error.code !== "23505") {
+      return { ok: false, message: /send_weekends/.test(error.message) ? "Sending on weekends needs migration 0066 first." : error.message };
+    }
   }
   return { ok: false, message: "Someone else saved at the same moment. Try again." };
 }
@@ -121,6 +127,9 @@ export async function setPaused(paused: boolean): Promise<Result> {
     )
     .eq("id", true);
   if (error) return { ok: false, message: error.message };
+  // Resuming starts the auto-pause rules counting afresh, so a pause Kyle has
+  // looked at and lifted doesn't fire again on the same evidence (0066).
+  if (!paused) await db.from("outreach_state").update({ auto_rules_since: new Date().toISOString() }).eq("id", true);
   await db.from("outreach_events").insert({ kind: paused ? "paused" : "resumed", actor: "kyle" });
   revalidatePath("/admin/outreach");
   return { ok: true };
@@ -190,8 +199,8 @@ export async function disconnectGmailAction(): Promise<Result> {
 /**
  * Send a test pair to the first test inbox: the reference email from Kyle's
  * brief, then its follow-up threaded under it, as Draper would send them.
- * Checks the Gmail connection, the From name, plain text, spacing and
- * threading. Records nothing against any business.
+ * Checks the Gmail connection, the From name, the layout and threading.
+ * Recorded against a made-up test business only (see recordTestPair).
  */
 export async function sendTestPair(): Promise<Result & { to?: string }> {
   const session = await guard();
@@ -224,15 +233,73 @@ export async function sendTestPair(): Promise<Result & { to?: string }> {
   if ("error" in token) return { ok: false, message: token.error };
   try {
     const firstId = newMessageId();
-    const first = await sendRaw(token.token, buildMessage({ to, subject: `[Test] ${r.first.subject}`, body: r.first.body, messageId: firstId }));
-    await sendRaw(
+    const firstSubject = `[Test] ${r.first.subject}`;
+    const first = await sendRaw(token.token, buildMessage({ to, subject: firstSubject, body: r.first.body, messageId: firstId }));
+    const fuId = newMessageId();
+    const fu = await sendRaw(
       token.token,
-      buildMessage({ to, subject: `Re: [Test] ${r.first.subject}`, body: r.followUp.body, messageId: newMessageId(), inReplyTo: firstId }),
+      buildMessage({ to, subject: `Re: ${firstSubject}`, body: r.followUp.body, messageId: fuId, inReplyTo: firstId }),
       first.threadId,
     );
     await admin.from("outreach_change_log").insert({ what: `Test pair sent to ${to}`, why: "Checking the Gmail connection", changed_by: session.clerkUserId });
-    return { ok: true, to };
+    const recorded = await recordTestPair(admin, {
+      to,
+      templateVersion: (t as { version: number }).version,
+      settingsVersion: s.version,
+      first: { ...first, rfc: firstId, subject: firstSubject, body: r.first.body },
+      followUp: { ...fu, rfc: fuId, subject: `Re: ${firstSubject}`, body: r.followUp.body },
+      by: session.clerkUserId,
+    });
+    return recorded ? { ok: true, to } : { ok: false, message: `Sent to ${to}, but it couldn't be recorded, so a reply to it won't show under Replies.` };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : String(e) };
   }
+}
+
+type SentCopy = { id: string; threadId: string; rfc: string; subject: string; body: string };
+
+/**
+ * The test pair, recorded as a made-up test business (Stage 6), so a reply
+ * from the test inbox runs through Replies exactly as a real one would:
+ * "no thanks" opts out, anything else waits for a label, Interested makes a
+ * [Test] lead. Test only: no fingerprints, no do-not-contact, and the domain
+ * is a .invalid one no business can have.
+ */
+async function recordTestPair(
+  db: ReturnType<typeof createAdminSupabase>,
+  x: { to: string; templateVersion: number; settingsVersion: number; first: SentCopy; followUp: SentCopy; by: string },
+): Promise<boolean> {
+  const tag = randomUUID().slice(0, 8);
+  const stamp = new Date().toISOString();
+  const { data: p, error } = await db
+    .from("outreach_prospects")
+    .insert({
+      business_name: `Test pair ${tag} (made up)`,
+      domain: `test-pair-${tag}.invalid`,
+      website_url: `https://test-pair-${tag}.invalid/`,
+      source: "manual",
+      status: "followed_up",
+      test: true,
+      created_by: x.by,
+    })
+    .select("id")
+    .single();
+  if (error || !p) return false;
+  const pid = (p as { id: string }).id;
+  await db.from("outreach_contacts").insert({
+    prospect_id: pid,
+    email: x.to,
+    first_name: "Sam",
+    address_kind: "general",
+    source_url: `https://test-pair-${tag}.invalid/contact`,
+    context: "Kyle's test inbox",
+  });
+  const common = { prospect_id: pid, template_version: x.templateVersion, settings_version: x.settingsVersion, status: "sent", sent_at: stamp, sent_to: x.to, test_mode: true, created_by: x.by };
+  const { error: me } = await db.from("outreach_messages").insert([
+    { ...common, kind: "first", fault: "slow_mobile", subject: x.first.subject, body: x.first.body, gmail_message_id: x.first.id, gmail_thread_id: x.first.threadId, rfc_message_id: x.first.rfc },
+    { ...common, kind: "follow_up", fault: "broken_page", subject: x.followUp.subject, body: x.followUp.body, gmail_message_id: x.followUp.id, gmail_thread_id: x.followUp.threadId, rfc_message_id: x.followUp.rfc },
+  ]);
+  if (me) return false;
+  await db.from("outreach_events").insert({ prospect_id: pid, kind: "sent", actor: "kyle", detail: { test: true, test_pair: true } });
+  return true;
 }

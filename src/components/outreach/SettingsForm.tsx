@@ -37,6 +37,7 @@ export function SettingsForm({ s }: { s: DraperSettings }) {
     pause_from: s.pause_from ?? "",
     pause_to: s.pause_to ?? "",
     opt_out_line: s.opt_out_line,
+    send_weekends: s.send_weekends === true,
   });
   const [note, setNote] = useState("");
   const set = <K extends keyof SettingsInput>(k: K, v: SettingsInput[K]) => setF({ ...f, [k]: v });
@@ -72,10 +73,17 @@ export function SettingsForm({ s }: { s: DraperSettings }) {
           </span>
         </label>
       </div>
+      <label className="flex items-start gap-2 rounded-[var(--radius-input)] border border-pulse-border p-3">
+        <input type="checkbox" className="mt-1" checked={f.send_weekends} onChange={(e) => set("send_weekends", e.target.checked)} />
+        <span>
+          <span className="block text-sm text-pulse-text">Send on weekends</span>
+          <span className="block text-[12px] text-pulse-text-mute">Saturdays and Sundays become sending days. Public holidays and your pause dates are still skipped.</span>
+        </span>
+      </label>
       <Field label="Test inboxes" hint="One Gmail and one Outlook, separated by commas.">
         <input className={field} value={f.test_inboxes} onChange={(e) => set("test_inboxes", e.target.value)} placeholder="you@gmail.com, you@outlook.com" />
       </Field>
-      <Field label={`First emails a weekday: ${f.daily_first_emails}`} hint="Warms up at 5 a day for five sending days, then 10, 15 and 20. Past 12 a day go in Check these.">
+      <Field label={`First emails a sending day: ${f.daily_first_emails}`} hint="Warms up at 5 a day for five sending days, then 10, 15 and 20. Past 12 a day go in Check these.">
         <input type="range" min={1} max={25} className="w-full" value={f.daily_first_emails} onChange={(e) => set("daily_first_emails", Number(e.target.value))} />
       </Field>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -118,8 +126,8 @@ export function SettingsForm({ s }: { s: DraperSettings }) {
         </Button>
       </div>
       <p className="text-[11px] text-pulse-text-mute">
-        Version {s.version}. With 20 to 45 minutes between sends, the 9:30 to 3:30 window holds about 11 to 18 emails;
-        anything that won&apos;t fit goes the next sending day.
+        Version {s.version}. Anything that won&apos;t fit in the window goes the next sending day. For 25 first emails and their
+        follow-ups, open the window about 8:30am to 5:30pm with 10 to 15 minutes between sends.
       </p>
       {msg && <p className={msg.ok ? "text-[13px] text-pulse-success" : "text-[13px] text-pulse-danger"}>{msg.text}</p>}
     </form>

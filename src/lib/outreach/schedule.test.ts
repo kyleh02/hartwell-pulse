@@ -49,6 +49,17 @@ test("the next sending day skips weekends, holidays and the pause", () => {
   assert.equal(nextSendingDay("2027-12-31", null, cal), null); // 2028 isn't covered
 });
 
+test("with Send on weekends, Saturday and Sunday count, and holidays and the pause still don't", () => {
+  const wk: Calendar = { ...cal, weekends: true };
+  assert.equal(sendingDay("2026-11-21", null, wk).ok, true); // Saturday
+  assert.equal(sendingDay("2026-11-22", "QLD", wk).ok, true); // Sunday
+  assert.equal(nextSendingDay("2026-11-20", null, wk), "2026-11-21"); // Friday to Saturday
+  assert.equal(sendingDay("2026-11-03", null, wk).ok, false); // still the Cup
+  assert.equal(sendingDay("2026-12-19", null, wk).ok, false); // a Saturday in the pause
+  assert.equal(sendingDay("2028-03-04", null, wk).ok, false); // still only covered years
+  assert.equal(followUpDay("2026-11-14", null, wk), "2026-11-21"); // a Saturday first, a Saturday follow-up
+});
+
 test("the follow-up goes on day 7, or the next sending day after it", () => {
   assert.equal(followUpDay("2026-11-16", null, cal), "2026-11-23");
   assert.equal(followUpDay("2026-11-17", "QLD", cal), "2026-11-25"); // day 7 is a QLD holiday

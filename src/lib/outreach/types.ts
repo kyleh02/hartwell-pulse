@@ -30,6 +30,8 @@ export interface DraperSettings {
   pause_from: string | null;
   pause_to: string | null;
   opt_out_line: "A" | "B";
+  /** 0066: Saturdays and Sundays are sending days too. Missing before 0066 is pasted. */
+  send_weekends?: boolean;
   client_radius_km: number;
   never_list: string[];
   exclusion_categories: string[];

@@ -11,9 +11,13 @@ into `main` 20 November. PAGESPEED_API_KEY is in Vercel (Secret, 20 Nov);
 ABR_GUID applied for, not yet issued. Stage 4 (submit, verify, lint) done:
 no migration, merged into `main` 20 November. Stage 5 (the sender) done in
 code: Kyle pasted 0065, its probe passed 4 of 4, merged into `main` 20
-November. It is inert until Kyle's Google, Vercel and cron-job.org setup,
-and his OK to download the public holiday dates (until they load, Draper
-schedules nothing). Next: Stage 6, replies.**
+November. Kyle's Google and Vercel setup, Gmail and the cron job are done;
+the test pair arrives clean (emails now carry a bare HTML copy, Kyle's
+choice). Holiday dates: Kyle said yes, but data.gov.au refuses automated
+downloads, so they are not loaded yet and nothing schedules. Stage 6
+(replies, and Send on weekends) built and tested on the branch 20 November,
+waiting for Kyle to paste 0066. Next: Stage 7, the connectors, which is
+what first puts real businesses into Draper.**
 Branch `draper` (renamed
 from `draper-outreach` the same day, at Kyle's request), cut from `main` at
 80fbe0b. Next step: Stage 2, the no-repeat rule.
@@ -485,9 +489,63 @@ fast-forwards into `main`.
         `tick_note`. Passed on Postgres with 0062's probe still 36 of 36.
       - **Untested until Kyle's setup:** the Google sign-in, real sends,
         threading in a real inbox, the 8am email. The pure rules: 99 tests.
-- [ ] **Stage 6: replies.** Thread polling, opt-out words, bounces,
+- [x] **Stage 6: replies.** (Built 20 Nov 2026; **0066 not yet pasted**.)
+      Thread polling, opt-out words, bounces,
       out-of-office, labels, leads, "later" cards, every auto-pause rule. Test:
       real replies from the test inboxes.
+      - `replies-rules.ts` (pure, 9 tests): reads a Gmail message; cuts their
+        words from the quoted original (Gmail's "On ... wrote:", Outlook's
+        separator and From/Sent block, "Sent from my iPhone", ">" lines, an
+        HTML reply's gmail_quote and blockquote); sorts bounce (mailer-daemon,
+        a delivery report, the usual subjects; a delay notice is ignored),
+        automatic (Auto-Submitted, X-Autoreply, Precedence, "Automatic
+        reply:" subjects), opt-out, or reply. **Opt-out words are matched on
+        their own words only**, with our template lines and both opt-out
+        lines removed wherever they were wrapped (line B contains "no
+        thanks"), a "one-stop" tagline excused, and everything from a legal
+        footer's first line down ignored ("if you are not the intended
+        recipient, please remove..."). "Remove" and "stop" count, as the
+        brief says: a false "no" costs one prospect, a missed one emails
+        someone who said stop. **No out-of-office guess from body words**
+        ("I'll be back next week to look at it" is a person); one without
+        headers waits for a label.
+      - `replies.ts`: `checkReplies()` from the tick every ten minutes,
+        paused or not: kyle@'s mail that isn't Kyle's own (spam included),
+        matched to the email it answers by thread, then our Message-ID, then
+        the address. Bounce: contact marked bad, follow-up cancelled,
+        prospect closed. Opt-out: labelled no thanks in code, follow-up
+        cancelled, on do-not-contact and fingerprinted (real sends only),
+        Kyle told. Reply: follow-up cancelled, Kyle told (instant channel,
+        so an email), waits for a label. After a business's first reply the
+        thread is Kyle's: later messages aren't recorded, except an opt-out.
+        A follow-up about to go reads its thread first (`threadSenders`) and
+        is dropped if anyone wrote.
+      - `applyLabel()` (Kyle's taps now, the morning run's in Stage 7):
+        interested or question makes a lead (`source = 'outreach'`, due
+        today, the quote, the fault, the Gmail thread link and their site in
+        the notes, no product names, since the follow-up drafter reads
+        them); later sets the card's day; the rest close; no thanks and
+        complaint also go on do-not-contact; a complaint pauses everything;
+        two wrong-fact labels switch that fault off. Labelling asks first
+        for no thanks, complaint and wrong fact. Relabelling is refused.
+      - Auto-pause over real first emails only, counted from Kyle's last
+        resume (`auto_rules_since`): 3 bounces or 3 no-thanks in the last
+        40, or 100 with nobody interested.
+      - **Test sends never reach a business**, so nothing from them touches
+        one: no do-not-contact, no fingerprints, no auto-pause, no fault
+        off; a lead from one says [Test] and carries the test inbox.
+      - "Send a test pair" now records the pair against a made-up test
+        business (`test-pair-xxxx.invalid`), so a reply from the test inbox
+        exercises all of this before Stage 7 brings real prospects.
+      - **Send on weekends** (Kyle, 20 Nov): a setting, off until he ticks
+        it; Saturdays and Sundays become sending days; holidays and the
+        pause dates still stop sending. The warm-up and ceilings stay: kyle@
+        has never sent mail, and a new mailbox sending 25 cold emails a day
+        is how Gmail suspends senders (Kyle told; he can override).
+      - 0066: `send_weekends`, `replies_checked_at`, `auto_rules_since`,
+        `leads.source` gains outreach, an index. Passed on Postgres twice
+        over, with 0062's and 0065's probes still passing. Code tolerates
+        0066 missing (new columns read and written apart).
 - [ ] **Stage 7: the two connectors.** OAuth resources and every tool. Test: a
       Draper token is refused by `/api/mcp` and by the advisor endpoint, and
       can reach no client, invoice or exclusion detail.
@@ -560,6 +618,17 @@ Can start now:
    Vercel as `PAGESPEED_API_KEY` (Secret, Production). Without it Google's
    shared quota refuses the speed test. The same project serves the Gmail
    API in Stage 5.
+
+8. **For Stage 6:** paste 0066, then its probe (6 checks). Then in Settings
+   tick Send on weekends if wanted; Send a test pair, and reply to it from
+   the test inbox: "Sounds good, tell me more" should show under Replies
+   (tap Interested and a [Test] lead appears in the pipeline); on a second
+   pair, "no thanks" should opt out by itself.
+9. **Holiday dates:** data.gov.au refused the automated download (403) and a
+   retry was stopped by the local safety check. Either Kyle downloads the
+   2026 and 2027 CSVs from data.gov.au's "Australian Public Holidays Dates
+   Machine Readable Dataset" and says where they are, or Claude opens the
+   page in Chrome.
 
 When a stage asks: the Google Cloud project, Gmail and PageSpeed APIs, the
 Internal OAuth screen, the OAuth client and API key (Stage 5 gives the clicks);
@@ -666,3 +735,13 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
   job (`/api/cron/outreach-tick`, every 5 minutes, same header, GET).
   Still waiting: a clean test pair, his OK to download the holiday dates,
   and ABR_GUID.
+- **20 November 2026, night.** The third test pair arrived clean. Kyle said
+  yes to the holiday dates, asked to send on weekends, to send the most a
+  day allows, and to start Stage 6. Told: no real email can go today
+  (nothing finds businesses until Stage 7, the window had closed, and
+  opt-outs must be handled before going live); the warm-up stays. The
+  holiday download was refused by data.gov.au (403) and the local safety
+  check stopped a retry with a browser user agent. Built Stage 6 and the
+  weekends setting; 0066 passed on Postgres; 109 tests. A self-review
+  dropped the body-words out-of-office guess, which would have hidden a
+  real reply.

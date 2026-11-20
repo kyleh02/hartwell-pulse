@@ -4,9 +4,10 @@
  * window is Melbourne's 9:30am to 3:30pm), worked out per date because
  * daylight saving moves the offset.
  *
- * A sending day is a weekday that isn't a public holiday in Victoria or in
- * the recipient's state, isn't in the pause dates, and is in a year the
- * holiday table covers. The day's queue is fixed at 8am and summarised; the
+ * A sending day is a weekday (or any day, with "Send on weekends" on: Kyle's
+ * choice, 20 Nov 2026) that isn't a public holiday in Victoria or in the
+ * recipient's state, isn't in the pause dates, and is in a year the holiday
+ * table covers. The day's queue is fixed at 8am and summarised; the
  * first send waits out the stop window; sends are 20 to 45 minutes apart at
  * random; "Check these" (the 13th first email on) go no earlier than 12:30pm;
  * anything that won't fit before 3:30pm rolls to the next sending day.
@@ -21,10 +22,12 @@ export interface Calendar {
   holidays: Record<string, Record<string, string[]>>;
   pauseFrom: string | null;
   pauseTo: string | null;
+  /** Saturdays and Sundays count as sending days too. */
+  weekends?: boolean;
 }
 
-export function calendar(pauseFrom: string | null, pauseTo: string | null): Calendar {
-  return { holidays: AU_HOLIDAYS, pauseFrom, pauseTo };
+export function calendar(pauseFrom: string | null, pauseTo: string | null, weekends = false): Calendar {
+  return { holidays: AU_HOLIDAYS, pauseFrom, pauseTo, weekends };
 }
 
 /** The Melbourne date of a moment, YYYY-MM-DD. */
@@ -75,7 +78,7 @@ export type DayCheck = { ok: true } | { ok: false; reason: string };
 /** Whether Draper may send on a date to someone in `state` (null: Victoria only). */
 export function sendingDay(date: string, state: string | null, cal: Calendar): DayCheck {
   const wd = weekday(date);
-  if (wd === 0 || wd === 6) return { ok: false, reason: "a weekend" };
+  if ((wd === 0 || wd === 6) && !cal.weekends) return { ok: false, reason: "a weekend" };
   const year = cal.holidays[date.slice(0, 4)];
   if (!year) return { ok: false, reason: `no public holiday dates are loaded for ${date.slice(0, 4)}` };
   if (year.VIC?.includes(date)) return { ok: false, reason: "a public holiday in Victoria" };
