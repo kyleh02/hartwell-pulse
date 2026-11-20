@@ -12,7 +12,7 @@ import {
   type Calendar,
 } from "./schedule.ts";
 import { sealToken, openToken, tokenKey } from "./crypto.ts";
-import { buildMessage, encodeHeader } from "./gmail.ts";
+import { buildMessage, encodeHeader, quotedPrintable } from "./gmail.ts";
 
 // A made-up holiday table, so the rules are tested apart from the real dates.
 const cal: Calendar = {
@@ -139,6 +139,36 @@ test("the email: plain text from Kyle Hartwell, CRLF, threaded when it's a follo
   // A header can't be split to smuggle in another.
   assert.equal(encodeHeader("a\r\nBcc: x@y.z"), "a Bcc: x@y.z");
   assert.equal(encodeHeader("café"), "=?UTF-8?B?Y2Fmw6k=?=");
+});
+
+const qpDecode = (s: string) =>
+  Buffer.from(
+    s.replace(/=\r\n/g, "").replace(/=([0-9A-F]{2})/g, (_, h: string) => String.fromCharCode(parseInt(h, 16))),
+    "latin1",
+  ).toString("utf8");
+
+test("the body is quoted-printable: a paragraph arrives as one line, so Gmail can't hard-wrap it", () => {
+  const para =
+    "We were looking at 4WD fit-out shops around the Sunshine Coast on Tuesday and had a look at your site. On a phone, your canopy page took a little over six seconds to show anything on Google’s own speed test. 1 = 1 ";
+  const body = `Hi Sam,\n\n${para}\n\nKyle Hartwell`;
+  const raw = Buffer.from(buildMessage({ to: "sam@catten.com.au", subject: "your canopy page", body, messageId: "<abc@hartwelldigital.com>" }), "base64url").toString("utf8");
+  assert.match(raw, /Content-Transfer-Encoding: quoted-printable\r\n/);
+  const encoded = raw.slice(raw.indexOf("\r\n\r\n") + 4);
+  assert.ok(/^[\x20-\x7e\r\n]*$/.test(encoded), "plain ASCII on the wire");
+  for (const line of encoded.split("\r\n")) {
+    assert.ok(line.length <= 76, `over 76: ${line}`);
+    assert.match(line, /^(?:[^=]|=[0-9A-F]{2})*=?$/, `a split escape: ${line}`);
+  }
+  // Decoded, it's exactly what was written: the paragraph is one line again.
+  assert.equal(qpDecode(encoded), `${body.replace(/\n/g, "\r\n")}\r\n`);
+  assert.ok(qpDecode(encoded).includes("Sunshine Coast on Tuesday and had a look"));
+
+  assert.equal(quotedPrintable("a=b"), "a=3Db");
+  assert.equal(quotedPrintable("ends "), "ends=20");
+  assert.equal(quotedPrintable("it’s"), "it=E2=80=99s");
+  const curly = quotedPrintable("’".repeat(40));
+  for (const line of curly.split("\r\n")) assert.match(line, /^(?:=[0-9A-F]{2})*=?$/);
+  assert.equal(qpDecode(curly), "’".repeat(40));
 });
 
 test("a queue fixed late still gets its full stop window", () => {

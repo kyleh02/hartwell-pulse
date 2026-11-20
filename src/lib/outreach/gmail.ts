@@ -149,9 +149,44 @@ export interface Outgoing {
   date?: Date;
 }
 
+const hexByte = (b: number) => `=${b.toString(16).toUpperCase().padStart(2, "0")}`;
+
+/**
+ * Quoted-printable (RFC 2045), so a paragraph stays one line wherever it's
+ * read. Sent as 8bit, Gmail hard-wraps every line near 76 characters, and a
+ * phone then wraps those lines again: the first test pair came out ragged
+ * (20 Nov 2026). Here a long line is cut with soft breaks ("=" at the end),
+ * which every mail app removes when it shows the email. No encoded line runs
+ * over 76 characters, an =XX is never split, and trailing spaces are encoded.
+ */
+export function quotedPrintable(text: string): string {
+  return text
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => {
+      const bytes = Buffer.from(line, "utf8");
+      const out: string[] = [];
+      let cur = "";
+      bytes.forEach((b, i) => {
+        const space = b === 0x20 || b === 0x09;
+        const plain = (b >= 33 && b <= 126 && b !== 61) || (space && i < bytes.length - 1);
+        const t = plain ? String.fromCharCode(b) : hexByte(b);
+        if (cur.length + t.length > 75) {
+          out.push(`${cur}=`);
+          cur = "";
+        }
+        cur += t;
+      });
+      out.push(cur);
+      return out.join("\r\n");
+    })
+    .join("\r\n");
+}
+
 /**
  * A plain-text email as Gmail's API wants it: RFC 5322, CRLF line ends,
- * UTF-8, base64url. No HTML part, no links, no tracking: just the words.
+ * UTF-8, quoted-printable, base64url. No HTML part, no links, no tracking:
+ * just the words.
  */
 export function buildMessage(m: Outgoing): string {
   const headers = [
@@ -163,8 +198,7 @@ export function buildMessage(m: Outgoing): string {
     ...(m.inReplyTo ? [`In-Reply-To: ${m.inReplyTo}`, `References: ${m.inReplyTo}`] : []),
     "MIME-Version: 1.0",
     "Content-Type: text/plain; charset=UTF-8",
-    "Content-Transfer-Encoding: 8bit",
+    "Content-Transfer-Encoding: quoted-printable",
   ];
-  const body = m.body.replace(/\r?\n/g, "\r\n");
-  return Buffer.from(`${headers.join("\r\n")}\r\n\r\n${body}\r\n`, "utf8").toString("base64url");
+  return Buffer.from(`${headers.join("\r\n")}\r\n\r\n${quotedPrintable(m.body)}\r\n`, "utf8").toString("base64url");
 }

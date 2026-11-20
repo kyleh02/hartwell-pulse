@@ -209,7 +209,7 @@ export default async function DraperPage({
     <div>
       <PageHeader
         title="Draper"
-        description="Automatic outreach, built in stages. Nothing can send yet: there's no sender, the master switch is off and test mode is on."
+        description="Automatic outreach, built in stages. A business is only ever emailed with the master switch on and test mode off; until then everything goes to your test inboxes."
       />
 
       {missing ? (
