@@ -15,9 +15,9 @@ November. Kyle's Google and Vercel setup, Gmail and the cron job are done;
 the test pair arrives clean (emails now carry a bare HTML copy, Kyle's
 choice). Holiday dates: Kyle said yes, but data.gov.au refuses automated
 downloads, so they are not loaded yet and nothing schedules. Stage 6
-(replies, and Send on weekends) built and tested on the branch 20 November,
-waiting for Kyle to paste 0066. Next: Stage 7, the connectors, which is
-what first puts real businesses into Draper.**
+(replies, and Send on weekends) done: Kyle pasted 0066, its probe passed 6
+of 6, merged into `main` 20 November. Next: Stage 7, the connectors, which
+is what first puts real businesses into Draper.**
 Branch `draper` (renamed
 from `draper-outreach` the same day, at Kyle's request), cut from `main` at
 80fbe0b. Next step: Stage 2, the no-repeat rule.
@@ -489,7 +489,8 @@ fast-forwards into `main`.
         `tick_note`. Passed on Postgres with 0062's probe still 36 of 36.
       - **Untested until Kyle's setup:** the Google sign-in, real sends,
         threading in a real inbox, the 8am email. The pure rules: 99 tests.
-- [x] **Stage 6: replies.** (Built 20 Nov 2026; **0066 not yet pasted**.)
+- [x] **Stage 6: replies.** (Built 20 Nov 2026; 0066 pasted and verified 6 of
+      6, merged the same day. Live reply test waiting on Kyle.)
       Thread polling, opt-out words, bounces,
       out-of-office, labels, leads, "later" cards, every auto-pause rule. Test:
       real replies from the test inboxes.
@@ -745,3 +746,6 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
   weekends setting; 0066 passed on Postgres; 109 tests. A self-review
   dropped the body-words out-of-office guess, which would have hidden a
   real reply.
+- **20 November 2026, later that night.** Kyle pasted 0066; its probe
+  passed 6 of 6. Stage 6 fast-forwarded into `main` and deployed. Next for
+  Kyle: tick Send on weekends if wanted, then the two test-pair replies.
