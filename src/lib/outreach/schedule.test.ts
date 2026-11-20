@@ -1,10 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  easterSunday,
   followUpDay,
+  holidayOn,
   melbourneDate,
   melbourneInstant,
   melbourneTime,
+  nationalHolidays,
   nextSendingDay,
   planDay,
   recipientFor,
@@ -14,55 +17,75 @@ import {
 import { sealToken, openToken, tokenKey } from "./crypto.ts";
 import { buildMessage, encodeHeader, quotedPrintable } from "./gmail.ts";
 
-// A made-up holiday table, so the rules are tested apart from the real dates.
-const cal: Calendar = {
-  holidays: {
-    "2026": { VIC: ["2026-11-03"], QLD: ["2026-11-24"], NSW: [] },
-    "2027": { VIC: ["2027-01-01", "2027-01-26"], QLD: ["2027-01-01", "2027-01-26"] },
-  },
-  pauseFrom: "2026-12-18",
-  pauseTo: "2027-01-11",
-};
+const cal: Calendar = { pauseFrom: "2026-12-18", pauseTo: "2027-01-11" };
 
 const seeded = (seed: number) => () => {
   seed = (seed * 16807) % 2147483647;
   return (seed - 1) / 2147483646;
 };
 
-test("sending days: weekdays, not holidays here or there, not paused, only covered years", () => {
+test("Easter, worked out for any year", () => {
+  assert.equal(easterSunday(2024), "2024-03-31");
+  assert.equal(easterSunday(2025), "2025-04-20");
+  assert.equal(easterSunday(2026), "2026-04-05");
+  assert.equal(easterSunday(2027), "2027-03-28");
+  assert.equal(easterSunday(2028), "2028-04-16");
+});
+
+test("only the big national holidays stop sending, with their weekday stand-ins", () => {
+  assert.deepEqual([...nationalHolidays(2026).keys()].sort(), [
+    "2026-01-01", // New Year's Day
+    "2026-01-26", // Australia Day
+    "2026-04-03", // Good Friday
+    "2026-04-06", // Easter Monday
+    "2026-04-25", // Anzac Day (a Saturday: no stand-in)
+    "2026-12-25", // Christmas Day
+    "2026-12-26", // Boxing Day, a Saturday...
+    "2026-12-28", // ...so the Monday
+  ]);
+  // 2027: Christmas on a Saturday and Boxing Day on a Sunday move to Monday and Tuesday.
+  assert.equal(holidayOn("2027-12-27"), "Christmas Day (the weekday it moves to)");
+  assert.equal(holidayOn("2027-12-28"), "Boxing Day (the weekday it moves to)");
+  // 2022: Christmas on a Sunday steps past Boxing Day's Monday to the Tuesday.
+  assert.equal(holidayOn("2022-12-26"), "Boxing Day");
+  assert.equal(holidayOn("2022-12-27"), "Christmas Day (the weekday it moves to)");
+  assert.equal(holidayOn("2028-01-03"), "New Year's Day (the weekday it moves to)");
+  // State holidays are sending days now (Kyle, 20 Nov 2026).
+  assert.equal(holidayOn("2026-11-03"), null); // Melbourne Cup
+  assert.equal(holidayOn("2026-06-08"), null); // not a national holiday
+});
+
+test("sending days: weekdays, not a national holiday, not paused, in any year", () => {
   assert.deepEqual(sendingDay("2026-11-23", "QLD", cal), { ok: true }); // a Monday
   assert.equal(sendingDay("2026-11-21", null, cal).ok, false); // Saturday
-  assert.equal(sendingDay("2026-11-03", "QLD", cal).ok, false); // Melbourne Cup in Victoria
-  assert.equal(sendingDay("2026-11-24", "QLD", cal).ok, false); // a Queensland holiday...
-  assert.equal(sendingDay("2026-11-24", "NSW", cal).ok, true); // ...but not in New South Wales
+  assert.deepEqual(sendingDay("2026-11-03", "VIC", cal), { ok: true }); // the Cup, a state holiday
+  assert.deepEqual(sendingDay("2027-03-26", null, cal), { ok: false, reason: "Good Friday" });
   assert.equal(sendingDay("2026-12-21", null, cal).ok, false); // pause dates
   assert.equal(sendingDay("2027-01-12", null, cal).ok, true); // the day after the pause
-  const uncovered = sendingDay("2028-03-01", null, cal);
-  assert.equal(uncovered.ok, false);
-  assert.match(uncovered.ok ? "" : uncovered.reason, /no public holiday dates are loaded for 2028/);
+  assert.equal(sendingDay("2031-03-04", null, { ...cal, weekends: true }).ok, true); // no year is "not covered" any more
 });
 
-test("the next sending day skips weekends, holidays and the pause", () => {
+test("the next sending day skips weekends, national holidays and the pause", () => {
   assert.equal(nextSendingDay("2026-11-20", null, cal), "2026-11-23"); // Friday to Monday
-  assert.equal(nextSendingDay("2026-11-02", null, cal), "2026-11-04"); // over the Cup
+  assert.equal(nextSendingDay("2027-03-25", null, cal), "2027-03-30"); // over Easter
   assert.equal(nextSendingDay("2026-12-17", null, cal), "2027-01-12"); // over the pause
-  assert.equal(nextSendingDay("2027-12-31", null, cal), null); // 2028 isn't covered
+  assert.equal(nextSendingDay("2027-12-24", null, { pauseFrom: null, pauseTo: null }), "2027-12-29"); // over Christmas and its stand-ins
 });
 
-test("with Send on weekends, Saturday and Sunday count, and holidays and the pause still don't", () => {
+test("with Send on weekends, Saturday and Sunday count, and the big holidays and the pause still don't", () => {
   const wk: Calendar = { ...cal, weekends: true };
   assert.equal(sendingDay("2026-11-21", null, wk).ok, true); // Saturday
   assert.equal(sendingDay("2026-11-22", "QLD", wk).ok, true); // Sunday
   assert.equal(nextSendingDay("2026-11-20", null, wk), "2026-11-21"); // Friday to Saturday
-  assert.equal(sendingDay("2026-11-03", null, wk).ok, false); // still the Cup
+  assert.deepEqual(sendingDay("2026-04-25", null, wk), { ok: false, reason: "Anzac Day" }); // a Saturday, still Anzac Day
   assert.equal(sendingDay("2026-12-19", null, wk).ok, false); // a Saturday in the pause
-  assert.equal(sendingDay("2028-03-04", null, wk).ok, false); // still only covered years
+  assert.deepEqual(sendingDay("2027-12-25", null, { pauseFrom: null, pauseTo: null, weekends: true }), { ok: false, reason: "Christmas Day" });
   assert.equal(followUpDay("2026-11-14", null, wk), "2026-11-21"); // a Saturday first, a Saturday follow-up
 });
 
 test("the follow-up goes on day 7, or the next sending day after it", () => {
   assert.equal(followUpDay("2026-11-16", null, cal), "2026-11-23");
-  assert.equal(followUpDay("2026-11-17", "QLD", cal), "2026-11-25"); // day 7 is a QLD holiday
+  assert.equal(followUpDay("2027-03-19", "QLD", cal), "2027-03-30"); // day 7 is Good Friday
   assert.equal(followUpDay("2026-12-14", null, cal), "2027-01-12"); // into the pause
 });
 

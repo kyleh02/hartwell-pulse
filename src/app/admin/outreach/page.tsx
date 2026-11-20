@@ -25,8 +25,7 @@ import { createAdminSupabase } from "@/lib/supabase/admin";
 import { gmailConnection, type GmailConnection } from "@/lib/outreach/gmail-access";
 import { oauthClient } from "@/lib/outreach/gmail";
 import { tokenKey } from "@/lib/outreach/crypto";
-import { AU_HOLIDAYS, AU_HOLIDAYS_SOURCE } from "@/lib/outreach/data/au-holidays";
-import { melbourneDate, melbourneInstant } from "@/lib/outreach/schedule";
+import { melbourneDate, melbourneInstant, nationalHolidays } from "@/lib/outreach/schedule";
 import { cn } from "@/lib/utils/cn";
 
 export const metadata = { title: "Draper" };
@@ -275,8 +274,14 @@ export default async function DraperPage({
     });
   }
 
-  const years = Object.keys(AU_HOLIDAYS).sort();
-  const holidays = years.length ? `${AU_HOLIDAYS_SOURCE}, ${years.join(" and ")}` : "not loaded yet, so nothing can be scheduled";
+  // Only the big national ones stop sending (Kyle, 20 Nov 2026); say which is next.
+  const nowMel = melbourneDate(new Date());
+  const nextHoliday = [...nationalHolidays(Number(nowMel.slice(0, 4))), ...nationalHolidays(Number(nowMel.slice(0, 4)) + 1)]
+    .filter(([d]) => d >= nowMel)
+    .sort(([a], [b]) => a.localeCompare(b))[0];
+  const holidays = `sends on them, except New Year's Day, Australia Day, Good Friday, Easter Monday, Anzac Day, Christmas and Boxing Day${
+    nextHoliday ? `. Next skipped: ${nextHoliday[1]}, ${new Date(`${nextHoliday[0]}T00:00:00Z`).toLocaleDateString("en-AU", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" })}` : ""
+  }`;
   const template =
     templates.find((t) => t.version === active?.template_version) ?? templates[templates.length - 1] ?? null;
 

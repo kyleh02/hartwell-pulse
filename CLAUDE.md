@@ -733,8 +733,10 @@ Live at https://portal.hartwelldigital.com
   call (fix the 8am queue, send one, or confirm one draft). Every send is
   claimed first and a retry asks Gmail for its Message-ID before resending.
   Test mode sends everything to the test inboxes even with the master switch
-  off; a business is reached only with master ON and test mode OFF. No
-  holiday dates loaded for a year means nothing is scheduled in it.
+  off; a business is reached only with master ON and test mode OFF. It
+  sends on public holidays except the seven national ones, which
+  `nationalHolidays()` in `schedule.ts` works out for any year (Kyle, 20 Nov
+  2026); the pause dates in Settings still stop everything.
 - **Replies are `checkReplies()` in `src/lib/outreach/replies.ts`**, from the
   same tick every ten minutes, paused or not. Opt-out words match their own
   words only (our template lines, quoted text and legal footers removed);

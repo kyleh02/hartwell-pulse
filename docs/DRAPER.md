@@ -18,9 +18,11 @@ downloads, so they are not loaded yet and nothing schedules. Stage 6
 (replies, and Send on weekends) done: Kyle pasted 0066, its probe passed 6
 of 6, merged into `main` 20 November. Stage 7 (the two connectors) done, no
 migration, merged into `main` 20 November: Kyle adds Draper in claude.ai and
-approves it on the portal. Real sends still wait on the holiday dates (none
-loaded, so no sending day exists and the brief's target reads 0). Next:
-Stage 8, pages, then Stage 9, the end-to-end test.**
+approves it on the portal; both Draper and Draper advisor are connected.
+Holidays: Kyle dropped the state table on 20 November; Pulse skips only the
+seven national public holidays, worked out itself, so sending days exist and
+nothing waits on a download. Next: Stage 8, pages, then Stage 9, the
+end-to-end test.**
 Branch `draper` (renamed
 from `draper-outreach` the same day, at Kyle's request), cut from `main` at
 80fbe0b. Next step: Stage 2, the no-repeat rule.
@@ -160,6 +162,16 @@ others, and he asked about the mailbox (decision 1).
      to schedule a date the table does not cover**, so a missing year stops
      sending rather than sending on a holiday. Topping it up yearly is a
      November job.
+   - **Replaced 20 November 2026.** data.gov.au refused the download, and
+     Kyle said: "Forget the holiday dates, we will send them then too.
+     Except for big ones like Christmas or New Years." So there is no table:
+     `nationalHolidays()` in `schedule.ts` works out, for any year, New
+     Year's Day, Australia Day, Good Friday and Easter Monday (from Easter,
+     computed), Anzac Day, Christmas Day and Boxing Day, plus the weekday
+     stand-in when New Year's Day, Australia Day, Christmas or Boxing Day
+     lands on a weekend. Draper sends on every other day the settings
+     allow, state holidays included. No year is ever "not covered". The
+     pause dates (18 December to 11 January in settings v1) still apply.
 8. **The defence lane is left out of this build.** Ironpeak trades in defence
    under the same ABN (44 286 503 049). A Hartwell email to a defence supplier
    carries the ABN that Ironpeak's invoices carry, so a firm that knows Ironpeak
@@ -680,11 +692,9 @@ Can start now:
    the test inbox: "Sounds good, tell me more" should show under Replies
    (tap Interested and a [Test] lead appears in the pipeline); on a second
    pair, "no thanks" should opt out by itself.
-9. **Holiday dates:** data.gov.au refused the automated download (403) and a
-   retry was stopped by the local safety check. Either Kyle downloads the
-   2026 and 2027 CSVs from data.gov.au's "Australian Public Holidays Dates
-   Machine Readable Dataset" and says where they are, or Claude opens the
-   page in Chrome.
+9. ~~Holiday dates~~: not needed. Kyle chose national holidays only (20 Nov).
+   Check the pause dates in Settings: 18 December to 11 January stops all
+   sending unless he changes them.
 
 When a stage asks: the Google Cloud project, Gmail and PageSpeed APIs, the
 Internal OAuth screen, the OAuth client and API key (Stage 5 gives the clicks);
@@ -812,3 +822,9 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
   the scope rule for clients that ask for every listed scope. Merged and
   deployed. The Drive mount dropped once mid-session (H: vanished, came
   back); no files were lost.
+- **20 November 2026, night.** Kyle connected Draper and Draper advisor in
+  claude.ai; outreach_brief answered through both (target 0, no sending
+  day). He then dropped the holiday dates: send on public holidays except
+  the big national ones. Built `nationalHolidays()` (Easter computed,
+  weekend stand-ins), removed the empty table and the "year not covered"
+  rule; the brief's target now counts real sending days.

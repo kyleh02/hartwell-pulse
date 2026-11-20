@@ -5,21 +5,27 @@
  * daylight saving moves the offset.
  *
  * A sending day is a weekday (or any day, with "Send on weekends" on: Kyle's
- * choice, 20 Nov 2026) that isn't a public holiday in Victoria or in the
- * recipient's state, isn't in the pause dates, and is in a year the holiday
- * table covers. The day's queue is fixed at 8am and summarised; the
- * first send waits out the stop window; sends are 20 to 45 minutes apart at
- * random; "Check these" (the 13th first email on) go no earlier than 12:30pm;
- * anything that won't fit before 3:30pm rolls to the next sending day.
+ * choice, 20 Nov 2026) that isn't one of the big national public holidays and
+ * isn't in the pause dates. The day's queue is fixed at 8am and summarised;
+ * the first send waits out the stop window; sends are a random gap apart;
+ * "Check these" (the 13th first email on) go no earlier than 12:30pm;
+ * anything that won't fit before the window closes rolls to the next sending
+ * day.
+ *
+ * Holidays (Kyle, 20 Nov 2026): "we will send them then too, except for big
+ * ones like Christmas or New Year's." So the state-by-state holiday table
+ * (decision 7) is gone, and with it the rule that a year without dates sends
+ * nothing. Pulse skips only the seven national public holidays, worked out
+ * for any year: New Year's Day, Australia Day, Good Friday, Easter Monday,
+ * Anzac Day, Christmas Day and Boxing Day, plus the weekday stand-in when
+ * New Year's Day, Australia Day, Christmas or Boxing Day falls on a weekend.
  */
-import { AU_HOLIDAYS } from "./data/au-holidays.ts";
 import { CHECK_THESE_FROM } from "./limits.ts";
 
 export const SUMMARY_AT = "08:00";
 const TZ = "Australia/Melbourne";
 
 export interface Calendar {
-  holidays: Record<string, Record<string, string[]>>;
   pauseFrom: string | null;
   pauseTo: string | null;
   /** Saturdays and Sundays count as sending days too. */
@@ -27,7 +33,69 @@ export interface Calendar {
 }
 
 export function calendar(pauseFrom: string | null, pauseTo: string | null, weekends = false): Calendar {
-  return { holidays: AU_HOLIDAYS, pauseFrom, pauseTo, weekends };
+  return { pauseFrom, pauseTo, weekends };
+}
+
+const ymd = (y: number, m: number, d: number) => new Date(Date.UTC(y, m - 1, d)).toISOString().slice(0, 10);
+
+/** Easter Sunday, YYYY-MM-DD (the Gregorian computus: Meeus, Jones and Butcher). */
+export function easterSunday(year: number): string {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return ymd(year, month, day);
+}
+
+/** The national public holidays Draper never sends on, date to name. */
+export function nationalHolidays(year: number): Map<string, string> {
+  const out = new Map<string, string>();
+  const add = (date: string, name: string) => {
+    if (!out.has(date)) out.set(date, name);
+  };
+  // A weekend holiday's weekday stand-in: the next weekday not already taken.
+  const withStandIn = (date: string, name: string) => {
+    add(date, name);
+    if (weekday(date) !== 0 && weekday(date) !== 6) return;
+    let d = addDays(date, 1);
+    while (weekday(d) === 0 || weekday(d) === 6 || out.has(d)) d = addDays(d, 1);
+    out.set(d, `${name} (the weekday it moves to)`);
+  };
+  const easter = easterSunday(year);
+  withStandIn(ymd(year, 1, 1), "New Year's Day");
+  withStandIn(ymd(year, 1, 26), "Australia Day");
+  add(addDays(easter, -2), "Good Friday");
+  add(addDays(easter, 1), "Easter Monday");
+  add(ymd(year, 4, 25), "Anzac Day");
+  // Christmas before Boxing Day, so Boxing Day's stand-in steps past Christmas's.
+  add(ymd(year, 12, 25), "Christmas Day");
+  add(ymd(year, 12, 26), "Boxing Day");
+  for (const [date, name] of [
+    [ymd(year, 12, 25), "Christmas Day"],
+    [ymd(year, 12, 26), "Boxing Day"],
+  ] as const) {
+    if (weekday(date) === 0 || weekday(date) === 6) {
+      let d = addDays(date, 1);
+      while (weekday(d) === 0 || weekday(d) === 6 || out.has(d)) d = addDays(d, 1);
+      out.set(d, `${name} (the weekday it moves to)`);
+    }
+  }
+  return out;
+}
+
+/** The national holiday on a date, or null. */
+export function holidayOn(date: string): string | null {
+  return nationalHolidays(Number(date.slice(0, 4))).get(date) ?? null;
 }
 
 /** The Melbourne date of a moment, YYYY-MM-DD. */
@@ -75,14 +143,16 @@ export function melbourneInstant(date: string, hhmm: string): Date {
 
 export type DayCheck = { ok: true } | { ok: false; reason: string };
 
-/** Whether Draper may send on a date to someone in `state` (null: Victoria only). */
-export function sendingDay(date: string, state: string | null, cal: Calendar): DayCheck {
+/**
+ * Whether Draper may send on a date. `state` is the recipient's; it no longer
+ * changes anything (only national holidays count) but callers still pass it,
+ * so a state rule can come back without touching them.
+ */
+export function sendingDay(date: string, _state: string | null, cal: Calendar): DayCheck {
   const wd = weekday(date);
   if ((wd === 0 || wd === 6) && !cal.weekends) return { ok: false, reason: "a weekend" };
-  const year = cal.holidays[date.slice(0, 4)];
-  if (!year) return { ok: false, reason: `no public holiday dates are loaded for ${date.slice(0, 4)}` };
-  if (year.VIC?.includes(date)) return { ok: false, reason: "a public holiday in Victoria" };
-  if (state && state !== "VIC" && year[state]?.includes(date)) return { ok: false, reason: `a public holiday in ${state}` };
+  const holiday = holidayOn(date);
+  if (holiday) return { ok: false, reason: holiday };
   if (cal.pauseFrom && cal.pauseTo && date >= cal.pauseFrom && date <= cal.pauseTo) return { ok: false, reason: "in the pause dates" };
   return { ok: true };
 }

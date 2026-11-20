@@ -121,7 +121,7 @@ async function target(ctx: DraperContext, s: DraperSettings): Promise<{ day: str
   let why: string | null = null;
   if (state?.paused) why = `Sending is paused (${state.paused_reason ?? "by Kyle"})`;
   else if (!s.test_mode && !s.master_on) why = "The master switch is off and test mode is off, so nothing can send";
-  else if (!day) why = "There's no sending day ahead: no public holiday dates are loaded for it, or it's in the pause dates";
+  else if (!day) why = "There's no sending day in the next two months: the pause dates cover it";
   return { day, cap, waiting: w, target: why ? 0 : Math.max(0, cap - w), why };
 }
 
