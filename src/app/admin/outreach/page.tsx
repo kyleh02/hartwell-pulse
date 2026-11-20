@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/Badge";
 import { NoRepeatTools } from "@/components/outreach/NoRepeatTools";
 import { ClientAreas, type AreaRow } from "@/components/outreach/ClientAreas";
 import { MeasureSite } from "@/components/outreach/MeasureSite";
+import { WordingCheck } from "@/components/outreach/WordingCheck";
 import { cn } from "@/lib/utils/cn";
 
 export const metadata = { title: "Draper" };
@@ -76,7 +77,7 @@ const STAGES: { name: string; what: string }[] = [
   { name: "Pages", what: "The queue, prospect cards, Settings, Lists, Numbers" },
   { name: "End-to-end test", what: "The nine checks in test mode, then your setup list" },
 ];
-const STAGES_DONE = 3;
+const STAGES_DONE = 4;
 
 function clock(t: string) {
   const [h, m] = t.split(":").map(Number);
@@ -257,6 +258,17 @@ export default async function DraperPage() {
               {process.env.PAGESPEED_API_KEY ? "" : " PAGESPEED_API_KEY isn't set yet, so the speed test will be refused."}
             </p>
             <MeasureSite />
+          </Card>
+
+          {/* ---------- the lint ---------- */}
+          <Card className="p-4">
+            <p className="mono-label mb-1">Check wording</p>
+            <p className="mb-3 text-[12px] leading-relaxed text-pulse-text-mute">
+              Every draft passes your rules before it can queue: no dashes, links, prices, meeting asks, promises,
+              health claims or American spelling, 60 words a slot, and every figure filled by Pulse from its own
+              measurements. Try some wording here; nothing is saved.
+            </p>
+            <WordingCheck />
           </Card>
 
           {/* ---------- how it fits ---------- */}

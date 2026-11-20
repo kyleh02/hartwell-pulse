@@ -717,6 +717,10 @@ Live at https://portal.hartwelldigital.com
   made or hashed: the tests pin both, because a change would quietly stop old
   fingerprints matching and a business that said no could be emailed again.
   A do-not-contact entry covers its whole business for outreach.
+- **Figures in an outreach email only ever come through tokens** (`[[day]]`,
+  `[[first_paint]]`, `[[page]]` and the rest, `src/lib/outreach/tokens.ts`),
+  filled by Pulse from its own measurements. The lint refuses any number,
+  weekday or month Claude types, so an email can never disagree with its proof.
 
 ## Client feedback, NPS (0058)
 - One question, 0 to 10, "How likely are you to recommend Hartwell Digital to

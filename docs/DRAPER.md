@@ -7,8 +7,9 @@ done too: Kyle pasted 0063 and its probe passed 5 of 5; merged into `main`.
 The flag is ON in Vercel since 20 November (Config, Production): Draper's
 page shows to admins; nothing can send. Stage 3 (the measuring tool) and the
 client-area radius done: Kyle pasted 0064, its probe passed 3 of 3, merged
-into `main` 20 November. The speed test still needs PAGESPEED_API_KEY and
-the ABN check ABR_GUID, both Kyle's to create. Next: Stage 4.**
+into `main` 20 November. PAGESPEED_API_KEY is in Vercel (Secret, 20 Nov);
+ABR_GUID applied for, not yet issued. Stage 4 (submit, verify, lint) done:
+no migration, merged into `main` 20 November. Next: Stage 5, the sender.**
 Branch `draper` (renamed
 from `draper-outreach` the same day, at Kyle's request), cut from `main` at
 80fbe0b. Next step: Stage 2, the no-repeat rule.
@@ -370,9 +371,47 @@ fast-forwards into `main`.
         Google's shared quota), so the speed test is untested until
         PAGESPEED_API_KEY is in Vercel.** The ABR check is untested until
         ABR_GUID is. Tests: 70 in all.
-- [ ] **Stage 4: submit, verify, lint.** Template v1 rendering with Pulse-filled
+- [x] **Stage 4: submit, verify, lint.** (Built and merged 20 Nov 2026, no
+      migration.) Template v1 rendering with Pulse-filled
       figures, claim checks, contact page re-fetch, every lint rule. Test: every
       refusal case in brief test 3, and a good draft passes.
+      - **The token syntax, settled:** `[[day]]`, `[[first_paint]]`,
+        `[[largest_paint]]`, `[[page]]`, `[[broken_page]]`, `[[area]]`,
+        `[[pageviews]]` (`tokens.ts`). `TOKEN_GUIDE` there is what
+        `outreach_brief` must return alongside the template's slot rules;
+        it lives in code, so template v1 stays as it is and no v2 was needed.
+        Any digit (bar trade words like 4WD, 4x4, 12-volt), weekday, month,
+        time or count typed out is refused. Times are rounded down and
+        worded ("a little over six seconds"). `[[first_paint]]` needs FCP of
+        4 s or more on the claimed measurement, `[[largest_paint]]` LCP of
+        6 s or more. `page_name` must be the measured page's address slug or
+        menu label ("home" at the root), or the broken page for a
+        broken-page email. `area` must be the business's own suburb or the
+        region its postcode is in (`REGIONS`, rough postcode ranges), never
+        another lane area.
+      - `lint.ts`: every rule in the brief as word and pattern lists, on the
+        slot as written with tokens blanked (so a filled page name can't trip
+        a rule), length and punctuation on the slot as sent. Also refuses the
+        word Draper, "me/my", talk of their spend, and unknown tokens.
+      - `render.ts`: fills the template and proves every placeholder-free
+        line of Kyle's text arrived unchanged, both opt-out lines included.
+        "another thing / it" or "a couple of other things / them" from the
+        faults on record (ok measurements, less switched-off faults, less the
+        first email's own). **Stage 5 must re-render at confirmation** from
+        the lower of the two runs and the confirmed faults.
+      - `verify.ts` (pure): claims (one fault per email, two different
+        faults, each backed by an ok measurement of this prospect that
+        showed it, not switched off, the ad signal on record), tokens, lint,
+        personal (Claude's count 2+, and Pulse's: each token filled plus the
+        fault, 2+), template version, two refusals and it says drop.
+      - `contact.ts` and `submit.ts`: the no-repeat check again, the contact
+        page fetched again (own site, address present as text, mailto or
+        entity-encoded, no "no marketing" note within 300 characters), then
+        verify; stores both messages as `awaiting_confirmation` with their
+        claims, or a `refused` event with the reasons. Called by the
+        connector in Stage 7.
+      - "Check wording" on the Draper page runs the lint in the browser.
+      - Tests: 88 in all; `verify.test.ts` reads template v1 from 0062.
 - [ ] **Stage 5: sender.** Connect Gmail, the window and random gaps, holidays
       and pause dates, the slider, ramp and hard ceilings, "Check these" past
       12 from 12:30pm, the 8am summary, the stop window, "Don't send", pause
@@ -515,3 +554,8 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
 - **20 November 2026, later.** 0064's probe passed 3 of 3. Stage 3
   fast-forwarded into `main` and deployed. Neither PAGESPEED_API_KEY nor
   ABR_GUID was in Vercel yet.
+- **20 November 2026, Stage 4.** Kyle added PAGESPEED_API_KEY (Secret,
+  redeployed) and applied for the ABR GUID. Stage 4 built: tokens, lint,
+  render, verify, submit, the contact re-fetch, "Check wording". 88 tests
+  pass, including every refusal case in brief test 3 and a good draft that
+  renders word for word like Kyle's reference example. No migration; merged.
