@@ -9,10 +9,11 @@ page shows to admins; nothing can send. Stage 3 (the measuring tool) and the
 client-area radius done: Kyle pasted 0064, its probe passed 3 of 3, merged
 into `main` 20 November. PAGESPEED_API_KEY is in Vercel (Secret, 20 Nov);
 ABR_GUID applied for, not yet issued. Stage 4 (submit, verify, lint) done:
-no migration, merged into `main` 20 November. Stage 5 (the sender) built and
-tested on the branch, waiting for Kyle to paste 0065; then Kyle's Google,
-Vercel and cron-job.org setup, and his OK to download the public holiday
-dates (until they load, Draper schedules nothing).**
+no migration, merged into `main` 20 November. Stage 5 (the sender) done in
+code: Kyle pasted 0065, its probe passed 4 of 4, merged into `main` 20
+November. It is inert until Kyle's Google, Vercel and cron-job.org setup,
+and his OK to download the public holiday dates (until they load, Draper
+schedules nothing). Next: Stage 6, replies.**
 Branch `draper` (renamed
 from `draper-outreach` the same day, at Kyle's request), cut from `main` at
 80fbe0b. Next step: Stage 2, the no-repeat rule.
@@ -415,8 +416,8 @@ fast-forwards into `main`.
         connector in Stage 7.
       - "Check wording" on the Draper page runs the lint in the browser.
       - Tests: 88 in all; `verify.test.ts` reads template v1 from 0062.
-- [x] **Stage 5: sender.** (Built 20 Nov 2026; **0065 not yet pasted**; real
-      sends wait on Kyle's setup.) Connect Gmail, the window and random gaps, holidays
+- [x] **Stage 5: sender.** (Built 20 Nov 2026; 0065 pasted and verified 4 of
+      4, merged the same day; real sends wait on Kyle's setup.) Connect Gmail, the window and random gaps, holidays
       and pause dates, the slider, ramp and hard ceilings, "Check these" past
       12 from 12:30pm, the 8am summary, the stop window, "Don't send", pause
       all, the pre-send re-check, the day-7 threaded follow-up, test mode, lane
@@ -643,3 +644,6 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
   with Kyle: the window holds 11 to 18 sends a day, not 25. Waiting on
   Kyle: 0065, the Google and Vercel setup, the cron job, and his OK to
   download the holiday dates.
+- **20 November 2026, later.** 0065's probe passed 4 of 4. Stage 5
+  fast-forwarded into `main` and deployed. Still inert: no Gmail connection,
+  no cron job, no holiday dates.
