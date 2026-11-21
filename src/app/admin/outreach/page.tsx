@@ -18,6 +18,8 @@ import { QueueList, type QueueRow } from "@/components/outreach/QueueList";
 import { RepliesPanel, type LaterRow, type ReplyRow } from "@/components/outreach/RepliesPanel";
 import { gmailThreadUrl } from "@/lib/outreach/replies-rules";
 import { DraperConnectors, type ConnectorRow } from "@/components/outreach/DraperConnectors";
+import { TestSendButtons } from "@/components/outreach/TestSendButtons";
+import { e2eChecklist, type E2EMessage } from "@/lib/outreach/e2e";
 import { requestOrigin } from "@/lib/mcp/http";
 import { OUTREACH, OUTREACH_ADVISOR, resourceUrl } from "@/lib/mcp/resources";
 import { getPulseSession } from "@/lib/auth/session";
@@ -266,6 +268,39 @@ export default async function DraperPage({
     ? `Last 7 days: ${added} added, ${submitted} submitted, ${tally.confirmed ?? 0} confirmed, ${tally.dropped ?? 0} dropped, ${tally.refused ?? 0} refused, ${tally.sent ?? 0} sent.${submitted ? ` About ${Math.round(added / submitted)} added for each one submitted.` : " Nothing submitted yet."}`
     : "Last 7 days: no businesses added yet.";
 
+  // ---------- the end-to-end checklist, while test mode is on ----------
+  let checklist: ReturnType<typeof e2eChecklist> = [];
+  if (settings?.test_mode) {
+    const { data: tps } = await supabase.from("outreach_prospects").select("id, business_name").eq("test", true).order("created_at", { ascending: false }).limit(100);
+    const tpRows = (tps as { id: string; business_name: string | null }[] | null) ?? [];
+    const tIds = tpRows.map((p) => p.id);
+    const [{ data: tMsgs }, { data: tReps }] = tIds.length
+      ? await Promise.all([
+          supabase.from("outreach_messages").select("prospect_id, kind, status, confirmed_at, sent_at, test_mode, subject, body, gmail_thread_id").in("prospect_id", tIds),
+          supabase.from("outreach_replies").select("prospect_id, kind, label").in("prospect_id", tIds),
+        ])
+      : [{ data: [] }, { data: [] }];
+    checklist = e2eChecklist(
+      tpRows.map((p) => ({ id: p.id, name: p.business_name ?? "A business" })),
+      (tMsgs as E2EMessage[] | null) ?? [],
+      (tReps as { prospect_id: string; kind: string; label: string | null }[] | null) ?? [],
+    );
+  }
+
+  // ---------- each morning run's own report (0068) ----------
+  const { data: runRows, error: runErr } = await supabase
+    .from("outreach_runs")
+    .select("id, ran_on, sites_read, added, measured, submitted, dropped, skipped, dropped_reasons, test, created_at")
+    .order("created_at", { ascending: false })
+    .limit(10);
+  type RunRow = { id: string; ran_on: string; sites_read: number; added: number; measured: number; submitted: number; dropped: number; skipped: Record<string, number>; dropped_reasons: Record<string, number>; test: boolean; created_at: string };
+  const runs = runErr ? [] : ((runRows as RunRow[] | null) ?? []);
+  const reasons = (o: Record<string, number>) =>
+    Object.entries(o ?? {})
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, n]) => `${n} ${k}`)
+      .join(", ");
+
   // ---------- Stage 7: the two connectors ----------
   const origin = await requestOrigin();
   const conDefs = [
@@ -431,6 +466,64 @@ export default async function DraperPage({
               holidays={holidays}
               flash={one(sp.gmail) ? { outcome: one(sp.gmail)!, why: one(sp.why) } : null}
             />
+          </Card>
+
+          {settings.test_mode && (
+            <Card className="p-4">
+              <p className="mono-label mb-1">End-to-end test</p>
+              <p className="mb-3 text-[12px] leading-relaxed text-pulse-text-mute">
+                Every step once, on businesses found in test mode that passed the hour-later re-check. Don&apos;t switch to
+                live until all six tick.
+              </p>
+              <ul className="mb-3 space-y-1.5 text-[13px]">
+                {checklist.map((c) => (
+                  <li key={c.key} className="flex items-start gap-2">
+                    {c.by ? (
+                      <Check size={15} className="mt-0.5 shrink-0 text-pulse-gold" />
+                    ) : (
+                      <Circle size={15} className="mt-0.5 shrink-0 text-pulse-text-mute" />
+                    )}
+                    <span className={c.by ? "text-pulse-text" : "text-pulse-text-dim"}>
+                      {c.label}
+                      {c.by && <span className="text-pulse-text-mute"> · {c.by}</span>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <TestSendButtons />
+            </Card>
+          )}
+
+          <Card className="p-4">
+            <p className="mono-label mb-1">Morning runs</p>
+            <p className="mb-3 text-[12px] leading-relaxed text-pulse-text-mute">
+              Each run&apos;s own report: what it read and skipped before adding anything, then what Pulse measured, took and
+              dropped. The skips are the run&apos;s word; Pulse never saw those sites.
+            </p>
+            {runs.length === 0 ? (
+              <p className="text-[13px] text-pulse-text-mute">{runErr ? "Run migration 0068 to keep these." : "No run has reported yet."}</p>
+            ) : (
+              <ul className="space-y-2 text-[13px]">
+                {runs.map((r) => (
+                  <li key={r.id} className="rounded-[var(--radius-input)] border border-pulse-border p-2.5">
+                    <p className="text-pulse-text">
+                      {day(r.ran_on)}
+                      {r.test && <span className="text-pulse-warn"> · test mode</span>}
+                      <span className="text-pulse-text-dim">
+                        {" "}
+                        · read {r.sites_read}, added {r.added}, measured {r.measured}, submitted {r.submitted}, dropped {r.dropped}
+                      </span>
+                    </p>
+                    {Object.keys(r.skipped ?? {}).length > 0 && (
+                      <p className="text-[12px] text-pulse-text-mute">Skipped before adding: {reasons(r.skipped)}</p>
+                    )}
+                    {Object.keys(r.dropped_reasons ?? {}).length > 0 && (
+                      <p className="text-[12px] text-pulse-text-mute">Dropped after measuring: {reasons(r.dropped_reasons)}</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
 
           <Card className="p-4">

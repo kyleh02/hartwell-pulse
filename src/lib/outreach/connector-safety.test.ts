@@ -28,6 +28,7 @@ const ALLOWED = new Set([
   "outreach_lessons",
   "outreach_tests",
   "outreach_change_log",
+  "outreach_runs",
 ]);
 
 test("the connector's tools read and write only Draper's own tables", () => {
@@ -59,7 +60,7 @@ test("the advisor's three writes are advisor only", () => {
     assert.match(block, /advisorOnly: true/, `${name} isn't marked advisor only`);
   }
   const morning = [...src.matchAll(/name: "(outreach_[a-z_]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(morning.slice(0, 9), [
+  assert.deepEqual(morning.slice(0, 10), [
     "outreach_brief",
     "outreach_check_business",
     "outreach_add_prospect",
@@ -69,7 +70,11 @@ test("the advisor's three writes are advisor only", () => {
     "outreach_replies_to_label",
     "outreach_label_reply",
     "outreach_numbers",
+    "outreach_finish_run",
   ]);
+  // The run report is the morning run's own; it isn't an advisor write.
+  const at = src.indexOf('name: "outreach_finish_run"');
+  assert.ok(!/advisorOnly: true/.test(src.slice(at, src.indexOf('name: "outreach_set_lessons"'))));
 });
 
 test("an address's mail provider, from its MX records", () => {

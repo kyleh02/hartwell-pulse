@@ -900,3 +900,34 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
     site. The third check run read sites, used ABN Lookup, added,
     measured and dropped as it should. It ends with a phone notification.
   - Kyle still has to tick Send on weekends in Settings for weekend sends.
+- **21 November 2026, the advisory chat's "114" list.** After the forced
+  test was submitted (Suncoast Caravan Service and the sample workshop both
+  in the chain, sending Monday 23 November to the test inboxes), the
+  advisory chat wrote seven changes for this chat. Reviewed with Kyle:
+  - **2 (no_mobile_layout can't be claimed): not a code fault.** Pulse's
+    submit accepts all nine faults; claude.ai chats hold the tool list from
+    when the connector was added, which shows six. Fix: a new chat, or
+    disconnect and reconnect Draper and Draper advisor in claude.ai. The
+    cloud routine connects fresh each run.
+  - **3 (allow "a few minutes"): kept strict**, Kyle agreeing. An effort
+    claim can't be checked and some speed fixes take hours; describe the
+    fix itself instead.
+  - **4 (one fault on two pages qualifies): waits** a few mornings with the
+    three new faults, which went live the same afternoon; Kyle had chosen
+    them over this rule that morning.
+  - **Built:** test-only send-now (`sendTestNow` in sender.ts, the route
+    `/api/outreach/test-send`, a 404 outside test mode; only messages past
+    the hour-later re-check, through `sendClaimed` itself, one a call, a
+    put-back ends the loop; the page's buttons send up to ten a press);
+    the end-to-end checklist (`e2e.ts`, six checks, each naming the
+    business that proved it, since a follow-up can't both land and be
+    stopped by a "no thanks" for one business; shown in test mode only);
+    `undeliverableAddress()` (.invalid, .test, .example, .localhost and
+    the example domains): never a real send to one, refused at add once
+    live; **going live drops every unsent email of every business found in
+    test mode**, the sample workshop included, and the confirm dialog says
+    so; `outreach_finish_run` and migration **0068** (`outreach_runs`,
+    admins read and add only): each run reports what it read and skipped
+    before adding, and what it added, measured, submitted and dropped, by
+    reason; the Draper page lists the last ten. Code tolerates 0068
+    missing. 130 tests; 0068 passed on Postgres.

@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { notifyAdmins } from "@/lib/notify";
 import { checkBusiness, recordFingerprints } from "./check.ts";
-import { businessKeys } from "./normalise.ts";
+import { businessKeys, undeliverableAddress } from "./normalise.ts";
 import { measureSite } from "./measure.ts";
 import { storeMeasurement } from "./store.ts";
 import { confirmedFaults } from "./measure-rules.ts";
@@ -290,6 +290,13 @@ async function sendClaimed(db: SupabaseClient, m: Msg, s: DraperSettings, cal: C
     await db.from("outreach_messages").update({ status: "queued" }).eq("id", m.id);
     return `Not sending: ${rcpt.blocked}`;
   }
+  // Never a real send to an address that can't receive mail (the sample
+  // workshop's is one, on purpose): it would only bounce and count against
+  // the auto-pause rules.
+  if (!rcpt.test && undeliverableAddress(contact.email)) {
+    await dropMessage(db, m, "Its address can't receive mail");
+    return "Dropped: the address can't receive mail";
+  }
 
   // Anyone written in the thread? Read it before the follow-up can go: a
   // reply, a bounce or an opt-out cancels it; an out-of-office doesn't.
@@ -414,6 +421,57 @@ async function sendClaimed(db: SupabaseClient, m: Msg, s: DraperSettings, cal: C
     );
   }
   return `Sent the ${m.kind === "first" ? "first email" : "follow-up"} to ${rcpt.test ? "a test inbox" : p.business_name}`;
+}
+
+/**
+ * "Send now", test mode only (Kyle, 21 Nov 2026): the next queued first
+ * email, or the next follow-up whose first email has gone, sent straight
+ * away instead of on its day, so the whole chain can be watched in an
+ * afternoon. Only what has passed Pulse's hour-later re-check, and through
+ * exactly the same path as a scheduled send: claimed first, checked again,
+ * measured again, to the test inbox. Refused outright unless test mode is on
+ * and nothing is paused. One message a call: a measurement takes up to 40
+ * seconds.
+ */
+export async function sendTestNow(db: SupabaseClient, kind: "first" | "follow_up", now = new Date()): Promise<{ sent: boolean; done: boolean; note: string }> {
+  const s = await latestSettings(db);
+  if (!s.test_mode) return { sent: false, done: true, note: "Only in test mode." };
+  const { data: st } = await db.from("outreach_state").select("paused").maybeSingle();
+  if ((st as { paused: boolean } | null)?.paused) return { sent: false, done: true, note: "Sending is paused. Resume it first." };
+  const cal = calendar(s.pause_from, s.pause_to, s.send_weekends === true);
+
+  const { data } = await db
+    .from("outreach_messages")
+    .select(MSG_COLS)
+    .eq("kind", kind)
+    .eq("status", "queued")
+    .not("confirmed_at", "is", null)
+    .order("queued_at")
+    .limit(25);
+  let candidates = ((data as Msg[] | null) ?? []).filter((m) => kind !== "first" || !m.needs_approval || m.approved_at);
+  if (kind === "follow_up" && candidates.length) {
+    const { data: firsts } = await db
+      .from("outreach_messages")
+      .select("prospect_id")
+      .eq("kind", "first")
+      .eq("status", "sent")
+      .in("prospect_id", candidates.map((m) => m.prospect_id));
+    const sentFirst = new Set(((firsts as { prospect_id: string }[] | null) ?? []).map((f) => f.prospect_id));
+    candidates = candidates.filter((m) => sentFirst.has(m.prospect_id));
+  }
+  const next = candidates[0];
+  if (!next) return { sent: false, done: true, note: kind === "first" ? "No first emails are waiting." : "No follow-ups are waiting on a sent first email." };
+
+  const { data: claimed } = await db.from("outreach_messages").update({ status: "sending" }).eq("id", next.id).eq("status", "queued").select("id");
+  if (!claimed?.length) return { sent: false, done: false, note: "Another run took that one; trying the next." };
+  try {
+    const note = await sendClaimed(db, next, s, cal, now);
+    // Put back or held: it would only be picked again, so stop there.
+    return { sent: note.startsWith("Sent"), done: note.startsWith("Put back") || note.startsWith("Not sending"), note };
+  } catch (e) {
+    await putBack(db, next, e instanceof Error ? e.message : String(e), now);
+    return { sent: false, done: true, note: `It didn't send and was put back: ${e instanceof Error ? e.message : String(e)}` };
+  }
 }
 
 // ---------- 4. confirming a draft ----------

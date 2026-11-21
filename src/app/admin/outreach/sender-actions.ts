@@ -104,6 +104,12 @@ export async function saveSettings(input: SettingsInput, note: string): Promise<
     });
     if (!error) {
       await db.from("outreach_change_log").insert({ what: `Settings v${prev.version + 1}: ${note || "saved"}`, changed_by: session.clerkUserId });
+      // Going live starts clean (Kyle, 21 Nov 2026): anything still waiting
+      // from test mode is dropped, so nothing found or written during testing,
+      // the sample workshop included, goes to a business by surprise.
+      const wasLive = prev.master_on && !prev.test_mode;
+      const nowLive = !!input.master_on && !input.test_mode;
+      if (nowLive && !wasLive) await dropTestLeftovers(db, session.clerkUserId);
       revalidatePath("/admin/outreach");
       return { ok: true };
     }
@@ -112,6 +118,20 @@ export async function saveSettings(input: SettingsInput, note: string): Promise<
     }
   }
   return { ok: false, message: "Someone else saved at the same moment. Try again." };
+}
+
+/** Drop every unsent email of every business found while test mode was on. */
+async function dropTestLeftovers(db: Awaited<ReturnType<typeof createServerSupabase>>, by: string) {
+  const { data: tps } = await db.from("outreach_prospects").select("id").eq("test", true).in("status", ["found", "measured", "queued"]);
+  const ids = ((tps as { id: string }[] | null) ?? []).map((p) => p.id);
+  if (!ids.length) return;
+  const reason = "Found in test mode; dropped when Draper went live";
+  for (let i = 0; i < ids.length; i += 200) {
+    const chunk = ids.slice(i, i + 200);
+    await db.from("outreach_messages").update({ status: "dropped", drop_reason: reason }).in("prospect_id", chunk).in("status", ["awaiting_confirmation", "queued"]);
+    await db.from("outreach_prospects").update({ status: "dropped", drop_reason: reason }).in("id", chunk);
+  }
+  await db.from("outreach_change_log").insert({ what: `Going live dropped ${ids.length} test-mode business${ids.length === 1 ? "" : "es"} still waiting`, changed_by: by });
 }
 
 /** Pause all: nothing sends until it's switched back. */

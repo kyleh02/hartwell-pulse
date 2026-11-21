@@ -159,6 +159,19 @@ export function normaliseEmail(input: string | null | undefined): string | null 
   return `${local}@${domain}`;
 }
 
+/**
+ * An address that can never receive mail: on a top-level name reserved for
+ * testing and documentation (RFC 2606 and 6761: .invalid, .test, .example,
+ * .localhost) or one of the example domains. The sample workshop uses one on
+ * purpose; nothing live may ever be sent to one (Kyle, 21 Nov 2026).
+ */
+export function undeliverableAddress(email: string | null | undefined): boolean {
+  const domain = (email ?? "").trim().toLowerCase().split("@")[1]?.replace(/\.+$/, "") ?? "";
+  if (!domain) return true;
+  if (/\.(invalid|test|example|localhost)$/.test(domain) || ["invalid", "test", "example", "localhost"].includes(domain)) return true;
+  return /(^|\.)example\.(com|net|org)$/.test(domain);
+}
+
 /** An ABN passes the ATO's check-digit rule. Takes exactly eleven digits. */
 export function isValidAbn(digits: string): boolean {
   if (!/^[0-9]{11}$/.test(digits)) return false;

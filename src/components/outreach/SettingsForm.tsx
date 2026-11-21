@@ -45,7 +45,13 @@ export function SettingsForm({ s }: { s: DraperSettings }) {
   function save(e: React.FormEvent) {
     e.preventDefault();
     const goingLive = f.master_on && !f.test_mode && !(s.master_on && !s.test_mode);
-    if (goingLive && !window.confirm("Master switch on and test mode off: Draper will email real businesses. Go live?")) return;
+    if (
+      goingLive &&
+      !window.confirm(
+        "Master switch on and test mode off: Draper will email real businesses. Anything still waiting from test mode (the sample workshop included) is dropped first. Go live?",
+      )
+    )
+      return;
     setMsg(null);
     start(async () => {
       const r = await saveSettings(f, note.trim());

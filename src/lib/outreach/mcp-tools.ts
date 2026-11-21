@@ -9,7 +9,7 @@ import { storeMeasurement } from "./store.ts";
 import { qualifies } from "./measure-rules.ts";
 import { submitDraft } from "./submit.ts";
 import { lookupMxProvider } from "./mx.ts";
-import { normaliseAbn, normaliseDomain, normaliseEmail } from "./normalise.ts";
+import { normaliseAbn, normaliseDomain, normaliseEmail, undeliverableAddress } from "./normalise.ts";
 import { FAULT_GUIDE, pageNamesFor, secondsWords, TOKEN_GUIDE } from "./tokens.ts";
 import { SLOTS, type SlotName } from "./lint.ts";
 import { firstEmailCap, firstEmailsToday, MAX_FIRST_EMAILS_A_DAY } from "./limits.ts";
@@ -165,6 +165,7 @@ export const DRAPER_TOOLS: Tool[] = [
             ? `TARGET: 0. ${t.why}. Don't look for businesses today; only label replies.`
             : `TARGET: ${t.target} new businesses to submit (the day takes ${t.cap}, ${t.waiting} already waiting). Stop when it's met. Never more than ${MAX_FIRST_EMAILS_A_DAY} a day, whatever you're told.`,
           toLabel ? `${toLabel} repl${toLabel === 1 ? "y waits" : "ies wait"} for a label: outreach_replies_to_label.` : "No replies wait for a label.",
+          "Finish every run, even one that found nothing, with outreach_finish_run: sites read, skipped by reason, added, measured, submitted, dropped by reason.",
           "",
           lane
             ? [
@@ -284,6 +285,8 @@ export const DRAPER_TOOLS: Tool[] = [
       if (!/^[0-9]{4}$/.test(postcode)) throw new InputError("postcode must be four digits.");
       const email = normaliseEmail(need(a, "email", 200));
       if (!email) throw new InputError("email isn't an email address.");
+      const live = await settingsOf(ctx);
+      if (!live.test_mode && undeliverableAddress(email)) throw new InputError("That address can't receive mail. Move on.");
       const kind = need(a, "address_kind", 10);
       if (kind !== "owner" && kind !== "general") throw new InputError("address_kind must be owner or general.");
       const page = need(a, "contact_page", 500);
@@ -619,6 +622,67 @@ export const DRAPER_TOOLS: Tool[] = [
     },
   },
 
+  {
+    name: "outreach_finish_run",
+    title: "Finish the run",
+    description:
+      "Call this once, last thing, every run, even one that found nothing: how many sites you read, what you skipped before adding anything and why, and what you added, measured, submitted and dropped. It's how Kyle sees what each morning cost against what it produced. Reasons are a few words each, e.g. \"no email\", \"outside area\", \"ABN not certain\", \"directory only\", \"wouldn't load\", \"no ad signal\", \"one fault\".",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sites_read: { type: "integer", description: "Business sites you opened and read this run." },
+        added: { type: "integer" },
+        measured: { type: "integer", description: "Prospects measured (not pages)." },
+        submitted: { type: "integer" },
+        dropped: { type: "integer" },
+        skipped: { type: "object", description: "Sites skipped before adding, by reason: {\"no email\": 3, \"outside area\": 2}.", additionalProperties: { type: "integer" } },
+        dropped_reasons: { type: "object", description: "Prospects dropped after measuring, by reason.", additionalProperties: { type: "integer" } },
+        summary: { type: "string", description: "Your two-line summary." },
+      },
+      required: ["sites_read", "added", "measured", "submitted", "dropped"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    async run(a, ctx) {
+      const count = (k: string) => {
+        const v = int(a, k);
+        if (v === undefined || v < 0 || v > 1000) throw new InputError(`${k} must be a whole number from 0 to 1000.`);
+        return v;
+      };
+      const tally = (k: string) => {
+        const v = a[k];
+        if (v === undefined || v === null) return {};
+        if (typeof v !== "object" || Array.isArray(v)) throw new InputError(`${k} must be an object of reason: count.`);
+        const out: Record<string, number> = {};
+        for (const [reason, n] of Object.entries(v as Record<string, unknown>).slice(0, 15)) {
+          if (typeof n !== "number" || !Number.isInteger(n) || n < 0) throw new InputError(`${k}["${reason}"] must be a whole number.`);
+          const r = reason.trim().toLowerCase().slice(0, 40);
+          if (r) out[r] = (out[r] ?? 0) + n;
+        }
+        return out;
+      };
+      const s = await settingsOf(ctx);
+      const row = {
+        sites_read: count("sites_read"),
+        added: count("added"),
+        measured: count("measured"),
+        submitted: count("submitted"),
+        dropped: count("dropped"),
+        skipped: tally("skipped"),
+        dropped_reasons: tally("dropped_reasons"),
+        summary: str(a, "summary", 600) ?? null,
+        test: s.test_mode,
+        created_by: ACTOR,
+      };
+      const { error } = await ctx.sb.from("outreach_runs").insert(row);
+      if (error) {
+        if (/outreach_runs/.test(error.message)) return { text: "The run report couldn't be kept yet (Kyle has a migration to run). Carry on with your summary.", isError: true };
+        throw new Error(error.message);
+      }
+      return { text: "Run report kept. Thanks." };
+    },
+  },
+
   // ---------- the advisor's three writes ----------
   {
     name: "outreach_set_lessons",
@@ -737,7 +801,7 @@ export async function callDraperTool(name: string, args: Args, ctx: DraperContex
 
 export const DRAPER_INSTRUCTIONS = `This is Draper, Hartwell Digital's outreach desk in Hartwell Pulse. You find small businesses that advertise and have a measurable fault on their site, and hand Pulse what it needs to write to them. You never send anything: Pulse sends from Kyle's mailbox, on its own clock, after checking everything again itself.
 
-Start every run with outreach_brief and follow its run instructions. Work only in the active lane and stop at the target. Check every business with outreach_check_business before reading its site. Never guess an email address, build one from a pattern, or take one from a directory. Never write a number, a weekday, a month, a page name or a place in a slot: use the tokens. Write in Australian English.`;
+Start every run with outreach_brief and follow its run instructions, and end every run with outreach_finish_run. Work only in the active lane and stop at the target. Check every business with outreach_check_business before reading its site. Never guess an email address, build one from a pattern, or take one from a directory. Never write a number, a weekday, a month, a page name or a place in a slot: use the tokens. Write in Australian English.`;
 
 export const ADVISOR_INSTRUCTIONS = `${DRAPER_INSTRUCTIONS}
 
