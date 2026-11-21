@@ -25,9 +25,9 @@ nothing waits on a download. 21 November: the first real morning run (test
 mode) read 15 sites and submitted none, because most 4WD sites are only
 slow and a prospect needs two faults. Kyle chose three more faults and a
 deliberately broken sample workshop on the portal for a forced end-to-end
-test; built on the branch, waiting for Kyle to paste 0067. Next: the
-forced test (every step once, into the test inbox), then Stage 8 pages and
-the daily run.**
+test; Kyle pasted 0067, its probe passed 3 of 3, merged into `main` 21
+November. Next: the forced test (every step once, into the test inbox),
+then Stage 8 pages and the daily run.**
 Branch `draper` (renamed
 from `draper-outreach` the same day, at Kyle's request), cut from `main` at
 80fbe0b. Next step: Stage 2, the no-repeat rule.
@@ -882,3 +882,5 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
   - Not done, for Kyle's yes in the Draper chat: letting directories be
     used to find business names (addresses still only from the business's
     own site), a run-instructions change through Draper advisor.
+  - Later the same day: Kyle pasted 0067; its probe passed 3 of 3. Merged
+    into `main` and deployed.
