@@ -930,4 +930,11 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
     admins read and add only): each run reports what it read and skipped
     before adding, and what it added, measured, submitted and dropped, by
     reason; the Draper page lists the last ten. Code tolerates 0068
-    missing. 130 tests; 0068 passed on Postgres.
+    missing. 130 tests; 0068 passed on Postgres. Merged before Kyle pasted
+    0068; the 22 November 5:30am run's report was refused for that reason.
+    Kyle pasted 0068 on 22 November; its probe passed 4 of 4.
+  - That 22 November run read no sites: every search gave directories, and
+    the run instructions say to skip anything that isn't the business's own
+    site. The advisory chat's directory wording (find the name in a
+    directory, then the business's own site; the address only from there)
+    is the fix, through Draper advisor with Kyle's yes.
