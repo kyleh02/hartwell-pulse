@@ -616,8 +616,30 @@ fast-forwards into `main`.
         whether each is connected, and a Disconnect that revokes only that
         address's tokens. Settings' Disconnect still cuts off a whole app,
         which for claude.ai may mean every connector at once.
-- [ ] **Stage 8: pages.** Outreach, prospect card, Settings, Lists, Numbers,
-      checked at phone width.
+- [~] **Stage 8: pages.** Outreach, prospect card, Settings, Lists, Numbers,
+      checked at phone width. **The Draper page redesigned 22 Nov 2026**
+      (Kyle: "simple yet aesthetic, Apple like ... still toggle and change
+      key things"): a status line under the title (mode, next email,
+      replies to label); `ModeCard`, one Off / Test / Live segmented control
+      (Live asks first; `setMode()` saves a settings version at once and
+      going live still drops test leftovers) with Pause all as a switch;
+      four figures (sent today, waiting, to label, this week); tabs as
+      links (`?tab=`): **Today** (`TodayPanel`: going out today with
+      times, sent today, being checked, coming up; each row opens to its
+      email; Don't send, Approve, Checked; warnings for Gmail, a stale
+      tick, faults switched off, later cards due; the end-to-end checklist
+      and send-now buttons in test mode), **Replies** (`RepliesPanel`),
+      **Settings** (`SettingsPanel`: grouped rows; switches and choices save
+      as tapped through `updateSettings()`, times, numbers, dates and
+      inboxes show a Save once edited; Gmail and the connectors live here),
+      **More** (disclosures: morning runs and yield, lanes, the emails,
+      run instructions, client areas, the no-repeat tools, measure a site,
+      check wording). The build list and "how it will work" are gone.
+      Shared pieces in `components/outreach/ui.tsx` (Switch, Segmented,
+      Group, Row), in Pulse's colours with `.card-title` headings and no
+      eyebrows. Reply notifications link to `?tab=replies`; `HashTab` sends
+      old `#replies` links there. Prospect cards, Lists and Numbers are
+      still to come.
 - [ ] **Stage 9: end-to-end test** in test mode (the brief's nine checks), then
       Kyle's setup list: Google Cloud and Google Admin steps, the exact
       environment variables, the two connector addresses, and what could not be
@@ -933,6 +955,9 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
     missing. 130 tests; 0068 passed on Postgres. Merged before Kyle pasted
     0068; the 22 November 5:30am run's report was refused for that reason.
     Kyle pasted 0068 on 22 November; its probe passed 4 of 4.
+  - 22 November, later: Kyle believed he had switched test mode off; the
+    brief still said TEST MODE (the two checkboxes and a separate Save were
+    the trouble), which the Off / Test / Live control replaces.
   - That 22 November run read no sites: every search gave directories, and
     the run instructions say to skip anything that isn't the business's own
     site. The advisory chat's directory wording (find the name in a

@@ -120,6 +120,51 @@ export async function saveSettings(input: SettingsInput, note: string): Promise<
   return { ok: false, message: "Someone else saved at the same moment. Try again." };
 }
 
+/** The settings in force, as the form's input, so one field can change and the rest stay as they are. */
+function inputOf(s: DraperSettings): SettingsInput {
+  return {
+    master_on: s.master_on,
+    test_mode: s.test_mode,
+    test_inboxes: s.test_inboxes.join(", "),
+    daily_first_emails: s.daily_first_emails,
+    window_start: s.window_start.slice(0, 5),
+    window_end: s.window_end.slice(0, 5),
+    gap_min_minutes: s.gap_min_minutes,
+    gap_max_minutes: s.gap_max_minutes,
+    stop_window_minutes: s.stop_window_minutes,
+    pause_from: s.pause_from ?? "",
+    pause_to: s.pause_to ?? "",
+    opt_out_line: s.opt_out_line,
+    send_weekends: s.send_weekends === true,
+  };
+}
+
+/**
+ * Change some settings and keep the rest (Stage 8: each switch on the page
+ * saves as it's tapped). Still a new version every time, with the same
+ * checks as a full save.
+ */
+export async function updateSettings(patch: Partial<SettingsInput>, note: string): Promise<Result> {
+  await guard();
+  const db = await createServerSupabase();
+  const { data: cur } = await db.from("outreach_settings").select("*").order("version", { ascending: false }).limit(1).single();
+  if (!cur) return { ok: false, message: "Draper's settings couldn't be read." };
+  return saveSettings({ ...inputOf(cur as DraperSettings), ...patch }, note);
+}
+
+export type DraperMode = "off" | "test" | "live";
+
+/**
+ * The one mode control: Off (nothing sends), Test (everything to the test
+ * inboxes) or Live (businesses). The page asks before Live; going live also
+ * drops whatever test mode left waiting.
+ */
+export async function setMode(mode: DraperMode): Promise<Result> {
+  const patch: Partial<SettingsInput> =
+    mode === "live" ? { master_on: true, test_mode: false } : mode === "test" ? { master_on: false, test_mode: true } : { master_on: false, test_mode: false };
+  return updateSettings(patch, `Mode: ${mode === "live" ? "Live" : mode === "test" ? "Test" : "Off"}`);
+}
+
 /** Drop every unsent email of every business found while test mode was on. */
 async function dropTestLeftovers(db: Awaited<ReturnType<typeof createServerSupabase>>, by: string) {
   const { data: tps } = await db.from("outreach_prospects").select("id").eq("test", true).in("status", ["found", "measured", "queued"]);

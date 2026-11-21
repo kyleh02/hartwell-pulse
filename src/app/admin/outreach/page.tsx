@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Check, Circle } from "lucide-react";
+import { Check, ChevronRight, Circle } from "lucide-react";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { outreachEnabled } from "@/lib/outreach/flag";
-import { MAX_FIRST_EMAILS_A_DAY, MAX_SENDS_A_DAY, rampCap } from "@/lib/outreach/limits";
 import type { DraperSettings, DraperState, Lane, RunInstructions, Template } from "@/lib/outreach/types";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
@@ -12,12 +11,17 @@ import { NoRepeatTools } from "@/components/outreach/NoRepeatTools";
 import { ClientAreas, type AreaRow } from "@/components/outreach/ClientAreas";
 import { MeasureSite } from "@/components/outreach/MeasureSite";
 import { WordingCheck } from "@/components/outreach/WordingCheck";
-import { SendingPanel } from "@/components/outreach/SendingPanel";
-import { SettingsForm } from "@/components/outreach/SettingsForm";
-import { QueueList, type QueueRow } from "@/components/outreach/QueueList";
+import { type QueueRow } from "@/components/outreach/QueueList";
+import { TodayPanel } from "@/components/outreach/TodayPanel";
+import { ModeCard } from "@/components/outreach/ModeCard";
+import { SettingsPanel } from "@/components/outreach/SettingsPanel";
+import { HashTab } from "@/components/outreach/HashTab";
+import { Segmented } from "@/components/outreach/ui";
+import type { DraperMode } from "@/app/admin/outreach/sender-actions";
+import { FAULT_LABEL } from "@/lib/outreach/rules";
 import { RepliesPanel, type LaterRow, type ReplyRow } from "@/components/outreach/RepliesPanel";
 import { gmailThreadUrl } from "@/lib/outreach/replies-rules";
-import { DraperConnectors, type ConnectorRow } from "@/components/outreach/DraperConnectors";
+import { type ConnectorRow } from "@/components/outreach/DraperConnectors";
 import { TestSendButtons } from "@/components/outreach/TestSendButtons";
 import { e2eChecklist, type E2EMessage } from "@/lib/outreach/e2e";
 import { requestOrigin } from "@/lib/mcp/http";
@@ -33,10 +37,11 @@ import { cn } from "@/lib/utils/cn";
 export const metadata = { title: "Draper" };
 
 /**
- * Draper, Stage 1 (docs/DRAPER.md): what is set up so far, read straight from
- * the tables, and how the rest will fit Pulse as each stage lands. Read-only.
- * Stage 8 replaces this with the Outreach queue, prospect cards, Settings,
- * Lists and Numbers.
+ * Draper (docs/DRAPER.md). Redesigned on 22 November 2026 at Kyle's request,
+ * "simple yet aesthetic, Apple like": a status line, one Off / Test / Live
+ * control with Pause all, four figures, then four tabs. Today (what goes out
+ * and when, Don't send on each), Replies (label them), Settings (switches
+ * that save as they're tapped) and More (the tools he rarely needs).
  *
  * Reads go through the signed-in user's RLS client, so this page is itself a
  * check that an admin can read every Draper table. A client account never gets
@@ -47,58 +52,6 @@ const MISSING = new Set(["PGRST205", "42P01"]);
 
 /** Claude writes these three; Pulse fills every other {slot}. */
 const CLAUDE_SLOTS = new Set(["finding", "why_and_fix", "second_finding"]);
-
-const FLOW: { when: string; what: string; where: string; href?: string }[] = [
-  {
-    when: "5:30am, each sending day",
-    what: "Claude's morning run finds businesses in the active lane, reads their sites and checks each one with Pulse first. Its connector can't send anything.",
-    where: "Draper connector",
-  },
-  {
-    when: "Through the day",
-    what: "Pulse measures each site itself, checks every claim against its own measurements, checks the wording, and measures each fault again an hour later before it counts.",
-    where: "Draper",
-  },
-  {
-    when: "8am",
-    what: "The day's queue is fixed and a summary arrives in your notifications. Stop any message, or pause everything, before the first one goes.",
-    where: "Notifications and this page",
-  },
-  {
-    when: "9:30am to 3:30pm",
-    what: "Pulse sends from kyle@hartwelldigital.com through Gmail: plain text, 20 to 45 minutes apart, one follow-up on day 7 in the same thread.",
-    where: "Gmail",
-  },
-  {
-    when: "Every 10 minutes",
-    what: "Replies are read. An opt-out is suppressed at once, a reply cancels the follow-up, and everything else waits for your label.",
-    where: "This page",
-  },
-  {
-    when: "When they're keen",
-    what: "Interested and question replies become leads, source Outreach email, due today. You answer every reply yourself.",
-    where: "Pipeline",
-    href: "/admin/pipeline",
-  },
-];
-
-const STAGES: { name: string; what: string }[] = [
-  { name: "Data", what: "Every table, admin-only access, the switch that hides Draper" },
-  { name: "The no-repeat rule", what: "Fingerprints, do-not-contact by business, the imports" },
-  { name: "The measuring tool", what: "PageSpeed, the tags, the six faults, the ABN check" },
-  { name: "Submit, verify, check the wording", what: "Pulse fills the figures and refuses what it can't prove" },
-  { name: "Sender", what: "Connect Gmail, the window, the warm-up, the 8am summary, test mode" },
-  { name: "Replies", what: "Opt-outs, bounces, labels, leads, auto-pause" },
-  { name: "The two connectors", what: "Draper and Draper advisor, added in claude.ai" },
-  { name: "Pages", what: "The queue, prospect cards, Settings, Lists, Numbers" },
-  { name: "End-to-end test", what: "The nine checks in test mode, then your setup list" },
-];
-const STAGES_DONE = 7;
-
-function clock(t: string) {
-  const [h, m] = t.split(":").map(Number);
-  return `${h % 12 || 12}${m ? `:${String(m).padStart(2, "0")}` : ""}${h < 12 ? "am" : "pm"}`;
-}
 
 function day(d: string | null) {
   if (!d) return "None";
@@ -131,16 +84,6 @@ function Slotted({ text }: { text: string }) {
         );
       })}
     </>
-  );
-}
-
-function Tile({ label, value, sub, warn }: { label: string; value: string; sub?: string; warn?: boolean }) {
-  return (
-    <div className="rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2/40 px-3 py-2.5">
-      <p className="text-[11px] text-pulse-text-mute">{label}</p>
-      <p className={cn("data-mono mt-0.5 text-sm", warn ? "text-pulse-warn" : "text-pulse-text")}>{value}</p>
-      {sub && <p className="mt-0.5 text-[11px] leading-snug text-pulse-text-mute">{sub}</p>}
-    </div>
   );
 }
 
@@ -336,391 +279,269 @@ export default async function DraperPage({
   const template =
     templates.find((t) => t.version === active?.template_version) ?? templates[templates.length - 1] ?? null;
 
+  // ---------- the page's headline figures and status (Stage 8) ----------
+  const mode: DraperMode = settings?.test_mode ? "test" : settings?.master_on ? "live" : "off";
+  const nowIso = new Date().toISOString();
+  const nextSend = queue
+    .filter((r) => r.status === "queued" && r.send_on === todayMel && r.scheduled_for && r.scheduled_for > nowIso && (!r.needs_approval || r.approved_at))
+    .map((r) => r.scheduled_for!)
+    .sort()[0];
+  const sentToday = queue.filter((r) => r.status === "sent").length;
+  const waitingFirst = queue.filter((r) => r.kind === "first" && ["awaiting_confirmation", "queued", "sending"].includes(r.status)).length;
+  const dueLater = laterRows.filter((l) => l.due).length;
+  const tickStale = !st?.tick_at || Date.now() - new Date(st.tick_at).getTime() > 20 * 60_000;
+  const atTime = (iso: string) =>
+    new Intl.DateTimeFormat("en-AU", { timeZone: "Australia/Melbourne", hour: "numeric", minute: "2-digit" }).format(new Date(iso)).replace(" ", "").toLowerCase();
+  const statusLine = [
+    state?.paused ? "Paused" : mode === "live" ? "Live" : mode === "test" ? "Test mode" : "Off",
+    nextSend ? `next email ${atTime(nextSend)}` : waitingFirst ? `${waitingFirst} waiting` : "nothing waiting",
+    needs.length ? `${needs.length} repl${needs.length === 1 ? "y" : "ies"} to label` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const tabParam = one(sp.gmail) ? "settings" : one(sp.tab);
+  const tab: "today" | "replies" | "settings" | "more" =
+    tabParam === "replies" || tabParam === "settings" || tabParam === "more" ? tabParam : "today";
+
   return (
-    <div>
-      <PageHeader
-        title="Draper"
-        description="Automatic outreach, built in stages. A business is only ever emailed with the master switch on and test mode off; until then everything goes to your test inboxes."
-      />
+    <div className="mx-auto max-w-3xl">
+      <HashTab />
+      <PageHeader title="Draper" description={statusLine} />
 
       {missing ? (
         <Card className="p-5 text-sm leading-relaxed text-pulse-text-dim">
           Run migration 0062 in the Supabase SQL Editor, then{" "}
-          <span className="data-mono text-pulse-text">supabase/probes/0062_draper_probe.sql</span> to
-          check it landed.
+          <span className="data-mono text-pulse-text">supabase/probes/0062_draper_probe.sql</span> to check it landed.
         </Card>
       ) : errors.length > 0 || !settings ? (
         <Card className="p-5 text-sm leading-relaxed text-pulse-danger">
           Draper&apos;s tables couldn&apos;t be read: {errors[0]?.message ?? "settings version 1 is missing"}.
         </Card>
       ) : (
-        <div className="space-y-5">
-          {/* ---------- switches ---------- */}
-          <Card className="p-4">
-            <p className="mono-label mb-3">Switches</p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-              <Tile label="Master switch" value={settings.master_on ? "On" : "Off"} warn={settings.master_on} />
-              <Tile
-                label="Test mode"
-                value={settings.test_mode ? "On" : "Off"}
-                sub={settings.test_mode ? "Everything goes to your test inboxes" : undefined}
-                warn={!settings.test_mode}
-              />
-              <Tile
-                label="Pause all"
-                value={state?.paused ? (state.paused_by === "auto" ? "Auto-paused" : "Paused") : "Off"}
-                sub={state?.paused ? (state.paused_reason ?? undefined) : undefined}
-                warn={!!state?.paused}
-              />
-              <Tile
-                label="Test inboxes"
-                value={settings.test_inboxes.length ? `${settings.test_inboxes.length} set` : "None yet"}
-                sub="One Gmail, one Outlook, before the test"
-              />
-              <Tile
-                label="First emails a day"
-                value={String(settings.daily_first_emails)}
-                sub={`Warm-up starts at ${rampCap(0)}. Ceilings: ${MAX_FIRST_EMAILS_A_DAY} first emails, ${MAX_SENDS_A_DAY} sends.`}
-              />
-              <Tile
-                label="Send window"
-                value={`${clock(settings.window_start)} to ${clock(settings.window_end)}`}
-                sub={`${settings.send_weekends ? "Every day" : "Weekdays"}, ${settings.gap_min_minutes} to ${settings.gap_max_minutes} minutes apart`}
-              />
-              <Tile
-                label="Stop window"
-                value={settings.stop_window_minutes ? `${settings.stop_window_minutes} minutes` : "None"}
-                sub="After the 8am summary"
-              />
-              <Tile label="Pause dates" value={`${day(settings.pause_from)} to ${day(settings.pause_to)}`} />
+        <div className="space-y-6">
+          <ModeCard mode={mode} paused={!!state?.paused} pausedReason={state?.paused_reason ?? null} testInboxes={settings.test_inboxes} />
+
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { n: sentToday, label: "Sent today" },
+              { n: waitingFirst, label: "Waiting" },
+              { n: needs.length, label: "To label", warn: needs.length > 0 },
+              { n: tally.sent ?? 0, label: "This week" },
+            ].map((t) => (
+              <div key={t.label} className="rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface px-2 py-3 text-center">
+                <p className={cn("data-mono text-[22px] leading-none", t.warn ? "text-pulse-gold" : "text-pulse-text")}>{t.n}</p>
+                <p className="mt-1.5 text-[11px] text-pulse-text-mute">{t.label}</p>
+              </div>
+            ))}
+          </div>
+
+          <Segmented
+            ariaLabel="Draper"
+            value={tab}
+            options={[
+              { value: "today", label: "Today", href: "/admin/outreach" },
+              { value: "replies", label: "Replies", href: "/admin/outreach?tab=replies", count: needs.length },
+              { value: "settings", label: "Settings", href: "/admin/outreach?tab=settings" },
+              { value: "more", label: "More", href: "/admin/outreach?tab=more" },
+            ]}
+          />
+
+          {tab === "today" && (
+            <div className="space-y-6">
+              {(!gmail || tickStale || (state?.faults_off?.length ?? 0) > 0 || dueLater > 0) && (
+                <div className="space-y-2">
+                  {!gmail && (
+                    <Notice tone="warn">
+                      Gmail isn&apos;t connected, so nothing can send.{" "}
+                      <Link href="/admin/outreach?tab=settings" className="underline underline-offset-2">Connect it in Settings</Link>.
+                    </Notice>
+                  )}
+                  {tickStale && (
+                    <Notice tone="warn">
+                      {st?.tick_at ? `Pulse last ticked ${atTime(st.tick_at)}` : "Pulse hasn't ticked yet"}: check the cron-job.org job.
+                    </Notice>
+                  )}
+                  {(state?.faults_off?.length ?? 0) > 0 && (
+                    <Notice tone="warn">
+                      {state!.faults_off.map((f) => FAULT_LABEL[f]).join(", ")} switched off after two &quot;wrong fact&quot; replies.{" "}
+                      <Link href="/admin/outreach?tab=replies" className="underline underline-offset-2">Switch back on</Link>.
+                    </Notice>
+                  )}
+                  {dueLater > 0 && (
+                    <Notice>
+                      {dueLater} &quot;later&quot; {dueLater === 1 ? "card is" : "cards are"} due.{" "}
+                      <Link href="/admin/outreach?tab=replies" className="underline underline-offset-2">See them</Link>.
+                    </Notice>
+                  )}
+                </div>
+              )}
+
+              {settings.test_mode && (
+                <section className="space-y-2">
+                  <h3 className="card-title px-1">End-to-end test</h3>
+                  <div className="space-y-3 rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface p-4">
+                    <ul className="space-y-1.5 text-[13px]">
+                      {checklist.map((c) => (
+                        <li key={c.key} className="flex items-start gap-2">
+                          {c.by ? <Check size={15} className="mt-0.5 shrink-0 text-pulse-gold" /> : <Circle size={15} className="mt-0.5 shrink-0 text-pulse-text-mute" />}
+                          <span className={c.by ? "text-pulse-text" : "text-pulse-text-dim"}>
+                            {c.label}
+                            {c.by && <span className="text-pulse-text-mute"> · {c.by}</span>}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    <TestSendButtons />
+                  </div>
+                </section>
+              )}
+
+              <TodayPanel rows={queue} today={todayMel} />
+
+              <p className="px-1 text-[12px] leading-relaxed text-pulse-text-mute">
+                {st?.tick_at ? `Last tick ${atTime(st.tick_at)}: ${st.tick_note ?? ""}` : ""}
+              </p>
             </div>
-            <p className="data-mono mt-3 text-[11px] text-pulse-text-mute">
-              Settings v{settings.version} · template v{template?.version ?? "?"} · run instructions v
-              {run?.version ?? "?"} · {prospectsRes.count ?? 0} prospects · {prints.count ?? 0} fingerprints
-            </p>
-            <p className="mt-1 text-[12px] text-pulse-text-mute">{yieldLine}</p>
-          </Card>
+          )}
 
-          {/* ---------- the no-repeat rule ---------- */}
-          <Card className="p-4">
-            <p className="mono-label mb-1">One approach per business, ever</p>
-            <p className="mb-3 text-[12px] leading-relaxed text-pulse-text-mute">
-              Every business is checked when it&apos;s found, when its email is submitted and again just before
-              it sends: against {prints.count ?? 0} fingerprints, the pipeline, your clients, do-not-contact,
-              your exclusions and every other prospect. A match on any domain, email, business name, ABN or phone
-              blocks it.
-            </p>
-            <NoRepeatTools />
-          </Card>
+          {tab === "replies" && <RepliesPanel needs={needs} recent={recent} later={laterRows} faultsOff={state?.faults_off ?? []} />}
 
-          {/* ---------- client areas ---------- */}
-          <Card className="p-4">
-            <p className="mono-label mb-1">Your clients&apos; areas</p>
-            <p className="mb-3 text-[12px] leading-relaxed text-pulse-text-mute">
-              Draper skips any business offering what a client sells within that client&apos;s radius, so it never
-              pitches a competitor down the road. The morning run is never told why. Postcode locations: GeoNames,
-              CC BY 4.0.
-            </p>
-            <ClientAreas areas={areas} clients={clientOptions} />
-          </Card>
-
-          {/* ---------- the measuring tool ---------- */}
-          <Card className="p-4">
-            <p className="mono-label mb-1">Measure a site</p>
-            <p className="mb-3 text-[12px] leading-relaxed text-pulse-text-mute">
-              What the morning run will ask Pulse for: Google&apos;s phone speed test, ad tracking, HTTPS, the main
-              menu&apos;s links and whether the phone number can be tapped.
-              {process.env.PAGESPEED_API_KEY ? "" : " PAGESPEED_API_KEY isn't set yet, so the speed test will be refused."}
-            </p>
-            <MeasureSite />
-          </Card>
-
-          {/* ---------- the lint ---------- */}
-          <Card className="p-4">
-            <p className="mono-label mb-1">Check wording</p>
-            <p className="mb-3 text-[12px] leading-relaxed text-pulse-text-mute">
-              Every draft passes your rules before it can queue: no dashes, links, prices, meeting asks, promises,
-              health claims or American spelling, 60 words a slot, and every figure filled by Pulse from its own
-              measurements. Try some wording here; nothing is saved.
-            </p>
-            <WordingCheck />
-          </Card>
-
-          {/* ---------- sending ---------- */}
-          <Card className="p-4">
-            <p className="mono-label mb-3">Sending</p>
-            <SendingPanel
+          {tab === "settings" && (
+            <SettingsPanel
+              s={settings}
               gmail={gmail}
               setupMissing={setupMissing}
-              paused={!!state?.paused}
-              pausedReason={state?.paused_reason ?? null}
-              tickAt={st?.tick_at ?? null}
-              tickNote={st?.tick_note ?? null}
-              mode={
-                settings.test_mode
-                  ? `Test mode: every email goes to ${settings.test_inboxes.join(" or ") || "your test inboxes (none set)"}`
-                  : settings.master_on
-                    ? "Live: Draper emails businesses"
-                    : "Master switch off: nothing sends"
-              }
+              connectors={connectors}
               holidays={holidays}
               flash={one(sp.gmail) ? { outcome: one(sp.gmail)!, why: one(sp.why) } : null}
             />
-          </Card>
-
-          {settings.test_mode && (
-            <Card className="p-4">
-              <p className="mono-label mb-1">End-to-end test</p>
-              <p className="mb-3 text-[12px] leading-relaxed text-pulse-text-mute">
-                Every step once, on businesses found in test mode that passed the hour-later re-check. Don&apos;t switch to
-                live until all six tick.
-              </p>
-              <ul className="mb-3 space-y-1.5 text-[13px]">
-                {checklist.map((c) => (
-                  <li key={c.key} className="flex items-start gap-2">
-                    {c.by ? (
-                      <Check size={15} className="mt-0.5 shrink-0 text-pulse-gold" />
-                    ) : (
-                      <Circle size={15} className="mt-0.5 shrink-0 text-pulse-text-mute" />
-                    )}
-                    <span className={c.by ? "text-pulse-text" : "text-pulse-text-dim"}>
-                      {c.label}
-                      {c.by && <span className="text-pulse-text-mute"> · {c.by}</span>}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <TestSendButtons />
-            </Card>
           )}
 
-          <Card className="p-4">
-            <p className="mono-label mb-1">Morning runs</p>
-            <p className="mb-3 text-[12px] leading-relaxed text-pulse-text-mute">
-              Each run&apos;s own report: what it read and skipped before adding anything, then what Pulse measured, took and
-              dropped. The skips are the run&apos;s word; Pulse never saw those sites.
-            </p>
-            {runs.length === 0 ? (
-              <p className="text-[13px] text-pulse-text-mute">{runErr ? "Run migration 0068 to keep these." : "No run has reported yet."}</p>
-            ) : (
-              <ul className="space-y-2 text-[13px]">
-                {runs.map((r) => (
-                  <li key={r.id} className="rounded-[var(--radius-input)] border border-pulse-border p-2.5">
-                    <p className="text-pulse-text">
-                      {day(r.ran_on)}
-                      {r.test && <span className="text-pulse-warn"> · test mode</span>}
-                      <span className="text-pulse-text-dim">
-                        {" "}
-                        · read {r.sites_read}, added {r.added}, measured {r.measured}, submitted {r.submitted}, dropped {r.dropped}
-                      </span>
-                    </p>
-                    {Object.keys(r.skipped ?? {}).length > 0 && (
-                      <p className="text-[12px] text-pulse-text-mute">Skipped before adding: {reasons(r.skipped)}</p>
-                    )}
-                    {Object.keys(r.dropped_reasons ?? {}).length > 0 && (
-                      <p className="text-[12px] text-pulse-text-mute">Dropped after measuring: {reasons(r.dropped_reasons)}</p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
+          {tab === "more" && (
+            <div className="space-y-2">
+              <Disclosure title="Morning runs" note={yieldLine} open>
+                {runs.length === 0 ? (
+                  <p className="text-[13px] text-pulse-text-mute">{runErr ? "Run migration 0068 to keep these." : "No run has reported yet."}</p>
+                ) : (
+                  <ul className="space-y-2 text-[13px]">
+                    {runs.map((r) => (
+                      <li key={r.id} className="rounded-[var(--radius-input)] border border-pulse-border p-2.5">
+                        <p className="text-pulse-text">
+                          {day(r.ran_on)}
+                          {r.test && <span className="text-pulse-warn"> · test mode</span>}
+                          <span className="text-pulse-text-dim">
+                            {" "}
+                            · read {r.sites_read}, added {r.added}, measured {r.measured}, submitted {r.submitted}, dropped {r.dropped}
+                          </span>
+                        </p>
+                        {Object.keys(r.skipped ?? {}).length > 0 && <p className="text-[12px] text-pulse-text-mute">Skipped before adding: {reasons(r.skipped)}</p>}
+                        {Object.keys(r.dropped_reasons ?? {}).length > 0 && <p className="text-[12px] text-pulse-text-mute">Dropped after measuring: {reasons(r.dropped_reasons)}</p>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Disclosure>
 
-          <Card className="p-4">
-            <p className="mono-label mb-3">Queue</p>
-            <QueueList rows={queue} />
-          </Card>
+              <Disclosure title="Lanes" note={active ? `Active: ${active.name}` : "No lane is active"}>
+                <ul className="space-y-2.5">
+                  {lanes.map((l) => (
+                    <li key={l.id} className="rounded-[var(--radius-input)] border border-pulse-border p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-sm text-pulse-text">
+                          Lane {l.id}: {l.name}
+                        </p>
+                        <Badge tone={l.active ? "gold" : "neutral"}>{l.active ? "Active" : "Off"}</Badge>
+                      </div>
+                      {l.services.length > 0 && <p className="mt-1.5 text-[12px] text-pulse-text-dim">{l.services.join(", ")}</p>}
+                      {l.areas.length > 0 && <p className="mt-1 text-[12px] text-pulse-text-mute">Areas: {l.areas.join(", ")}</p>}
+                      {l.skip.length > 0 && <p className="mt-1 text-[12px] text-pulse-text-mute">Skip: {l.skip.join("; ")}</p>}
+                    </li>
+                  ))}
+                </ul>
+                {settings.never_list.length > 0 && <p className="mt-3 text-[12px] text-pulse-text-mute">Never, in any lane: {settings.never_list.join("; ")}.</p>}
+              </Disclosure>
 
-          <Card className="p-4">
-            <p className="mono-label mb-1">Connectors</p>
-            <p className="mb-3 text-[12px] leading-relaxed text-pulse-text-mute">
-              In claude.ai: Settings, Connectors, Add custom connector, paste the address, then approve it here on the portal. Each
-              one&apos;s sign-in works only at its own address, never at the pipeline connector or the other one.
-            </p>
-            <DraperConnectors rows={connectors} />
-          </Card>
-
-          <Card className="scroll-mt-20 p-4" id="replies">
-            <p className="mono-label mb-3">Replies</p>
-            <RepliesPanel needs={needs} recent={recent} later={laterRows} faultsOff={state?.faults_off ?? []} />
-          </Card>
-
-          <Card className="p-4">
-            <p className="mono-label mb-3">Settings</p>
-            <SettingsForm s={settings} />
-          </Card>
-
-          {/* ---------- how it fits ---------- */}
-          <Card className="p-4">
-            <p className="mono-label mb-3">How it will work</p>
-            <ol className="space-y-3">
-              {FLOW.map((f, i) => (
-                <li key={f.when} className="flex gap-3">
-                  <span className="data-mono mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-pulse-gold/40 text-[11px] text-pulse-gold">
-                    {i + 1}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-sm text-pulse-text">
-                      {f.when}{" "}
-                      <span className="data-mono text-[11px] text-pulse-text-mute">
-                        ·{" "}
-                        {f.href ? (
-                          <Link href={f.href} className="underline decoration-pulse-border underline-offset-2 hover:text-pulse-gold">
-                            {f.where}
-                          </Link>
-                        ) : (
-                          f.where
-                        )}
-                      </span>
-                    </p>
-                    <p className="mt-0.5 text-[13px] leading-relaxed text-pulse-text-dim">{f.what}</p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </Card>
-
-          {/* ---------- lanes ---------- */}
-          <Card className="p-4">
-            <p className="mono-label mb-3">Lanes</p>
-            <ul className="space-y-2.5">
-              {lanes.map((l) => (
-                <li
-                  key={l.id}
-                  className="rounded-[var(--radius-input)] border border-pulse-border bg-pulse-surface-2/40 p-3"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-pulse-text">
-                        Lane {l.id}: {l.name}
+              {template && (
+                <Disclosure title="The emails" note={`Template v${template.version}: gold is what the run writes; grey Pulse fills in.`}>
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <div className="rounded-[var(--radius-input)] border border-pulse-border p-3">
+                      <p className="text-[12px] text-pulse-text-mute">First email</p>
+                      <p className="mt-1 text-sm text-pulse-text">
+                        Subject: <Slotted text={template.first_subject} />
                       </p>
-                      <p className="data-mono mt-0.5 text-[11px] text-pulse-text-mute">
-                        Template v{l.template_version} · approval {l.approval_required ? "on" : "off"}
-                        {l.notes ? ` · ${l.notes}` : ""}
+                      <pre className="mt-2 font-sans text-[13px] leading-relaxed break-words whitespace-pre-wrap text-pulse-text">
+                        <Slotted text={template.first_body} />
+                      </pre>
+                    </div>
+                    <div className="rounded-[var(--radius-input)] border border-pulse-border p-3">
+                      <p className="text-[12px] text-pulse-text-mute">Follow-up, day 7, same thread</p>
+                      <pre className="mt-2 font-sans text-[13px] leading-relaxed break-words whitespace-pre-wrap text-pulse-text">
+                        <Slotted text={template.followup_body} />
+                      </pre>
+                      <p className="mt-3 text-[12px] text-pulse-text-dim">
+                        <span className="text-pulse-text-mute">Last line ({settings.opt_out_line}): </span>
+                        {settings.opt_out_line === "B" ? template.opt_out_b : template.opt_out_a}
                       </p>
                     </div>
-                    <Badge tone={l.active ? "gold" : "neutral"}>{l.active ? "Active" : "Off"}</Badge>
                   </div>
-                  {l.services.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {l.services.map((s) => (
-                        <span
-                          key={s}
-                          className="rounded-full border border-pulse-border px-2 py-0.5 text-[11px] text-pulse-text-dim"
-                        >
-                          {s}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {l.areas.length > 0 && (
-                    <p className="mt-2 text-[12px] leading-relaxed text-pulse-text-dim">
-                      <span className="text-pulse-text-mute">Areas: </span>
-                      {l.areas.join(", ")}
-                    </p>
-                  )}
-                  {l.skip.length > 0 && (
-                    <p className="mt-1 text-[12px] leading-relaxed text-pulse-text-dim">
-                      <span className="text-pulse-text-mute">Skip: </span>
-                      {l.skip.join("; ")}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
-            {settings.never_list.length > 0 && (
-              <p className="mt-3 text-[12px] leading-relaxed text-pulse-text-dim">
-                <span className="text-pulse-text-mute">Never, in any lane: </span>
-                {settings.never_list.join("; ")}.
-              </p>
-            )}
-            <p className="mt-1.5 text-[12px] text-pulse-text-mute">
-              No defence lane: Ironpeak trades in defence under the same ABN.
-            </p>
-          </Card>
+                </Disclosure>
+              )}
 
-          {/* ---------- the template ---------- */}
-          {template && (
-            <Card className="p-4">
-              <p className="mono-label mb-1">Template v{template.version}</p>
-              <p className="mb-3 text-[12px] text-pulse-text-mute">
-                <span className="rounded bg-pulse-gold/15 px-1 text-pulse-gold">Gold</span> Claude writes.{" "}
-                <span className="rounded bg-pulse-surface-2 px-1 text-pulse-text-dim">Grey</span> Pulse fills from
-                its own records.
-              </p>
-              <div className="grid gap-3 lg:grid-cols-2">
-                <div className="rounded-[var(--radius-input)] border border-pulse-border p-3">
-                  <p className="text-[11px] text-pulse-text-mute">First email</p>
-                  <p className="mt-1 text-sm text-pulse-text">
-                    Subject: <Slotted text={template.first_subject} />
-                  </p>
-                  <pre className="mt-2 font-sans text-[13px] leading-relaxed break-words whitespace-pre-wrap text-pulse-text">
-                    <Slotted text={template.first_body} />
-                  </pre>
-                </div>
-                <div className="rounded-[var(--radius-input)] border border-pulse-border p-3">
-                  <p className="text-[11px] text-pulse-text-mute">Follow-up, day 7, same thread</p>
-                  <p className="mt-1 text-sm text-pulse-text">
-                    Subject: <Slotted text={template.followup_subject} />
-                  </p>
-                  <pre className="mt-2 font-sans text-[13px] leading-relaxed break-words whitespace-pre-wrap text-pulse-text">
-                    <Slotted text={template.followup_body} />
-                  </pre>
-                  <p className="mt-3 text-[12px] leading-relaxed text-pulse-text-dim">
-                    <span className="text-pulse-text-mute">Opt-out line in use ({settings.opt_out_line}): </span>
-                    {settings.opt_out_line === "B" ? template.opt_out_b : template.opt_out_a}
-                  </p>
-                </div>
-              </div>
-              <details className="mt-3 text-sm">
-                <summary className="cursor-pointer text-pulse-text-dim hover:text-pulse-text">
-                  What Claude is told about the slots
-                </summary>
-                <pre className="mt-2 font-sans text-[13px] leading-relaxed break-words whitespace-pre-wrap text-pulse-text-dim">
-                  {template.slot_rules}
-                </pre>
-              </details>
-            </Card>
+              {run && (
+                <Disclosure title="Run instructions" note={`Version ${run.version}. Changed only through Draper advisor, with your yes.`}>
+                  <pre className="font-sans text-[13px] leading-relaxed break-words whitespace-pre-wrap text-pulse-text-dim">{run.body}</pre>
+                </Disclosure>
+              )}
+
+              <Disclosure title="Your clients' areas" note="Draper never pitches a business offering what a client sells within that client's radius.">
+                <ClientAreas areas={areas} clients={clientOptions} />
+              </Disclosure>
+
+              <Disclosure title="One approach per business" note={`${prints.count ?? 0} fingerprints, ${prospectsRes.count ?? 0} prospects. Import lists, or check a business by hand.`}>
+                <NoRepeatTools />
+              </Disclosure>
+
+              <Disclosure title="Measure a site" note="The same measurement the morning run asks for, shown, not stored.">
+                <MeasureSite />
+              </Disclosure>
+
+              <Disclosure title="Check wording" note="Try a slot against your rules. Nothing is saved.">
+                <WordingCheck />
+              </Disclosure>
+            </div>
           )}
-
-          {/* ---------- run instructions ---------- */}
-          {run && (
-            <Card className="p-4">
-              <details className="text-sm">
-                <summary className="mono-label cursor-pointer">Run instructions v{run.version}</summary>
-                <pre className="mt-3 font-sans text-[13px] leading-relaxed break-words whitespace-pre-wrap text-pulse-text-dim">
-                  {run.body}
-                </pre>
-              </details>
-            </Card>
-          )}
-
-          {/* ---------- build progress ---------- */}
-          <Card className="p-4">
-            <p className="mono-label mb-3">Build</p>
-            <ol className="space-y-2">
-              {STAGES.map((s, i) => {
-                const done = i < STAGES_DONE;
-                return (
-                  <li key={s.name} className="flex items-start gap-2.5">
-                    {done ? (
-                      <Check size={15} className="mt-0.5 shrink-0 text-pulse-gold" />
-                    ) : (
-                      <Circle size={15} className="mt-0.5 shrink-0 text-pulse-text-mute" />
-                    )}
-                    <p className="text-[13px] leading-snug">
-                      <span className={done ? "text-pulse-text" : "text-pulse-text-dim"}>
-                        Stage {i + 1}: {s.name}
-                      </span>
-                      <span className="text-pulse-text-mute"> · {s.what}</span>
-                    </p>
-                  </li>
-                );
-              })}
-            </ol>
-          </Card>
         </div>
       )}
     </div>
+  );
+}
+
+function Notice({ tone, children }: { tone?: "warn"; children: React.ReactNode }) {
+  return (
+    <p
+      className={cn(
+        "rounded-[var(--radius-input)] border px-3 py-2.5 text-[13px] leading-relaxed",
+        tone === "warn" ? "border-pulse-warn/40 bg-pulse-warn/10 text-pulse-text" : "border-pulse-border bg-pulse-surface text-pulse-text-dim",
+      )}
+    >
+      {children}
+    </p>
+  );
+}
+
+/** A section of More: a card that opens, like a phone's settings rows. */
+function Disclosure({ title, note, open, children }: { title: string; note?: string; open?: boolean; children: React.ReactNode }) {
+  return (
+    <details open={open} className="group rounded-[var(--radius-card)] border border-pulse-border bg-pulse-surface">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 [&::-webkit-details-marker]:hidden">
+        <span className="min-w-0">
+          <span className="block text-[15px] text-pulse-text">{title}</span>
+          {note && <span className="mt-0.5 block text-[12px] leading-snug text-pulse-text-mute">{note}</span>}
+        </span>
+        <ChevronRight size={16} className="shrink-0 text-pulse-text-mute transition-transform group-open:rotate-90" aria-hidden="true" />
+      </summary>
+      <div className="border-t border-pulse-border p-4">{children}</div>
+    </details>
   );
 }

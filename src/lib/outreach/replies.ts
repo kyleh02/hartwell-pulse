@@ -220,7 +220,7 @@ async function handleIncoming(db: SupabaseClient, inc: Incoming, sent: SentMsg, 
     await notifyAdmins(
       null,
       "outreach",
-      { title: `${tag}Bounced: ${name}`, body: "The address is marked bad and the follow-up is cancelled.", link: "/admin/outreach#replies" },
+      { title: `${tag}Bounced: ${name}`, body: "The address is marked bad and the follow-up is cancelled.", link: "/admin/outreach?tab=replies" },
       "in_portal",
     );
     return "bounce";
@@ -242,7 +242,7 @@ async function handleIncoming(db: SupabaseClient, inc: Incoming, sent: SentMsg, 
     await notifyAdmins(null, "outreach", {
       title: `${tag}${name} opted out`,
       body: `"${c.quote.slice(0, 300)}"\n\n${test ? "A test send: nothing was added to do-not-contact." : "On do-not-contact for good, and the follow-up is cancelled. Nothing was sent back to them."}`,
-      link: "/admin/outreach#replies",
+      link: "/admin/outreach?tab=replies",
     });
     return "opt_out";
   }
@@ -257,7 +257,7 @@ async function handleIncoming(db: SupabaseClient, inc: Incoming, sent: SentMsg, 
   await notifyAdmins(null, "outreach", {
     title: `${tag}Reply from ${name}`,
     body: `"${c.quote.slice(0, 400)}"\n\nAnswer it yourself from kyle@hartwelldigital.com, then label it on the Draper page.`,
-    link: "/admin/outreach#replies",
+    link: "/admin/outreach?tab=replies",
   });
   return "reply";
 }
@@ -384,7 +384,7 @@ async function maybeFaultOff(db: SupabaseClient, fault: Fault) {
   await notifyAdmins(null, "outreach", {
     title: `Draper stopped using "${FAULT_LABEL[fault]}"`,
     body: `${count} replies said it got that fact wrong. No new email will claim it until you switch it back on, on the Draper page.`,
-    link: "/admin/outreach#replies",
+    link: "/admin/outreach?tab=replies",
   });
 }
 
@@ -492,7 +492,7 @@ async function makeLead(
   // Before 0066 the pipeline doesn't know the "outreach" source yet.
   if (!r.ok && /source|check constraint/i.test(r.message)) r = await createLeadOp(db, actorId, { ...input, source: "other" }, createdNote);
   if (!r.ok) {
-    await notifyAdmins(null, "outreach", { title: `Couldn't add ${p.business_name ?? "a reply"} to the pipeline`, body: r.message, link: "/admin/outreach#replies" });
+    await notifyAdmins(null, "outreach", { title: `Couldn't add ${p.business_name ?? "a reply"} to the pipeline`, body: r.message, link: "/admin/outreach?tab=replies" });
     return null;
   }
   await db.from("outreach_replies").update({ lead_id: r.id }).eq("id", reply.id);
