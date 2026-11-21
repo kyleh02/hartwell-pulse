@@ -174,6 +174,10 @@ export interface PsiSummary {
   error?: string;
   fcpMs: number | null;
   lcpMs: number | null;
+  /** Cumulative layout shift, unitless (0.25 or more is Google's "poor"). */
+  cls: number | null;
+  /** Total blocking time in ms (600 or more is Google's "poor" on a phone). */
+  tbtMs: number | null;
   finalUrl: string | null;
   requestUrls: string[];
   /** PageSpeed's phone screenshot, a data: URI. */
@@ -182,7 +186,7 @@ export interface PsiSummary {
 
 /** The parts of a PageSpeed Insights v5 response Draper uses. */
 export function summarisePsi(json: unknown): PsiSummary {
-  const empty: PsiSummary = { ok: false, fcpMs: null, lcpMs: null, finalUrl: null, requestUrls: [], screenshot: null };
+  const empty: PsiSummary = { ok: false, fcpMs: null, lcpMs: null, cls: null, tbtMs: null, finalUrl: null, requestUrls: [], screenshot: null };
   const j = json as {
     error?: { message?: string };
     lighthouseResult?: {
@@ -203,11 +207,15 @@ export function summarisePsi(json: unknown): PsiSummary {
   const num = (k: string) => (typeof a[k]?.numericValue === "number" ? Math.round(a[k].numericValue!) : null);
   const fcpMs = num("first-contentful-paint");
   const lcpMs = num("largest-contentful-paint");
+  const clsRaw = a["cumulative-layout-shift"]?.numericValue;
   return {
     ok: fcpMs !== null && lcpMs !== null,
     error: fcpMs === null || lcpMs === null ? "PageSpeed didn't report paint times" : undefined,
     fcpMs,
     lcpMs,
+    // Kept to three places: it's a small decimal, and rounding it whole would lose it.
+    cls: typeof clsRaw === "number" ? Math.round(clsRaw * 1000) / 1000 : null,
+    tbtMs: num("total-blocking-time"),
     finalUrl: lh.finalDisplayedUrl ?? lh.finalUrl ?? null,
     requestUrls: (a["network-requests"]?.details?.items ?? []).map((i) => i.url ?? "").filter(Boolean),
     screenshot: a["final-screenshot"]?.details?.data ?? null,
@@ -231,10 +239,32 @@ export interface Facts {
   scriptBuilt: boolean;
   pixelPageViews: Record<string, number>;
   tags: Tags;
+  /** 0067: Google's layout shift and blocking time, and whether the page is set up for phones (null: couldn't tell). */
+  cls?: number | null;
+  tbtMs?: number | null;
+  mobileViewport?: boolean | null;
 }
 
 export const SLOW_FCP_MS = 4000;
 export const SLOW_LCP_MS = 6000;
+/** Google's "poor" lines for a phone. */
+export const POOR_CLS = 0.25;
+export const POOR_TBT_MS = 600;
+
+/**
+ * Whether the page tells a phone to lay it out at the phone's width: a
+ * viewport meta tag with width=device-width. Without one, a phone shows the
+ * desktop page shrunk to fit and the customer pinches and zooms.
+ */
+export function hasMobileViewport(html: string): boolean {
+  for (const m of html.matchAll(/<meta\b[^>]*>/gi)) {
+    const tag = m[0];
+    if (!/\bname\s*=\s*["']?viewport\b/i.test(tag)) continue;
+    const content = /\bcontent\s*=\s*(["'])(.*?)\1/i.exec(tag)?.[2] ?? "";
+    if (/width\s*=\s*device-width/i.test(content)) return true;
+  }
+  return false;
+}
 
 /** The ad signal: a Google Ads tag or a Meta Pixel. Needed to qualify at all. */
 export function hasAdSignal(tags: Tags): boolean {
@@ -255,6 +285,12 @@ export function faultsOf(f: Facts): Fault[] {
   if (f.phoneInHtml && !f.telLink && !f.scriptBuilt) out.push("phone_not_tappable");
   if (Object.values(f.pixelPageViews).some((n) => n >= 2)) out.push("pixel_double");
   if (f.tags.ua.length > 0 && f.tags.ga4.length === 0) out.push("old_analytics");
+  // 0067. From the same phone test: the page jumps about while it loads, or
+  // can't respond for a stretch after it shows. And from the HTML itself:
+  // no phone layout at all. A page built by script is left alone.
+  if (f.psiOk && (f.cls ?? 0) >= POOR_CLS) out.push("layout_shift");
+  if (f.psiOk && (f.tbtMs ?? 0) >= POOR_TBT_MS) out.push("page_freezes");
+  if (f.mobileViewport === false && !f.scriptBuilt) out.push("no_mobile_layout");
   return out;
 }
 

@@ -14,6 +14,7 @@ import {
   faultsOf,
   findTags,
   hasAdSignal,
+  hasMobileViewport,
   hasTelLink,
   isBlockPage,
   looksScriptBuilt,
@@ -154,6 +155,8 @@ export interface Measurement {
   phone: string | null;
   telLink: boolean;
   scriptBuilt: boolean;
+  /** 0067: set up for phones (a device-width viewport); null when the page couldn't be read. */
+  mobileViewport: boolean | null;
   adSignal: boolean;
   faults: Fault[];
   /** PageSpeed's phone screenshot as a data: URI. */
@@ -221,6 +224,9 @@ export async function measureSite(input: string): Promise<Measurement> {
     scriptBuilt,
     pixelPageViews: views,
     tags,
+    cls: psi.cls,
+    tbtMs: psi.tbtMs,
+    mobileViewport: readable ? hasMobileViewport(page.html) : null,
   };
 
   const error =
@@ -238,7 +244,8 @@ export async function measureSite(input: string): Promise<Measurement> {
     status,
     measuredAt,
     error,
-    psi: { ok: psi.ok, error: psi.error, fcpMs: psi.fcpMs, lcpMs: psi.lcpMs, finalUrl: psi.finalUrl, requests: psi.requestUrls.length },
+    psi: { ok: psi.ok, error: psi.error, fcpMs: psi.fcpMs, lcpMs: psi.lcpMs, cls: psi.cls, tbtMs: psi.tbtMs, finalUrl: psi.finalUrl, requests: psi.requestUrls.length },
+    mobileViewport: facts.mobileViewport ?? null,
     httpStatus: http.status,
     httpsStatus: https.status,
     https: httpsState,
@@ -255,7 +262,7 @@ export async function measureSite(input: string): Promise<Measurement> {
     raw: {
       https: { status: https.status, finalUrl: https.finalUrl, errorCode: https.errorCode, error: https.error },
       http: { status: http.status, finalUrl: http.finalUrl, errorCode: http.errorCode, error: http.error },
-      psi: { ok: psi.ok, error: psi.error, fcpMs: psi.fcpMs, lcpMs: psi.lcpMs, finalUrl: psi.finalUrl },
+      psi: { ok: psi.ok, error: psi.error, fcpMs: psi.fcpMs, lcpMs: psi.lcpMs, cls: psi.cls, tbtMs: psi.tbtMs, finalUrl: psi.finalUrl },
       requestUrls: psi.requestUrls.slice(0, 400),
     },
   };

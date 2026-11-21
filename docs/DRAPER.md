@@ -21,8 +21,13 @@ migration, merged into `main` 20 November: Kyle adds Draper in claude.ai and
 approves it on the portal; both Draper and Draper advisor are connected.
 Holidays: Kyle dropped the state table on 20 November; Pulse skips only the
 seven national public holidays, worked out itself, so sending days exist and
-nothing waits on a download. Next: Stage 8, pages, then Stage 9, the
-end-to-end test.**
+nothing waits on a download. 21 November: the first real morning run (test
+mode) read 15 sites and submitted none, because most 4WD sites are only
+slow and a prospect needs two faults. Kyle chose three more faults and a
+deliberately broken sample workshop on the portal for a forced end-to-end
+test; built on the branch, waiting for Kyle to paste 0067. Next: the
+forced test (every step once, into the test inbox), then Stage 8 pages and
+the daily run.**
 Branch `draper` (renamed
 from `draper-outreach` the same day, at Kyle's request), cut from `main` at
 80fbe0b. Next step: Stage 2, the no-repeat rule.
@@ -681,6 +686,11 @@ Can start now:
    shared quota refuses the speed test. The same project serves the Gmail
    API in Stage 5.
 
+11. **Three new faults and the forced test (21 Nov):** paste 0067, then its
+   probe (3 checks). Then in a claude.ai chat with Draper and web search
+   on, give it the forced-test prompt (below, in the 21 November log
+   entry): one site only, the sample workshop. Pulse confirms an hour on;
+   the pair sends on the next sending day into the test inbox; reply to it.
 10. **For Stage 7:** in claude.ai, Settings, Connectors, Add custom
    connector: name Draper, address
    `https://portal.hartwelldigital.com/api/mcp/outreach`; connect and press
@@ -828,3 +838,47 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
   the big national ones. Built `nationalHolidays()` (Easter computed,
   weekend stand-ins), removed the empty table and the "year not covered"
   rule; the brief's target now counts real sending days.
+- **21 November 2026.** Kyle ran the first morning run from claude.ai with
+  Draper (test mode). It read 15 sites, measured 7, submitted none: four
+  were only slow on a phone (one fault, even across four pages each), two
+  had no ad signal, one had no fault at all. Draper's own read: the
+  two-fault rule is the bottleneck, and it lacked a guide to how faults
+  are measured. Kyle also switched the master switch on; test mode still
+  wins, so nothing reached a business. The cron job was confirmed ticking
+  every five minutes in Vercel's logs.
+  - **Kyle chose to add three faults** (over "one fault on two pages
+    counts", which would have made the first email's "we noticed another
+    thing" point at the same problem): `layout_shift` (Google's layout
+    shift 0.25 or more), `page_freezes` (total blocking time 600 ms or
+    more on a phone), `no_mobile_layout` (no device-width viewport tag, a
+    page not built by script). All from the same measurement, no form
+    sent. 0067 widens the four fault constraints and keeps the readings
+    (`psi_cls`, `psi_tbt_ms`, `mobile_viewport`, written apart from the
+    insert). `schema.test.ts` now reads a constraint's newest definition.
+  - The brief carries `FAULT_GUIDE` (tokens.ts): how each fault is decided
+    and how to say it without a figure, and where each tends to hide.
+    outreach_measure reports the layout shift, blocking time and phone
+    layout too, marked "for choosing only".
+  - **The sample workshop** (Kyle chose the portal over the website):
+    `/sample-workshop`, `/canopies`, `/contact`, and a Gallery menu link
+    that is a real 404; route handlers serving plain HTML (a Next page
+    would add the viewport tag it must lack), public in middleware,
+    noindex. Hartwell Digital's own name and ABN (honest for the ABN
+    check), Caloundra QLD 4551 (lane 1's area), a fictional number in
+    ACMA's 07 5550 range that isn't a tap-to-call link, and
+    workshop@sample-workshop.invalid, which can never receive mail. A
+    no-repeat check of exactly those details through Draper said allowed.
+    Expected faults: broken_page, phone_not_tappable, no_mobile_layout,
+    and the Google Ads tag for the ad signal.
+  - The Draper page shows the last seven days' yield (added, submitted,
+    confirmed, dropped, refused, sent, and added per submit).
+  - **The forced-test prompt** for a claude.ai chat with Draper: "Forced
+    end-to-end test. Use only this one site and don't search for others:
+    https://portal.hartwelldigital.com/sample-workshop. It's Hartwell
+    Digital's own sample page, ABN 44 286 503 049 (active, certainly
+    Hartwell Digital's), in Caloundra QLD 4551. Check it, add it with the
+    address on its contact page (a general inbox), measure the home page
+    and the canopies page, write the slots and submit. Then stop."
+  - Not done, for Kyle's yes in the Draper chat: letting directories be
+    used to find business names (addresses still only from the business's
+    own site), a run-instructions change through Draper advisor.

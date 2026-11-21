@@ -5,6 +5,7 @@ import {
   faultsOf,
   findTags,
   hasAdSignal,
+  hasMobileViewport,
   hasTelLink,
   isBlockPage,
   looksScriptBuilt,
@@ -157,6 +158,45 @@ test("each of the six faults, by its own rule", () => {
   assert.deepEqual(faultsOf({ ...base, phoneInHtml: true, telLink: false }), ["phone_not_tappable"]);
   assert.deepEqual(faultsOf({ ...base, pixelPageViews: { "1": 2 } }), ["pixel_double"]);
   assert.deepEqual(faultsOf({ ...base, tags: { aw: ["AW-1"], metaPixel: [], ga4: [], ua: ["UA-1-1"] } }), ["old_analytics"]);
+});
+
+test("the three 0067 faults: jumps around, freezes, not set up for phones", () => {
+  assert.deepEqual(faultsOf({ ...base, cls: 0.25 }), ["layout_shift"]);
+  assert.deepEqual(faultsOf({ ...base, cls: 0.249 }), []);
+  assert.deepEqual(faultsOf({ ...base, tbtMs: 600 }), ["page_freezes"]);
+  assert.deepEqual(faultsOf({ ...base, tbtMs: 599 }), []);
+  assert.deepEqual(faultsOf({ ...base, mobileViewport: false }), ["no_mobile_layout"]);
+  assert.deepEqual(faultsOf({ ...base, mobileViewport: true }), []);
+  // Couldn't tell, or the speed test didn't run, or a page built by script: no claim.
+  assert.deepEqual(faultsOf({ ...base, mobileViewport: null }), []);
+  assert.deepEqual(faultsOf({ ...base, psiOk: false, cls: 0.6, tbtMs: 3000 }), []);
+  assert.deepEqual(faultsOf({ ...base, mobileViewport: false, scriptBuilt: true }), []);
+  // A slow site that also jumps about now has two faults, one for each email.
+  assert.ok(qualifies(true, faultsOf({ ...base, fcpMs: 5000, cls: 0.4 })));
+});
+
+test("set up for phones: a device-width viewport tag, however it's written", () => {
+  assert.equal(hasMobileViewport('<meta name="viewport" content="width=device-width, initial-scale=1">'), true);
+  assert.equal(hasMobileViewport("<META content='initial-scale=1,width = device-width' NAME=viewport>"), true);
+  assert.equal(hasMobileViewport('<meta name="viewport" content="width=1024">'), false);
+  assert.equal(hasMobileViewport('<meta name="description" content="width=device-width">'), false);
+  assert.equal(hasMobileViewport("<head><title>Old site</title></head>"), false);
+});
+
+test("PageSpeed's layout shift and blocking time are read, the shift to three places", () => {
+  const s = summarisePsi({
+    lighthouseResult: {
+      audits: {
+        "first-contentful-paint": { numericValue: 1800 },
+        "largest-contentful-paint": { numericValue: 2600 },
+        "cumulative-layout-shift": { numericValue: 0.31234 },
+        "total-blocking-time": { numericValue: 1240.6 },
+      },
+    },
+  });
+  assert.equal(s.cls, 0.312);
+  assert.equal(s.tbtMs, 1241);
+  assert.equal(summarisePsi({ lighthouseResult: { audits: {} } }).cls, null);
 });
 
 test("what doesn't count as a fault", () => {

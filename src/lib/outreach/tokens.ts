@@ -36,6 +36,23 @@ export const TOKEN_GUIDE = `Never write a number, a weekday, a month, a page nam
 [[pageviews]] how many times the Meta Pixel counted one visit ("twice")
 Any digit, weekday or month written out is refused.`;
 
+/**
+ * How Pulse decides each fault, and how to put it in a slot without a figure,
+ * for the morning run's brief. The first run had to guess at these. Figures
+ * here are for choosing sites; a slot still never carries one.
+ */
+export const FAULT_GUIDE = `How Pulse measures each fault, and how to say it (never with a figure):
+slow_mobile: Google's phone test took 4 seconds or more to show anything, or 6 or more for the main content. Say how long with [[first_paint]] or [[largest_paint]].
+broken_page: a page in their main menu answers with an error. Name it with [[broken_page]] and pass broken_page_name.
+not_secure: HTTPS fails on its certificate, or only plain HTTP loads. Browsers warn visitors the site isn't secure.
+phone_not_tappable: a phone number shows in the page but isn't a tap-to-call link. People on a phone can't tap it to ring.
+pixel_double: the Meta Pixel counts one visit [[pageviews]].
+old_analytics: only the old Google Analytics tag, which Google has switched off, with no GA4 alongside it.
+layout_shift: on Google's phone test the page jumps about while it loads (in Google's poor range). Things move as it loads, so people tap the wrong thing.
+page_freezes: on Google's phone test the page is too busy to respond for a stretch after it shows (in Google's poor range). It doesn't answer a tap straight away.
+no_mobile_layout: the page has no phone layout, so a phone shows the desktop page shrunk down and people pinch and zoom.
+Where they tend to be: builders that load a lot of script freeze; sliders and late banners jump; older hand-built sites have no phone layout and plain-text phone numbers.`;
+
 /** Every [[token]] in a text, unknown ones included. */
 export function tokensIn(text: string): string[] {
   return [...text.matchAll(/\[\[\s*([a-z_]+)\s*\]\]/g)].map((m) => m[1]);

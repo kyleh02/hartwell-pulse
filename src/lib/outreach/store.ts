@@ -47,6 +47,12 @@ export async function storeMeasurement(
     .single();
   if (error) throw new Error(`Couldn't store the measurement: ${error.message}`);
   const id = (data as { id: string }).id;
+  // 0067's readings, in their own write so a database without the columns
+  // still keeps the measurement (the faults themselves are in `faults`).
+  await db
+    .from("outreach_measurements")
+    .update({ psi_cls: m.psi.cls, psi_tbt_ms: m.psi.tbtMs, mobile_viewport: m.mobileViewport })
+    .eq("id", id);
 
   if (!m.screenshot) return { id };
   const match = /^data:(image\/[a-z+]+);base64,(.+)$/.exec(m.screenshot);

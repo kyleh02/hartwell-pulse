@@ -31,6 +31,11 @@ const isPublicRoute = createRouteMatcher([
   "/api/mcp/(.*)",
   "/api/oauth/(.*)",
   "/.well-known/(.*)",
+  // Draper's sample workshop (src/lib/outreach/sample-site.ts): a made-up,
+  // deliberately broken business page for the end-to-end test. Pulse and
+  // Google's speed test must load it signed out. Hidden from search.
+  "/sample-workshop",
+  "/sample-workshop/(.*)",
   // The feedback email's number buttons. The token in the address is the
   // credential, and nothing is saved until Send is pressed on the page.
   "/nps/(.*)",

@@ -250,6 +250,22 @@ export default async function DraperPage({
     return { prospect_id: l.id, business: l.business_name ?? "A business", later_on: l.later_on, due: l.later_on <= todayMel, thread_url: t ? gmailThreadUrl(t) : null };
   });
 
+  // ---------- yield: what the last seven days of runs produced ----------
+  const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const { data: evRows } = await supabase
+    .from("outreach_events")
+    .select("kind")
+    .in("kind", ["found", "submitted", "refused", "confirmed", "dropped", "sent"])
+    .gte("at", weekAgo)
+    .limit(5000);
+  const tally: Record<string, number> = {};
+  for (const e of (evRows as { kind: string }[] | null) ?? []) tally[e.kind] = (tally[e.kind] ?? 0) + 1;
+  const added = tally.found ?? 0;
+  const submitted = tally.submitted ?? 0;
+  const yieldLine = added
+    ? `Last 7 days: ${added} added, ${submitted} submitted, ${tally.confirmed ?? 0} confirmed, ${tally.dropped ?? 0} dropped, ${tally.refused ?? 0} refused, ${tally.sent ?? 0} sent.${submitted ? ` About ${Math.round(added / submitted)} added for each one submitted.` : " Nothing submitted yet."}`
+    : "Last 7 days: no businesses added yet.";
+
   // ---------- Stage 7: the two connectors ----------
   const origin = await requestOrigin();
   const conDefs = [
@@ -347,6 +363,7 @@ export default async function DraperPage({
               Settings v{settings.version} · template v{template?.version ?? "?"} · run instructions v
               {run?.version ?? "?"} · {prospectsRes.count ?? 0} prospects · {prints.count ?? 0} fingerprints
             </p>
+            <p className="mt-1 text-[12px] text-pulse-text-mute">{yieldLine}</p>
           </Card>
 
           {/* ---------- the no-repeat rule ---------- */}

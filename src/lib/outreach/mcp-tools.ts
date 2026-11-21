@@ -10,7 +10,7 @@ import { qualifies } from "./measure-rules.ts";
 import { submitDraft } from "./submit.ts";
 import { lookupMxProvider } from "./mx.ts";
 import { normaliseAbn, normaliseDomain, normaliseEmail } from "./normalise.ts";
-import { pageNamesFor, secondsWords, TOKEN_GUIDE } from "./tokens.ts";
+import { FAULT_GUIDE, pageNamesFor, secondsWords, TOKEN_GUIDE } from "./tokens.ts";
 import { SLOTS, type SlotName } from "./lint.ts";
 import { firstEmailCap, firstEmailsToday, MAX_FIRST_EMAILS_A_DAY } from "./limits.ts";
 import { addDays, calendar, melbourneDate, melbourneInstant, nextSendingDay } from "./schedule.ts";
@@ -199,6 +199,9 @@ export const DRAPER_TOOLS: Tool[] = [
           "",
           "TOKENS:",
           TOKEN_GUIDE,
+          "",
+          "FAULTS:",
+          FAULT_GUIDE,
           "",
           `LESSONS${l ? ` v${l.version}` : ""}:`,
           l?.body ?? "None yet.",
@@ -403,6 +406,7 @@ export const DRAPER_TOOLS: Tool[] = [
               `Faults on this page: ${m.faults.length ? m.faults.map((f) => `${f} (${FAULT_LABEL[f]})`).join(", ") : "none"}.`,
               `Ad signal on this page: ${m.adSignal ? "yes" : "no"}${tags.length ? ` (tags: ${tags.join(", ")})` : ""}.`,
               m.psi.fcpMs !== null ? `First paint ${secondsWords(m.psi.fcpMs)}, largest paint ${m.psi.lcpMs !== null ? secondsWords(m.psi.lcpMs) : "not measured"} (write [[first_paint]] or [[largest_paint]], never the figure).` : "No speed test result.",
+              `Layout shift ${m.psi.cls ?? "not measured"} (poor from 0.25), blocking time ${m.psi.tbtMs !== null ? `${m.psi.tbtMs} ms` : "not measured"} (poor from 600 ms), phone layout ${m.mobileViewport === null ? "couldn't tell" : m.mobileViewport ? "yes" : "no"}. For choosing only: never put these figures in a slot.`,
               broken.length ? `Broken menu pages: ${broken.map((l) => `${l.label || l.url} (${l.status})`).join(", ")} (use [[broken_page]] and pass broken_page_name).` : "",
               `[[page]] may name this page as: ${[...pageNamesFor(m.url, m.menu.map((l) => l.label))].slice(0, 8).join(", ")}.`,
             ]

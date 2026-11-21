@@ -28,9 +28,14 @@ const sql = readFileSync(
   "utf8",
 ).replace(/\r/g, "");
 
-/** The quoted values in a named constraint, which sits on one line. */
+/** Later migrations that redefine a constraint, newest first. 0067 widened the four fault lists. */
+const LATER = ["0067_draper_faults.sql"].map((f) =>
+  readFileSync(new URL(`../../../supabase/migrations/${f}`, import.meta.url), "utf8").replace(/\r/g, ""),
+);
+
+/** The quoted values in a named constraint, which sits on one line: its newest definition. */
 function constraintValues(name: string): string[] {
-  const line = sql.split("\n").find((l) => l.includes(`constraint ${name} `));
+  const line = [...LATER, sql].map((s) => s.split("\n").find((l) => l.includes(`constraint ${name} `))).find(Boolean);
   assert.ok(line, `constraint ${name} is missing from 0062`);
   // From the constraint on, so a column default on the same line is skipped.
   const check = line.slice(line.indexOf(`constraint ${name} `));

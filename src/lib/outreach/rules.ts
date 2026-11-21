@@ -8,7 +8,13 @@
  * Pure data, no imports, so the test runner and the browser can both load it.
  */
 
-/** The six faults Pulse measures. Nothing else is ever claimed. */
+/**
+ * The faults Pulse measures. Nothing else is ever claimed. The first six are
+ * 0062's; the last three are 0067's (Kyle, 21 Nov 2026), added after the first
+ * morning run found that most sites in the 4WD lane are only slow, so the
+ * two-fault rule let nothing through. All nine come from the one measurement
+ * and none needs a form sent.
+ */
 export const FAULTS = [
   "slow_mobile",
   "broken_page",
@@ -16,6 +22,9 @@ export const FAULTS = [
   "phone_not_tappable",
   "pixel_double",
   "old_analytics",
+  "layout_shift",
+  "page_freezes",
+  "no_mobile_layout",
 ] as const;
 export type Fault = (typeof FAULTS)[number];
 
@@ -27,6 +36,9 @@ export const FAULT_LABEL: Record<Fault, string> = {
   phone_not_tappable: "Phone number can't be tapped",
   pixel_double: "Meta Pixel counted twice",
   old_analytics: "Old Google Analytics only",
+  layout_shift: "Jumps around while loading",
+  page_freezes: "Freezes after it appears",
+  no_mobile_layout: "Not set up for phones",
 };
 
 export const PROSPECT_STATUSES = [
