@@ -884,3 +884,19 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
     own site), a run-instructions change through Draper advisor.
   - Later the same day: Kyle pasted 0067; its probe passed 3 of 3. Merged
     into `main` and deployed.
+  - **The daily morning run is a Claude Code cloud routine** (Kyle: "every
+    day; small businesses still check their inboxes on weekends"):
+    "Draper morning run", `trig_01WhTPoCiehhEx3CPwyJoQMz`
+    (claude.ai/code/routines), cron `30 18 * * *` UTC (5:30am Melbourne in
+    daylight saving, 4:30am in winter), Sonnet 5.5, no repository, the
+    **Draper connector only** (the server first attached every connector
+    on the account, Gmail, Microsoft 365, Drive, the pipeline and the
+    advisor included; cut back by hand), tools WebSearch, WebFetch and
+    `mcp__Draper_Hartwell_Pulse_Outreach`. Its prompt forbids the advisor's
+    writes and any pipeline tool, any contact with a business, and guessed
+    addresses. It runs in the **"Cloud" environment, which Kyle set to full
+    network access**: both environments started with an allow-list, and
+    the first two check runs could search but not open any business's
+    site. The third check run read sites, used ABN Lookup, added,
+    measured and dropped as it should. It ends with a phone notification.
+  - Kyle still has to tick Send on weekends in Settings for weekend sends.
