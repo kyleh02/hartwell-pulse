@@ -122,6 +122,11 @@ export function lintSlot(slot: SlotName, raw: string, rendered: string, opts: Li
       add("batch", "uses [[day]] or [[area]]; the first email never says when or where we looked");
     }
     if (slot === "second_finding" && used.includes("ad_platform")) add("ad fact", "mentions their ads; only the first email does, from that morning's check");
+    // A load time is Google's phone test, not their phone: an owner whose site
+    // opens fast on home wifi reads a bare "a phone took 27 seconds" as wrong.
+    if ((used.includes("first_paint") || used.includes("largest_paint")) && !/\bgoogle/i.test(raw)) {
+      add("source", "gives a load time without saying it was Google's own speed test");
+    }
     if (slot === "finding" && !/^\s*Your \[\[\s*ad_platform\s*\]\] ads\b/.test(raw)) add("opener", 'must start "Your [[ad_platform]] ads"');
     if (/\byour (web ?)?site\b/i.test(blanked) && !/\[\[\s*(page|broken_page)\s*\]\]/.test(raw)) add("no page", 'says "your site" without naming the page with [[page]]');
   }

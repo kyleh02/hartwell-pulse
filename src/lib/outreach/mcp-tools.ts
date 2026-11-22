@@ -956,6 +956,39 @@ export const DRAPER_TOOLS: Tool[] = [
     },
   },
   {
+    name: "outreach_redo_draft",
+    title: "Withdraw a draft to write it again",
+    description:
+      "Withdraw a business's emails that haven't been sent (being checked or queued) so its draft can be written and submitted again, keeping the business, its measurements and its ad checks. For a draft that would go out wrong. Never touches a business that has been emailed. Pass confirm: \"redo\". Only after Kyle has said yes in this chat.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        prospect_id: ID,
+        why: { type: "string", description: "What was wrong with the draft, for the change log." },
+        confirm: { type: "string", description: 'Must be exactly "redo".' },
+      },
+      required: ["prospect_id", "why", "confirm"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    advisorOnly: true,
+    async run(a, ctx) {
+      const p = await prospectOf(ctx, need(a, "prospect_id", 40));
+      const why = need(a, "why", 600);
+      if (str(a, "confirm", 10) !== "redo") throw new InputError('Pass confirm: "redo" once Kyle has said yes.');
+      if (!["found", "measured", "queued"].includes(p.status)) throw new InputError(`This business is ${p.status}; there's no unsent draft to withdraw.`);
+      const { data: sent } = await ctx.sb.from("outreach_messages").select("id").eq("prospect_id", p.id).not("sent_at", "is", null).limit(1);
+      if (sent?.length) throw new InputError("This business has been emailed; its draft can't be withdrawn.");
+      // Unsent only (the delete trigger refuses a sent one anyway); its claims go with it.
+      const { error } = await ctx.sb.from("outreach_messages").delete().eq("prospect_id", p.id).is("sent_at", null);
+      if (error) throw new Error(error.message);
+      await ctx.sb.from("outreach_prospects").update({ status: "measured" }).eq("id", p.id);
+      await event(ctx, p.id, "cancelled", { why, redo: true });
+      await log(ctx, `Draft withdrawn to be written again: ${p.business_name ?? p.id}`, why);
+      return { text: `Withdrawn. ${p.business_name ?? "The business"} is waiting for its draft again, with its measurements and ad checks kept; refusals count afresh. Submit when ready.` };
+    },
+  },
+  {
     name: "outreach_set_template",
     title: "Install a template",
     description:

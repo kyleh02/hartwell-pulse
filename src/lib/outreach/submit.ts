@@ -55,7 +55,8 @@ export async function submitDraft(
       .eq("prospect_id", prospect.id)
       .order("measured_at"),
     db.from("outreach_messages").select("id", { count: "exact", head: true }).eq("prospect_id", prospect.id),
-    db.from("outreach_events").select("id", { count: "exact", head: true }).eq("prospect_id", prospect.id).eq("kind", "refused"),
+    // Refusals since the draft was last withdrawn to be written again.
+    db.from("outreach_events").select("kind, at").eq("prospect_id", prospect.id).in("kind", ["refused", "cancelled"]),
   ]);
   const readErr = [contactRes, laneRes, templateRes, settingsRes, stateRes, measuresRes, messagesRes, refusedRes].find((r) => r.error)?.error;
   if (readErr) return { ok: false, reasons: [`Couldn't read what's on record: ${readErr.message}`] };
@@ -116,7 +117,11 @@ export async function submitDraft(
     faultsOff: ((stateRes.data as { faults_off: Fault[] } | null)?.faults_off ?? []) as Fault[],
     measurements: (measuresRes.data as MeasurementRow[] | null) ?? [],
     existingMessages: messagesRes.count ?? 0,
-    refusals: refusedRes.count ?? 0,
+    refusals: (() => {
+      const rows = (refusedRes.data as { kind: string; at: string }[] | null) ?? [];
+      const since = rows.filter((r) => r.kind === "cancelled").map((r) => r.at).sort().pop() ?? "";
+      return rows.filter((r) => r.kind === "refused" && r.at > since).length;
+    })(),
     ads: liveAds(evidence, new Date(), ADS_MAX_AGE_HOURS.submit),
     gstRegistered: prospect.gst_registered,
   };

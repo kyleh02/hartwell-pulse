@@ -6,7 +6,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { verifySubmission, type MeasurementRow, type SubmitContext, type SubmitInput } from "./verify.ts";
+import { tidyPageName, verifySubmission, type MeasurementRow, type SubmitContext, type SubmitInput } from "./verify.ts";
 import { renderMessages, reviewLine, isAdsTemplate } from "./render.ts";
 import { TEMPLATE_ADS } from "./template-ads.ts";
 import { bestFault, FAULT_RANK, FAULTS } from "./rules.ts";
@@ -206,4 +206,28 @@ test("the offer line counts what else is on record", () => {
   assert.match(r.first.body, /\n\nReply yes for a free ads review, emailed within two working days, no call needed\.\n\n/);
   // No live ads: the template can't be filled at all.
   assert.match(renderMessages(T, { pageName: "home", firstName: null, otherFaults: 0, optOut: "A", adPlatform: null, slots: { finding: "x", why_and_fix: "y", second_finding: "" } }).problems.join(" "), /No live ads/);
+});
+
+test("a page is named as its menu names it, in sentence case", () => {
+  assert.equal(tidyPageName("Suspension Lifts & Airbags"), "suspension lifts & airbags");
+  assert.equal(tidyPageName("4wd suspension lift airbag"), "4WD suspension lift airbag");
+  assert.equal(tidyPageName("UTE Trays"), "UTE trays");
+  assert.equal(tidyPageName("12-volt systems"), "12-volt systems");
+  // Typed from the address, it still reads as the menu has it.
+  const url = "https://vanbuilds.com.au/van-builds-fit-outs/";
+  const label = { ...vans, url, menu_links: [{ url, label: "Van Builds & Fit-outs", status: 200, blocked: false }] };
+  const v = verifySubmission(ctx({ measurements: [label, home] }), draft({ page_name: "van builds fit outs" }));
+  assert.equal(v.ok, true, v.ok ? "" : v.reasons.join("\n"));
+  if (v.ok) assert.match(v.first.body, /on your van builds & fit-outs page the Meta Pixel/);
+});
+
+test("a load time always says it was Google's own speed test", () => {
+  const slow = (finding: string) =>
+    verifySubmission(
+      ctx({ measurements: [{ ...vans, faults: ["slow_mobile"], pixel_pageviews: {} }] }),
+      draft({ claims: [{ fault: "slow_mobile", measurement_id: "m1", slot: "finding" }] }, { finding, why_and_fix: "Those are paid clicks, and plenty of people on a phone won't wait that long. A lighter page is the fix." }),
+    );
+  refused(slow("Your [[ad_platform]] ads send people to your website, and on a phone your [[page]] page took [[largest_paint]] to show its main content."), /Google's own speed test/);
+  const v = slow("Your [[ad_platform]] ads send people to your website. In Google's own speed test, your [[page]] page took [[largest_paint]] to show its main content on a phone.");
+  assert.equal(v.ok, true, v.ok ? "" : v.reasons.join("\n"));
 });

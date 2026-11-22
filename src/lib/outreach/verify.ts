@@ -104,6 +104,20 @@ export type Verified =
 
 const BROKEN = (s: number | null) => s !== null && (s === 404 || s === 410 || s >= 500);
 
+/**
+ * A page name as it reads mid-sentence: lower case, but trade words keep
+ * their capitals ("4WD", "UTE"), and "4wd" typed from an address becomes
+ * "4WD". "Suspension Lifts & Airbags" becomes "suspension lifts & airbags".
+ */
+export function tidyPageName(name: string): string {
+  return name
+    .trim()
+    .replace(/\s+/g, " ")
+    .split(" ")
+    .map((w) => (/^\d+wd$/i.test(w) ? w.toUpperCase() : /\d/.test(w) || /^[A-Z]{2,4}$/.test(w) ? w : w.toLowerCase()))
+    .join(" ");
+}
+
 export function verifySubmission(ctx: SubmitContext, input: SubmitInput): Verified {
   const reasons: string[] = [];
   const no = (r: string) => reasons.push(r);
@@ -192,6 +206,18 @@ export function verifySubmission(ctx: SubmitContext, input: SubmitInput): Verifi
   })();
   const areaOk = !input.area || allowedAreas(ctx.prospect).has(nameKey(input.area));
   if (!pageOk) no(`page_name "${input.page_name}" doesn't match the measured page's address or menu label.`);
+  // The ads template names a page the way the site's own menu does ("your
+  // suspension lifts & airbags page"), never as an address turned into words
+  // ("your 4wd suspension lift airbag page", which the first run wrote).
+  const pageText = (() => {
+    const typed = tidyPageName(input.page_name);
+    if (!ads || !pageOk || !firstMeasurement) return typed;
+    if (pageNamesFor(firstMeasurement.url).has("home")) return typed;
+    const label =
+      firstMeasurement.menu_links.find((l) => l.url === firstMeasurement.url && nameKey(l.label))?.label ??
+      (firstFault === "broken_page" ? firstMeasurement.menu_links.find((l) => BROKEN(l.status) && nameKey(l.label) === nameKey(input.page_name))?.label : undefined);
+    return label ? tidyPageName(label) : typed;
+  })();
   if (input.area && !areaOk) no(`area "${input.area}" isn't this business's suburb or its postcode's region.`);
 
   const filled = {} as Record<SlotName, string>;
@@ -266,7 +292,7 @@ export function verifySubmission(ctx: SubmitContext, input: SubmitInput): Verifi
           no(`[[page]] in {${slot}}: page_name must match the measured page.`);
           return null;
         }
-        return input.page_name.trim();
+        return pageText;
       }
       case "area": {
         if (!areaOk) {
@@ -295,7 +321,7 @@ export function verifySubmission(ctx: SubmitContext, input: SubmitInput): Verifi
 
   // ---------- render ----------
   const r = renderMessages(ctx.template, {
-    pageName: input.page_name,
+    pageName: pageText,
     firstName: ctx.contact.first_name,
     otherFaults,
     optOut: ctx.settings.opt_out_line,
@@ -327,7 +353,7 @@ export function verifySubmission(ctx: SubmitContext, input: SubmitInput): Verifi
       slots: {
         finding: input.slots.finding,
         why_and_fix: input.slots.why_and_fix,
-        page_name: input.page_name.trim(),
+        page_name: pageText,
         area: input.area?.trim() || null,
         broken_page_name: input.broken_page_name?.trim() || null,
       },

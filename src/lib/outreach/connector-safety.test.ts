@@ -46,10 +46,15 @@ test("it can't send, and its business check only ever says allowed or blocked", 
   assert.ok(!/sendRaw|buildMessage|gmail-access|from "\.\/gmail\.ts"|sender\.ts/.test(src), "imports the sending path");
   assert.ok(!/verdict\.blocks/.test(src), "hands block details back");
   assert.equal((src.match(/publicVerdict\(/g) ?? []).length, 2);
-  // Three deletes only: a prospect it inserted a moment earlier whose contact
-  // failed to save, and the advisor's clear of a day's never-emailed work
-  // (its unsent drafts, then the businesses).
-  assert.equal((src.match(/\.delete\(\)/g) ?? []).length, 3);
+  // Four deletes only: a prospect it inserted a moment earlier whose contact
+  // failed to save, the advisor's clear of a day's never-emailed work (its
+  // unsent drafts, then the businesses), and the advisor's withdrawal of one
+  // unsent draft to be written again.
+  assert.equal((src.match(/\.delete\(\)/g) ?? []).length, 4);
+  const redoAt = src.indexOf('name: "outreach_redo_draft"');
+  const redoBlock = src.slice(redoAt, src.indexOf('name: "outreach_set_template"'));
+  assert.match(redoBlock, /advisorOnly: true/);
+  assert.match(redoBlock, /\.delete\(\)\.eq\("prospect_id", p\.id\)\.is\("sent_at", null\)/);
   const clearAt = src.indexOf('name: "outreach_clear_unsent"');
   const clearBlock = src.slice(clearAt, src.indexOf('name: "outreach_set_lessons"'));
   assert.match(clearBlock, /advisorOnly: true/);
@@ -60,7 +65,7 @@ test("it can't send, and its business check only ever says allowed or blocked", 
 });
 
 test("the advisor's three writes are advisor only", () => {
-  for (const name of ["outreach_clear_unsent", "outreach_set_template", "outreach_set_lessons", "outreach_set_run_instructions", "outreach_set_test"]) {
+  for (const name of ["outreach_clear_unsent", "outreach_redo_draft", "outreach_set_template", "outreach_set_lessons", "outreach_set_run_instructions", "outreach_set_test"]) {
     const at = src.indexOf(`name: "${name}"`);
     assert.ok(at > 0, name);
     const next = src.indexOf("name: \"outreach_", at + 10);
