@@ -21,7 +21,9 @@ import {
   type Calendar,
 } from "./schedule.ts";
 import { fillTokens } from "./tokens.ts";
-import { renderFollowUp, renderMessages, type TemplateText } from "./render.ts";
+import { isAdsTemplate, renderFollowUp, renderMessages, type TemplateText } from "./render.ts";
+import { adsEvidenceFor } from "./ads.ts";
+import { ADS_MAX_AGE_HOURS, liveAds, platformWords } from "./ads-rules.ts";
 import { gmailAccessToken } from "./gmail-access.ts";
 import { buildMessage, findByMessageId, newMessageId, sendRaw, SENDER_EMAIL, threadSenders } from "./gmail.ts";
 import { checkReplies } from "./replies.ts";
@@ -314,6 +316,20 @@ async function sendClaimed(db: SupabaseClient, m: Msg, s: DraperSettings, cal: C
     }
   }
 
+  // The ads template says where their ads run. The ad-library check behind
+  // that must still be fresh when it goes (four days covers a weekend); Pulse
+  // can't re-read the libraries itself, so a stale check drops the email.
+  if (m.kind === "first") {
+    const { data: tRow } = await db.from("outreach_templates").select("first_subject, first_body").eq("version", m.template_version).maybeSingle();
+    if (tRow && isAdsTemplate(tRow as { first_subject: string; first_body: string })) {
+      const live = liveAds(await adsEvidenceFor(db, p.id), now, ADS_MAX_AGE_HOURS.send);
+      if (!live.platforms.length) {
+        await dropMessage(db, m, "Its ad-library check was more than four days old by the time it could send");
+        return "Dropped: the ads check went stale before sending";
+      }
+    }
+  }
+
   // The no-repeat rule, again, just before it goes.
   const verdict = await checkBusiness(
     db,
@@ -540,6 +556,19 @@ async function confirmNext(db: SupabaseClient, s: DraperSettings, cal: Calendar,
       }
     }
 
+    // The ads template: the ad-library check must still be fresh at
+    // confirmation, and it fills [[ad_platform]] and the subject.
+    const { data: tFirst } = await db.from("outreach_templates").select("*").eq("version", first.template_version).single();
+    const adsTemplate = !!tFirst && isAdsTemplate(tFirst as TemplateText);
+    let adPlatform: string | null = null;
+    if (adsTemplate) {
+      adPlatform = platformWords(liveAds(await adsEvidenceFor(db, first.prospect_id), now, ADS_MAX_AGE_HOURS.confirm).platforms);
+      if (!adPlatform) {
+        await dropMessage(db, first, "Its ad-library check was more than two days old at confirmation");
+        return "Dropped a draft: its ads check went stale";
+      }
+    }
+
     // Confirmed. Fill the first email's figures from the lower of the runs.
     const firstRuns = runs.filter((r) => r.url === targets[0].run!.url && r.status === "ok");
     const low = (xs: (number | null)[]) => {
@@ -554,6 +583,7 @@ async function confirmNext(db: SupabaseClient, s: DraperSettings, cal: Calendar,
       page: first.slots.page_name,
       brokenPage: first.slots.broken_page_name,
       area: first.slots.area,
+      adPlatform,
     };
     const finding = fillTokens(first.slots.finding ?? "", facts);
     const why = fillTokens(first.slots.why_and_fix ?? "", facts);
@@ -579,6 +609,7 @@ async function confirmNext(db: SupabaseClient, s: DraperSettings, cal: Calendar,
       otherFaults: others.size,
       optOut: s.opt_out_line,
       slots: { finding: finding.text, why_and_fix: why.text, second_finding: followUp?.slots.second_finding ?? "" },
+      adPlatform,
     });
     if (r.problems.length) {
       await dropMessage(db, first, r.problems.join(" "));

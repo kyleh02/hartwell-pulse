@@ -21,6 +21,24 @@ export interface RenderInput {
   optOut: "A" | "B";
   /** Claude's slots with their tokens already filled. */
   slots: { finding: string; why_and_fix: string; second_finding: string };
+  /** platformWords() of the business's fresh, live ad checks: the ads template's {ad_platform}. */
+  adPlatform?: string | null;
+}
+
+/** A template written around the business's live ads (Draper v2). */
+export function isAdsTemplate(t: Pick<TemplateText, "first_subject" | "first_body">): boolean {
+  return /\{ad_platform\}/.test(`${t.first_subject}\n${t.first_body}`);
+}
+
+/**
+ * The ads template's offer line, by how many other faults are on record.
+ * Kyle's offer from the brand direction: a free ads review, emailed within two
+ * working days, nothing to book.
+ */
+export function reviewLine(otherFaults: number): string {
+  if (otherFaults >= 2) return "We noticed a couple of other things too. Reply yes for a free ads review covering the lot, emailed within two working days, no call needed.";
+  if (otherFaults === 1) return "We noticed another thing too. Reply yes for a free ads review covering both, emailed within two working days, no call needed.";
+  return "Reply yes for a free ads review, emailed within two working days, no call needed.";
 }
 
 export interface RenderedEmail {
@@ -49,11 +67,18 @@ function fixedLines(text: string): string[] {
 export function renderMessages(
   t: TemplateText,
   r: RenderInput,
-): { first: RenderedEmail; followUp: RenderedEmail; problems: string[] } {
+): { first: RenderedEmail; followUp: RenderedEmail | null; problems: string[] } {
   const problems: string[] = [];
-  if (r.otherFaults < 1) problems.push("Only one fault is on record; a prospect needs two, one for each email.");
+  const ads = isAdsTemplate(t);
+  // Kyle's first template promises "other things" and always has a follow-up.
+  // The ads template needs one fault; the follow-up only comes with a second.
+  if (!ads && r.otherFaults < 1) problems.push("Only one fault is on record; a prospect needs two, one for each email.");
+  if (ads && !r.adPlatform) problems.push("No live ads are on record from a fresh check, so the ads template can't be filled.");
+  const hasFollowUp = !ads || r.slots.second_finding.trim() !== "";
   const optOutLine = r.optOut === "B" ? t.opt_out_b : t.opt_out_a;
   const values: Record<string, string> = {
+    ad_platform: r.adPlatform ?? "",
+    review_line: reviewLine(r.otherFaults),
     page_name: r.pageName.trim(),
     first_name_or_there: greeting(r.firstName),
     finding: r.slots.finding.trim(),
@@ -65,18 +90,20 @@ export function renderMessages(
   };
   const firstSubject = fill(t.first_subject, values);
   const first = { subject: firstSubject, body: fill(t.first_body, values) };
-  const followUp = { subject: fill(t.followup_subject, { ...values, subject: firstSubject }), body: fill(t.followup_body, values) };
+  const followUp = hasFollowUp
+    ? { subject: fill(t.followup_subject, { ...values, subject: firstSubject }), body: fill(t.followup_body, values) }
+    : null;
 
   for (const [name, email, source] of [
     ["first email", first, t.first_body],
-    ["follow-up", followUp, t.followup_body],
+    ...(followUp ? ([["follow-up", followUp, t.followup_body]] as const) : []),
   ] as const) {
     if (/\{[a-z_]+\}/.test(`${email.subject}\n${email.body}`)) problems.push(`The ${name} still has a placeholder in it.`);
     for (const line of fixedLines(source)) {
       if (!email.body.includes(line)) problems.push(`The ${name} is missing Kyle's fixed text: "${line}"`);
     }
   }
-  if (!followUp.body.includes(optOutLine)) problems.push("The follow-up is missing its opt-out line.");
+  if (followUp && !followUp.body.includes(optOutLine)) problems.push("The follow-up is missing its opt-out line.");
   if (!first.body.includes(t.opt_out_a)) problems.push("The first email is missing its opt-out line.");
   return { first, followUp, problems };
 }

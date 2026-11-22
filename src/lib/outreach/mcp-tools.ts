@@ -16,7 +16,11 @@ import { firstEmailCap, firstEmailsToday, MAX_FIRST_EMAILS_A_DAY } from "./limit
 import { addDays, calendar, melbourneDate, melbourneInstant, nextSendingDay } from "./schedule.ts";
 import { applyLabel } from "./replies.ts";
 import { LABEL_TEXT, isReplyLabel } from "./replies-rules.ts";
-import { AU_STATES, FAULT_LABEL, FAULTS, type Fault } from "./rules.ts";
+import { AU_STATES, FAULT_LABEL, FAULT_RANK, FAULTS, type Fault } from "./rules.ts";
+import { adsEvidenceFor } from "./ads.ts";
+import { ADS_MAX_AGE_HOURS, libraryUrls, liveAds, platformWords, readAdsCheck } from "./ads-rules.ts";
+import { isAdsTemplate } from "./render.ts";
+import { TEMPLATE_ADS } from "./template-ads.ts";
 import type { DraperSettings, Lane } from "./types.ts";
 
 /**
@@ -85,6 +89,14 @@ async function activeLane(ctx: DraperContext): Promise<Lane | null> {
   return data as Lane | null;
 }
 
+/** Whether the active lane writes with the ads template (Draper plan 2). */
+async function adsTemplateActive(ctx: DraperContext): Promise<boolean> {
+  const lane = await activeLane(ctx);
+  if (!lane) return false;
+  const { data } = await ctx.sb.from("outreach_templates").select("first_subject, first_body").eq("version", lane.template_version).maybeSingle();
+  return !!data && isAdsTemplate(data as { first_subject: string; first_body: string });
+}
+
 async function prospectOf(ctx: DraperContext, id: string) {
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw new InputError("prospect_id isn't an id from outreach_add_prospect.");
   const { data } = await ctx.sb
@@ -150,7 +162,8 @@ export const DRAPER_TOOLS: Tool[] = [
       ]);
       const tv = lane?.template_version ?? 1;
       const { data: tpl } = await ctx.sb.from("outreach_templates").select("*").eq("version", tv).maybeSingle();
-      const template = tpl as { version: number; first_subject: string; first_body: string; followup_subject: string; followup_body: string; slot_rules: string } | null;
+      const template = tpl as { version: number; first_subject: string; first_body: string; followup_subject: string; followup_body: string; slot_rules: string; example: string | null } | null;
+      const adsT = !!template && isAdsTemplate(template);
       const off = ((st as { faults_off: Fault[] } | null)?.faults_off ?? []) as Fault[];
       const today = melbourneDate(new Date());
       const mode = s.test_mode ? "TEST MODE: every email goes to Kyle's test inboxes, never to the business" : s.master_on ? "LIVE: emails go to the businesses" : "OFF: nothing sends";
@@ -195,8 +208,18 @@ export const DRAPER_TOOLS: Tool[] = [
                 "",
                 "SLOT RULES:",
                 template.slot_rules,
+                ...(adsT && template.example ? ["", "EXAMPLE (made up, tokens filled):", template.example] : []),
               ].join("\n")
             : "The template is missing: don't submit anything.",
+          adsT
+            ? [
+                "",
+                "ADS CHECK (this template): a business only gets an email when Meta's Ad Library or Google's Ads Transparency Centre shows its ads live, pointing to its own website. A tag on the site isn't proof: tags outlive the ads by years.",
+                "The libraries only open in a browser. A run without one (the 5:30am cloud run) finds, checks, adds and measures businesses, then leaves them waiting: it never submits. The browser step calls outreach_ads_queue, records both libraries for each business with outreach_record_ads, then writes and submits the ones with live ads, best first, until the target is met.",
+                'Drop with a reason: "no live ads" when neither library shows them; "no faults" when neither measured page has one; "not registered for GST" when ABN Lookup shows no GST registration (the size floor).',
+                "The first email is about the best-ranked fault on record. Ranked best first: " + FAULT_RANK.join(", ") + ".",
+              ].join("\n")
+            : "",
           "",
           "TOKENS:",
           TOKEN_GUIDE,
@@ -262,7 +285,7 @@ export const DRAPER_TOOLS: Tool[] = [
         phone: { type: "string" },
         abn: { type: "string", description: "Eleven digits." },
         abn_status: { type: "string", enum: ["active", "cancelled", "not_found"], description: "From ABN Lookup, only when Pulse can't check ABNs itself (see the brief)." },
-        gst_registered: { type: "boolean" },
+        gst_registered: { type: "boolean", description: "From ABN Lookup's Goods & Services Tax line. Required when Pulse can't check ABNs itself; a business not registered for GST isn't added (the size floor)." },
         email: { type: "string", description: "The address published on their own site." },
         first_name: { type: "string", description: "Only if a first name is published with that address." },
         address_kind: { type: "string", enum: ["owner", "general"], description: "A named owner's address, or a general inbox." },
@@ -321,8 +344,12 @@ export const DRAPER_TOOLS: Tool[] = [
         const said = str(a, "abn_status", 12);
         if (said !== "active") return { text: `Not added: the ABN has to be active on ABN Lookup (you said ${said ?? "nothing"}). Move on.`, isError: true };
         const gst = a.gst_registered;
-        abnFields = { abn_status: "active", gst_registered: typeof gst === "boolean" ? gst : null, abn_checked_by: "claude", abn_checked_at: new Date().toISOString() };
+        if (typeof gst !== "boolean") return { text: 'Not added: give gst_registered from ABN Lookup ("Goods & Services Tax (GST)": registered from a date, or not currently registered).', isError: true };
+        abnFields = { abn_status: "active", gst_registered: gst, abn_checked_by: "claude", abn_checked_at: new Date().toISOString() };
       }
+      // The size floor (Kyle, 22 November 2026): GST registration means a
+      // turnover of $75,000 or more, a business with ad money worth helping.
+      if (abnFields.gst_registered === false) return { text: "Not added: the ABN isn't registered for GST, under the size floor. Move on.", isError: true };
 
       const s = await settingsOf(ctx);
       const { data: p, error } = await ctx.sb
@@ -416,7 +443,9 @@ export const DRAPER_TOOLS: Tool[] = [
               .filter(Boolean)
               .join("\n")
           : "Nothing on this page can be claimed. A page Pulse couldn't read is never a broken page.",
-        `So far for this business: ad signal ${ad ? "yes" : "no"}; faults ${allFaults.length ? allFaults.join(", ") : "none"}. ${qualifies(ad, allFaults) ? "It qualifies: write the slots and submit." : "It doesn't qualify yet (it needs the ad signal and two faults). Measure the main service page, or drop it."}`,
+        (await adsTemplateActive(ctx))
+          ? `So far for this business: faults ${allFaults.length ? FAULT_RANK.filter((f) => allFaults.includes(f)).join(", ") : "none"} (best first: the first email is about the first one); tags on the site ${ad ? "yes" : "none seen"}. ${allFaults.length ? "It has a fault to write about. It still needs its ads check in the browser (outreach_ads_queue) before any draft: don't submit it from a run without a browser." : "No faults yet: measure its main service page, or drop it (\"no faults\")."}`
+          : `So far for this business: ad signal ${ad ? "yes" : "no"}; faults ${allFaults.length ? allFaults.join(", ") : "none"}. ${qualifies(ad, allFaults) ? "It qualifies: write the slots and submit." : "It doesn't qualify yet (it needs the ad signal and two faults). Measure the main service page, or drop it."}`,
       ];
       return { text: lines.join("\n") };
     },
@@ -425,7 +454,7 @@ export const DRAPER_TOOLS: Tool[] = [
     name: "outreach_submit",
     title: "Submit the draft",
     description:
-      "Submit the three slots for a prospect. Pulse checks the business again, fetches the contact page again, checks every claim against its measurements, checks the wording, fills the tokens and renders both emails from Kyle's template. Refused: you get the reasons; fix it once, and if it's refused again, drop it. Accepted: it waits for Pulse's own second measurement an hour on, then queues. You never send anything.",
+      "Submit the slots for a prospect. Pulse checks the business again, fetches the contact page again, checks every claim against its measurements (and, for the ads template, against the ad-library checks you recorded), checks the wording, fills the tokens and renders the emails from Kyle's template. In the ads template second_finding may be empty: then there's no follow-up. Refused: you get the reasons; fix it once, and if it's refused again, drop it. Accepted: it waits for Pulse's own second measurement an hour on, then queues. You never send anything.",
     inputSchema: {
       type: "object",
       properties: {
@@ -434,7 +463,7 @@ export const DRAPER_TOOLS: Tool[] = [
         page_name: { type: "string", description: "The page the first email is about, as outreach_measure allowed it." },
         area: { type: "string", description: "Their own suburb, or a region their postcode is in, for [[area]]." },
         broken_page_name: { type: "string", description: "For a broken-page claim: the menu label of the broken page." },
-        slots: { type: "object", properties: SUBMIT_SLOTS, required: [...SLOTS], additionalProperties: false },
+        slots: { type: "object", properties: SUBMIT_SLOTS, required: ["finding", "why_and_fix"], additionalProperties: false },
         claims: {
           type: "array",
           description: "One per email: the first email's fault in finding or why_and_fix, the follow-up's in second_finding.",
@@ -459,6 +488,10 @@ export const DRAPER_TOOLS: Tool[] = [
       const slots = {} as Record<SlotName, string>;
       for (const k of SLOTS) {
         const v = (slotsIn as Record<string, unknown>)[k];
+        if (k === "second_finding" && (v === undefined || v === null || (typeof v === "string" && !v.trim()))) {
+          slots[k] = "";
+          continue;
+        }
         if (typeof v !== "string" || !v.trim()) throw new InputError(`slots.${k} is required.`);
         slots[k] = v.trim().slice(0, 1200);
       }
@@ -466,7 +499,7 @@ export const DRAPER_TOOLS: Tool[] = [
       if (!Array.isArray(claimsIn) || claimsIn.length === 0 || claimsIn.length > 6) throw new InputError("claims must list one claim per email.");
       const claims = claimsIn.map((c) => {
         const o = (c ?? {}) as Record<string, unknown>;
-        if (!(FAULTS as readonly string[]).includes(String(o.fault))) throw new InputError("Each claim's fault must be one of the six.");
+        if (!(FAULTS as readonly string[]).includes(String(o.fault))) throw new InputError(`Each claim's fault must be one of: ${FAULTS.join(", ")}.`);
         if (!(SLOTS as readonly string[]).includes(String(o.slot))) throw new InputError("Each claim's slot must be finding, why_and_fix or second_finding.");
         if (typeof o.measurement_id !== "string") throw new InputError("Each claim needs its measurement_id.");
         return { fault: o.fault as Fault, measurement_id: o.measurement_id, slot: o.slot as SlotName };
@@ -489,13 +522,15 @@ export const DRAPER_TOOLS: Tool[] = [
         ACTOR,
       );
       if (!r.ok) return { text: `Refused:\n- ${r.reasons.join("\n- ")}`, isError: true };
-      return { text: "Accepted. Pulse measures each claimed fault again an hour or more after its first run; if both repeat, the pair queues for the next sending day. Nothing more to do for this one." };
+      return {
+        text: `Accepted${r.messageIds.followUp ? "" : " (no follow-up)"}. Pulse measures each claimed fault again an hour or more after its first run; if ${r.messageIds.followUp ? "both repeat, the pair queues" : "it repeats, the email queues"} for the next sending day. Nothing more to do for this one.`,
+      };
     },
   },
   {
     name: "outreach_drop",
     title: "Drop a prospect",
-    description: "Drop a prospect you've added but won't submit (no ad signal, fewer than two faults, refused twice, anything else), with the reason in a few words.",
+    description: "Drop a prospect you've added but won't submit (no live ads, no faults, not registered for GST, refused twice, anything else), with the reason in a few words.",
     inputSchema: { type: "object", properties: { prospect_id: ID, reason: { type: "string" } }, required: ["prospect_id", "reason"], additionalProperties: false },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     async run(a, ctx) {
@@ -683,6 +718,156 @@ export const DRAPER_TOOLS: Tool[] = [
     },
   },
 
+  // ---------- the ads check (Draper plan 2, 22 November 2026) ----------
+  {
+    name: "outreach_ads_queue",
+    title: "Waiting for the ads check",
+    description:
+      "The businesses added and measured in the last three days that still need their ad-library check, best first: each with the two library searches to open (built by Pulse: Australia, active ads, their own domain), the faults on record best-ranked first, and any checks already recorded. A business that has waited more than three days is dropped here. Use it in the browser step, and in the morning run to count what's waiting.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    async run(_a, ctx) {
+      const s = await settingsOf(ctx);
+      const today = melbourneDate(new Date());
+      const since = addDays(today, -3);
+      // Waited too long: the cloud run added it, nobody checked its ads.
+      const { data: stale } = await ctx.sb
+        .from("outreach_prospects")
+        .select("id")
+        .eq("source", "claude_run")
+        .in("status", ["found", "measured"])
+        .lt("found_on", since)
+        .limit(200);
+      let expired = 0;
+      for (const p of (stale as { id: string }[] | null) ?? []) {
+        const { count } = await ctx.sb.from("outreach_messages").select("id", { count: "exact", head: true }).eq("prospect_id", p.id);
+        if (count) continue;
+        const reason = "The ads check didn't happen within three days";
+        await ctx.sb.from("outreach_prospects").update({ status: "dropped", drop_reason: reason }).eq("id", p.id).in("status", ["found", "measured"]);
+        await event(ctx, p.id, "dropped", { reason });
+        expired++;
+      }
+
+      const { data: ps } = await ctx.sb
+        .from("outreach_prospects")
+        .select("id, business_name, domain, suburb, found_on, gst_registered")
+        .eq("source", "claude_run")
+        .eq("test", s.test_mode)
+        .in("status", ["found", "measured"])
+        .gte("found_on", since)
+        .order("found_on")
+        .limit(60);
+      const rows = (ps as { id: string; business_name: string | null; domain: string | null; suburb: string | null; found_on: string; gst_registered: boolean | null }[] | null) ?? [];
+      const out: { rank: number; text: string }[] = [];
+      for (const p of rows) {
+        if (!p.domain) continue;
+        const [{ count: msgs }, { data: runs }, evidence] = await Promise.all([
+          ctx.sb.from("outreach_messages").select("id", { count: "exact", head: true }).eq("prospect_id", p.id),
+          ctx.sb.from("outreach_measurements").select("id, url, faults, ad_signal, tags").eq("prospect_id", p.id).eq("status", "ok"),
+          adsEvidenceFor(ctx.sb, p.id).catch(() => []),
+        ]);
+        if (msgs) continue;
+        const ok = (runs as { id: string; url: string; faults: Fault[]; ad_signal: boolean | null; tags: Record<string, string[]> | null }[] | null) ?? [];
+        const faults = FAULT_RANK.filter((f) => ok.some((r) => r.faults.includes(f)));
+        const tags = [...new Set(ok.flatMap((r) => [r.tags?.aw?.length ? "Google Ads tag" : "", r.tags?.meta_pixel?.length ? "Meta Pixel" : ""]).filter(Boolean))];
+        const urls = libraryUrls(p.domain);
+        const checked = (["meta", "google"] as const).map((pl) => {
+          const latest = evidence.filter((e) => e.platform === pl).sort((a, b) => b.checked_at.localeCompare(a.checked_at))[0];
+          return latest ? `${pl} ${latest.live ? "LIVE" : "not live"} (${latest.note})` : `${pl} not checked`;
+        });
+        const live = liveAds(evidence, new Date(), ADS_MAX_AGE_HOURS.submit);
+        const best = faults[0];
+        out.push({
+          rank: (live.platforms.length ? 0 : 100) + (best ? FAULT_RANK.indexOf(best) * 10 : 90) + (tags.length ? 0 : 5),
+          text: [
+            `${p.business_name ?? "A business"} (prospect_id ${p.id}, ${p.domain}, ${p.suburb ?? "?"}, found ${p.found_on})${p.gst_registered === false ? ": NOT registered for GST, drop it" : p.gst_registered === null ? ": GST unknown, check ABN Lookup before writing" : ""}`,
+            `  faults, best first: ${faults.length ? faults.map((f) => `${f} (${FAULT_LABEL[f]})`).join(", ") : "none: drop it (\"no faults\")"}`,
+            `  measured pages: ${ok.map((r) => `${r.url} (measurement_id ${r.id}${r.faults.length ? `: ${r.faults.join(", ")}` : ""})`).join("; ") || "none"}`,
+            `  tags seen on the site: ${tags.join(", ") || "none (Shopify and Tag Manager sites often hide them; check the libraries anyway)"}`,
+            `  meta search: ${urls.meta}`,
+            `  google search: ${urls.google}`,
+            `  checks: ${checked.join("; ")}${live.platforms.length ? `. Live: ${platformWords(live.platforms)}` : ""}`,
+          ].join("\n"),
+        });
+      }
+      const t = await target(ctx, s);
+      out.sort((a, b) => a.rank - b.rank);
+      return {
+        text: [
+          `${out.length} business${out.length === 1 ? "" : "es"} waiting for the ads check.${expired ? ` Dropped ${expired} that waited more than three days.` : ""} The next sending day still needs ${t.target} (${t.waiting} already waiting${t.why ? `; ${t.why}` : ""}).`,
+          ...out.map((o) => o.text),
+        ].join("\n\n"),
+      };
+    },
+  },
+  {
+    name: "outreach_record_ads",
+    title: "Record an ad-library check",
+    description:
+      "Hand Pulse what a business's ad library showed, as the page's own visible text (document.body.innerText). Pulse reads it itself: which ads are active, when they started or were last shown, and whether they point at the business's own domain. Your reading is never stored as the fact. Meta: open the meta search from outreach_ads_queue, let the results load, pass its text. Google: open the google search, pass its text; when it lists ads, open the ads (up to three) to find the latest Last shown, and pass that ad's address as ad_url and its text as ad_text. Record both libraries for every business, also when nothing is found. Never click an ad: the business pays for that click.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        prospect_id: ID,
+        platform: { type: "string", enum: ["meta", "google"] },
+        library_url: { type: "string", description: "The search you read: the meta or google search address from outreach_ads_queue." },
+        page_text: { type: "string", description: "The search page's visible text, once its results have loaded." },
+        ad_url: { type: "string", description: "Google only: the ad page you opened (adstransparency.google.com/advertiser/AR…/creative/CR…?region=AU)." },
+        ad_text: { type: "string", description: "Google only: that ad page's visible text, with its Last shown date." },
+      },
+      required: ["prospect_id", "platform", "library_url", "page_text"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    async run(a, ctx) {
+      const p = await prospectOf(ctx, need(a, "prospect_id", 40));
+      if (!["found", "measured"].includes(p.status)) throw new InputError(`This prospect is ${p.status}; its ads can't be checked now.`);
+      if (!p.domain) throw new InputError("This prospect has no website on file.");
+      const platform = need(a, "platform", 10);
+      if (platform !== "meta" && platform !== "google") throw new InputError("platform is meta or google.");
+      const { count: before } = await ctx.sb.from("outreach_events").select("id", { count: "exact", head: true }).eq("prospect_id", p.id).eq("kind", "checked");
+      if ((before ?? 0) >= 8) throw new InputError("Eight checks are on record for this business already. Submit it or drop it.");
+      const now = new Date();
+      const pageText = need(a, "page_text", 20_000);
+      const adText = str(a, "ad_text", 6000) ?? null;
+      const read = readAdsCheck(
+        { platform, library_url: need(a, "library_url", 600), page_text: pageText, ad_url: str(a, "ad_url", 400) ?? null, ad_text: adText },
+        p.domain,
+        now,
+        melbourneDate(now),
+      );
+      if ("problems" in read) throw new InputError(read.problems.join(" "));
+      await event(ctx, p.id, "checked", { ads: read.evidence, page_text: pageText.slice(0, 4000), ad_text: adText?.slice(0, 1500) ?? null });
+      const all = await adsEvidenceFor(ctx.sb, p.id);
+      const live = liveAds(all, now, ADS_MAX_AGE_HOURS.submit);
+      const done = new Set(all.filter((e) => now.getTime() - Date.parse(e.checked_at) <= ADS_MAX_AGE_HOURS.submit * 3_600_000).map((e) => e.platform));
+      const next = live.platforms.length
+        ? `Live ads: ${platformWords(live.platforms)}. ${done.size < 2 ? "Record the other library too, then write" : "Write"} the slots (the ads template) about the best-ranked fault and submit.`
+        : done.size < 2
+          ? "No live ads in this library. Check the other one."
+          : 'Neither library shows live ads pointing to their website: drop it with the reason "no live ads".';
+      return { text: `Recorded the ${platform === "meta" ? "Meta Ad Library" : "Google Ads Transparency Centre"} check: ${read.evidence.note}. ${next}` };
+    },
+  },
+  {
+    name: "outreach_preview",
+    title: "Read a business's emails",
+    description: "The stored subject and body of a business's emails, with their status and due day, as Pulse holds them (re-rendered with the confirming run's figures once confirmed). Read only.",
+    inputSchema: { type: "object", properties: { prospect_id: ID }, required: ["prospect_id"], additionalProperties: false },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    async run(a, ctx) {
+      const p = await prospectOf(ctx, need(a, "prospect_id", 40));
+      const { data } = await ctx.sb.from("outreach_messages").select("kind, status, send_on, subject, body, drop_reason").eq("prospect_id", p.id).order("kind");
+      const rows = (data as { kind: string; status: string; send_on: string | null; subject: string | null; body: string | null; drop_reason: string | null }[] | null) ?? [];
+      if (!rows.length) return { text: `${p.business_name ?? "This business"} has no emails yet.` };
+      return {
+        text: rows
+          .map((m) => `${m.kind === "first" ? "FIRST EMAIL" : "FOLLOW-UP"} (${m.status}${m.send_on ? `, due ${m.send_on}` : ""}${m.drop_reason ? `: ${m.drop_reason}` : ""})\nSubject: ${m.subject ?? ""}\n\n${m.body ?? ""}`)
+          .join("\n\n----------\n\n"),
+      };
+    },
+  },
+
   {
     name: "outreach_queue",
     title: "What's waiting",
@@ -752,6 +937,58 @@ export const DRAPER_TOOLS: Tool[] = [
       const names = clear.map((p) => p.business_name ?? "A business");
       await log(ctx, `Cleared ${clear.length} unsent business${clear.length === 1 ? "" : "es"} found ${day}`, names.join("; ").slice(0, 1000));
       return { text: `Cleared ${clear.length} (never emailed): ${names.join(", ")}.${emailed.size ? ` Kept ${emailed.size} already emailed.` : ""}` };
+    },
+  },
+  {
+    name: "outreach_set_template",
+    title: "Install a template",
+    description:
+      "Install a template written in Pulse's code as the next template version (or find it, if it's already installed) and move lanes onto it. \"ads\" is template 2 from Draper plan 2 (22 November 2026): live ads from the ad libraries, one best-ranked fault, the /work proof line, a named offer, optional follow-up. Only after Kyle has said yes in this chat.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        template: { type: "string", enum: ["ads"] },
+        lane_ids: { type: "array", items: { type: "integer" }, description: "The lanes to move onto it." },
+        why: { type: "string", description: "What changed and why, for the change log." },
+      },
+      required: ["template", "lane_ids", "why"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    advisorOnly: true,
+    async run(a, ctx) {
+      if (need(a, "template", 10) !== "ads") throw new InputError('template is "ads".');
+      const why = need(a, "why", 1000);
+      const laneIds = Array.isArray(a.lane_ids) ? (a.lane_ids as unknown[]).filter((x): x is number => typeof x === "number" && Number.isInteger(x) && x > 0 && x < 100) : [];
+      if (!laneIds.length) throw new InputError("lane_ids lists the lanes to move onto it.");
+      const t = TEMPLATE_ADS;
+      const { data: rows, error: rErr } = await ctx.sb.from("outreach_templates").select("version, first_subject, first_body, followup_body").order("version", { ascending: false });
+      if (rErr) throw new Error(rErr.message);
+      const all = (rows as { version: number; first_subject: string; first_body: string; followup_body: string }[] | null) ?? [];
+      let version = all.find((r) => r.first_subject === t.first_subject && r.first_body === t.first_body && r.followup_body === t.followup_body)?.version;
+      const installed = !version;
+      if (!version) {
+        version = (all[0]?.version ?? 0) + 1;
+        const { error } = await ctx.sb.from("outreach_templates").insert({
+          version,
+          first_subject: t.first_subject,
+          first_body: t.first_body,
+          followup_subject: t.followup_subject,
+          followup_body: t.followup_body,
+          opt_out_a: t.opt_out_a,
+          opt_out_b: t.opt_out_b,
+          slot_rules: t.slot_rules,
+          example: t.example,
+          note: t.note,
+          created_by: "claude (advisor)",
+        });
+        if (error) throw new Error(error.message);
+      }
+      const { data: moved, error: lErr } = await ctx.sb.from("outreach_lanes").update({ template_version: version }).in("id", laneIds).select("id");
+      if (lErr) throw new Error(lErr.message);
+      const ids = ((moved as { id: number }[] | null) ?? []).map((l) => l.id);
+      await log(ctx, `Template ${version} (ads) ${installed ? "installed" : "already installed"}; lanes ${ids.join(", ") || "none"} moved onto it`, why);
+      return { text: `Template ${version} (ads) ${installed ? "installed" : "was already installed"}. Lanes now on it: ${ids.join(", ") || "none (check the lane ids)"}.` };
     },
   },
   {
@@ -869,10 +1106,10 @@ export async function callDraperTool(name: string, args: Args, ctx: DraperContex
   }
 }
 
-export const DRAPER_INSTRUCTIONS = `This is Draper, Hartwell Digital's outreach desk in Hartwell Pulse. You find small businesses that advertise and have a measurable fault on their site, and hand Pulse what it needs to write to them. You never send anything: Pulse sends from Kyle's mailbox, on its own clock, after checking everything again itself.
+export const DRAPER_INSTRUCTIONS = `This is Draper, Hartwell Digital's outreach desk in Hartwell Pulse. You find small businesses whose Google or Meta ads are live and whose website, where those ads send people, has a fault Pulse can measure, and hand Pulse what it needs to write to them. You never send anything: Pulse sends from Kyle's mailbox, on its own clock, after checking everything again itself.
 
-Start every run with outreach_brief and follow its run instructions, and end every run with outreach_finish_run. Work only in the active lane and stop at the target. Check every business with outreach_check_business before reading its site. Never guess an email address, build one from a pattern, or take one from a directory. Never write a number, a weekday, a month, a page name or a place in a slot: use the tokens. Write in Australian English.`;
+Start every run with outreach_brief and follow its run instructions, and end every run with outreach_finish_run. Work only in the active lane and stop at the target. Check every business with outreach_check_business before reading its site. Never guess an email address, build one from a pattern, or take one from a directory. Never write a number, a weekday, a month, a page name or a place in a slot: use the tokens. Ads are only ever proven by the ad libraries' own pages, read in a browser and handed to Pulse with outreach_record_ads; never click an ad. Write in Australian English.`;
 
 export const ADVISOR_INSTRUCTIONS = `${DRAPER_INSTRUCTIONS}
 
-This is the advisor connector. It can also write the lessons, the run instructions and the test register, but only ever after Kyle has said yes to that exact change in this chat.`;
+This is the advisor connector. It can also write the lessons, the run instructions, the test register and the template, and clear a day's never-emailed work, but only ever after Kyle has said yes to that exact change in this chat.`;

@@ -10,7 +10,7 @@ import { normaliseEmail } from "@/lib/outreach/normalise";
 import { MAX_FIRST_EMAILS_A_DAY } from "@/lib/outreach/limits";
 import { disconnectGmail, gmailAccessToken } from "@/lib/outreach/gmail-access";
 import { buildMessage, newMessageId, sendRaw } from "@/lib/outreach/gmail";
-import { renderMessages, type TemplateText } from "@/lib/outreach/render";
+import { isAdsTemplate, renderMessages, type TemplateText } from "@/lib/outreach/render";
 import type { DraperSettings } from "@/lib/outreach/types";
 
 /** Draper's sender controls (Stage 5). Every one checks the flag and an admin first. */
@@ -280,20 +280,31 @@ export async function sendTestPair(): Promise<Result & { to?: string }> {
     .select("*")
     .eq("version", (lane as { template_version: number } | null)?.template_version ?? 1)
     .single();
+  // A made-up canopy shop, in the active lane's template.
+  const ads = isAdsTemplate(t as TemplateText);
   const r = renderMessages(t as TemplateText, {
     pageName: "canopy",
     firstName: "Sam",
-    otherFaults: 2,
+    otherFaults: ads ? 1 : 2,
     optOut: s.opt_out_line,
-    slots: {
-      finding:
-        "We were looking at 4WD fit-out shops around the Sunshine Coast on Tuesday and had a look at your site. On a phone, your canopy page took a little over six seconds to show anything on Google's own speed test.",
-      why_and_fix:
-        "Your site has Google's ad tracking on it, so some of those visits are probably paid clicks. Plenty of people on a phone won't wait that long, so it'd be worth getting that page loading faster before putting more into ads.",
-      second_finding: "Your contact page, in your main menu, showed an error page when we checked it.",
-    },
+    adPlatform: ads ? "Google" : null,
+    slots: ads
+      ? {
+          finding:
+            "Your Google ads send people to your website, and on a phone your canopy page took a little over six seconds to show anything in Google's own speed test.",
+          why_and_fix: "Those are paid clicks, and plenty of people on a phone won't wait that long. A lighter page that shows sooner is the fix.",
+          second_finding: "Your contact page, in your main menu, showed an error page when we checked it again, so anyone looking for it from an ad hits a dead end.",
+        }
+      : {
+          finding:
+            "We were looking at 4WD fit-out shops around the Sunshine Coast on Tuesday and had a look at your site. On a phone, your canopy page took a little over six seconds to show anything on Google's own speed test.",
+          why_and_fix:
+            "Your site has Google's ad tracking on it, so some of those visits are probably paid clicks. Plenty of people on a phone won't wait that long, so it'd be worth getting that page loading faster before putting more into ads.",
+          second_finding: "Your contact page, in your main menu, showed an error page when we checked it.",
+        },
   });
-  if (r.problems.length) return { ok: false, message: r.problems.join(" ") };
+  if (r.problems.length || !r.followUp) return { ok: false, message: r.problems.join(" ") || "The test pair needs a follow-up." };
+  const followUp = r.followUp;
   const token = await gmailAccessToken(admin);
   if ("error" in token) return { ok: false, message: token.error };
   try {
@@ -303,7 +314,7 @@ export async function sendTestPair(): Promise<Result & { to?: string }> {
     const fuId = newMessageId();
     const fu = await sendRaw(
       token.token,
-      buildMessage({ to, subject: `Re: ${firstSubject}`, body: r.followUp.body, messageId: fuId, inReplyTo: firstId }),
+      buildMessage({ to, subject: `Re: ${firstSubject}`, body: followUp.body, messageId: fuId, inReplyTo: firstId }),
       first.threadId,
     );
     await admin.from("outreach_change_log").insert({ what: `Test pair sent to ${to}`, why: "Checking the Gmail connection", changed_by: session.clerkUserId });
@@ -312,7 +323,7 @@ export async function sendTestPair(): Promise<Result & { to?: string }> {
       templateVersion: (t as { version: number }).version,
       settingsVersion: s.version,
       first: { ...first, rfc: firstId, subject: firstSubject, body: r.first.body },
-      followUp: { ...fu, rfc: fuId, subject: `Re: ${firstSubject}`, body: r.followUp.body },
+      followUp: { ...fu, rfc: fuId, subject: `Re: ${firstSubject}`, body: followUp.body },
       by: session.clerkUserId,
     });
     return recorded ? { ok: true, to } : { ok: false, message: `Sent to ${to}, but it couldn't be recorded, so a reply to it won't show under Replies.` };

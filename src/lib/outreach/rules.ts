@@ -41,6 +41,29 @@ export const FAULT_LABEL: Record<Fault, string> = {
   no_mobile_layout: "Not set up for phones",
 };
 
+/**
+ * Which fault an email leads with (Kyle, 22 November 2026: tracking faults
+ * above speed). The ads template's first email must be about the best-ranked
+ * fault on record: what touches the numbers their ads are judged by first,
+ * then what a paid visitor meets on arrival, then speed and layout.
+ */
+export const FAULT_RANK: readonly Fault[] = [
+  "pixel_double",
+  "old_analytics",
+  "not_secure",
+  "broken_page",
+  "phone_not_tappable",
+  "slow_mobile",
+  "no_mobile_layout",
+  "page_freezes",
+  "layout_shift",
+];
+
+/** The best-ranked of some faults, or null. */
+export function bestFault(faults: readonly Fault[]): Fault | null {
+  return FAULT_RANK.find((f) => faults.includes(f)) ?? null;
+}
+
 export const PROSPECT_STATUSES = [
   "found",
   "measured",

@@ -13,10 +13,12 @@
  *   [[broken_page]]    the broken menu page's name, checked against the menu
  *   [[area]]           the business's suburb or its postcode's region
  *   [[pageviews]]      how often the pixel counted one visit: "twice", "three times"
+ *   [[ad_platform]]    where their live ads run, from Pulse's reading of the ad
+ *                      libraries (ads-rules.ts): "Google", "Facebook", or both
  */
 import type { Fault } from "./rules.ts";
 
-export const TOKENS = ["day", "first_paint", "largest_paint", "page", "broken_page", "area", "pageviews"] as const;
+export const TOKENS = ["day", "first_paint", "largest_paint", "page", "broken_page", "area", "pageviews", "ad_platform"] as const;
 export type Token = (typeof TOKENS)[number];
 
 /** The token a fault's figure must come through, where it has one. */
@@ -34,6 +36,8 @@ export const TOKEN_GUIDE = `Never write a number, a weekday, a month, a page nam
 [[broken_page]] the broken menu page's name you give as broken_page_name
 [[area]] the suburb or region you give as area; it must be the business's own suburb or the region its postcode is in
 [[pageviews]] how many times the Meta Pixel counted one visit ("twice")
+[[ad_platform]] where their live ads run, from the ad-library checks you recorded ("Google", "Facebook", or "Google and Facebook"). The ads template's {finding} starts "Your [[ad_platform]] ads". Never in {second_finding}.
+In the ads template, [[day]] and [[area]] never go in the first email: saying when and where we looked tells them they're one of a batch.
 Any digit, weekday or month written out is refused.`;
 
 /**
@@ -166,6 +170,8 @@ export interface TokenFacts {
   page?: string | null;
   brokenPage?: string | null;
   area?: string | null;
+  /** platformWords() of the business's fresh, live ad checks. */
+  adPlatform?: string | null;
 }
 
 /**
@@ -185,6 +191,7 @@ export function fillTokens(raw: string, f: TokenFacts): { text: string; missing:
     else if (name === "page" && f.page) v = f.page;
     else if (name === "broken_page" && f.brokenPage) v = f.brokenPage;
     else if (name === "area" && f.area) v = f.area;
+    else if (name === "ad_platform" && f.adPlatform) v = f.adPlatform;
     if (v === null) {
       missing.push(name);
       return whole;

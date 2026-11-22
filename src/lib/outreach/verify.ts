@@ -16,9 +16,10 @@
  * submit.ts runs them around this.
  */
 import type { Fault } from "./rules.ts";
-import { FAULT_LABEL } from "./rules.ts";
+import { bestFault, FAULT_LABEL } from "./rules.ts";
 import { describe, lintSlots, SLOTS, type SlotName } from "./lint.ts";
-import { renderMessages, type TemplateText } from "./render.ts";
+import { isAdsTemplate, renderMessages, type TemplateText } from "./render.ts";
+import { platformWords, type AdPlatform } from "./ads-rules.ts";
 import {
   allowedAreas,
   FAULT_TOKENS,
@@ -69,6 +70,10 @@ export interface SubmitContext {
   existingMessages: number;
   /** Earlier refusals of a draft for this prospect. */
   refusals: number;
+  /** The ads template: live platforms from ad-library checks fresh enough to submit on (liveAds()). */
+  ads?: { platforms: AdPlatform[]; checkedAt: string | null } | null;
+  /** From the ABN record: the ads template's size floor. */
+  gstRegistered?: boolean | null;
 }
 
 export interface MessageDraft {
@@ -91,7 +96,8 @@ export type Verified =
   | {
       ok: true;
       first: MessageDraft;
-      followUp: MessageDraft;
+      /** Null when the ads template has no second fault to follow up with. */
+      followUp: MessageDraft | null;
       claims: { message: "first" | "follow_up"; measurement_id: string; fault: Fault; slot: SlotName; quote: string }[];
     }
   | { ok: false; reasons: string[] };
@@ -125,8 +131,14 @@ export function verifySubmission(ctx: SubmitContext, input: SubmitInput): Verifi
   const faultOf = (slot: SlotName) => [...new Set(input.claims.filter((c) => c.slot === slot).map((c) => c.fault))];
   const firstFaults = [...new Set([...faultOf("finding"), ...faultOf("why_and_fix")])];
   const secondFaults = faultOf("second_finding");
+  // The ads template (Draper v2) needs one fault; its follow-up only comes
+  // with a second. Kyle's first template always has both.
+  const ads = isAdsTemplate(ctx.template);
+  const wantsFollowUp = !ads || (input.slots.second_finding ?? "").trim() !== "" || secondFaults.length > 0;
   if (firstFaults.length !== 1) no("The first email must claim exactly one fault, in {finding} (and {why_and_fix} if it mentions it).");
-  if (secondFaults.length !== 1) no("The follow-up must claim exactly one fault, in {second_finding}.");
+  if (wantsFollowUp && secondFaults.length !== 1) {
+    no(ads ? "A {second_finding} must claim exactly one fault. Leave it empty for no follow-up." : "The follow-up must claim exactly one fault, in {second_finding}.");
+  }
   const firstFault = firstFaults[0];
   const secondFault = secondFaults[0];
   if (firstFault && secondFault && firstFault === secondFault) no("The two emails must be about two different faults.");
@@ -143,11 +155,25 @@ export function verifySubmission(ctx: SubmitContext, input: SubmitInput): Verifi
     if (off.has(c.fault)) no(`"${FAULT_LABEL[c.fault]}" is switched off after two wrong-fact labels.`);
     if (!measurementFor.has(c.slot)) measurementFor.set(c.slot, m);
   }
-  if (!ctx.measurements.some((m) => m.status === "ok" && m.ad_signal)) {
-    no("No measurement found a Google Ads tag or a Meta Pixel. Without the ad signal it doesn't qualify.");
-  }
   const onRecord = new Set(ctx.measurements.filter((m) => m.status === "ok").flatMap((m) => m.faults).filter((f) => !off.has(f)));
   const otherFaults = firstFault ? [...onRecord].filter((f) => f !== firstFault).length : 0;
+  const adWords = ads ? platformWords(ctx.ads?.platforms ?? []) : null;
+  if (ads) {
+    // Live ads, read by Pulse from the libraries' own text, replace the tag
+    // on the site as the reason to write (a tag outlives the ads by years).
+    if (!adWords) {
+      no('No ad-library check from the last 36 hours shows live ads for this business. Record both libraries with outreach_record_ads; if neither shows live ads pointing to their website, drop it with the reason "no live ads".');
+    }
+    if (ctx.gstRegistered !== true) {
+      no('The ABN record on file doesn\'t show this business registered for GST, the size floor for this template. Drop it with the reason "not registered for GST".');
+    }
+    const best = bestFault([...onRecord]);
+    if (firstFault && best && best !== firstFault) {
+      no(`The first email must be about the best-ranked fault on record: "${FAULT_LABEL[best]}" (${best}), not "${FAULT_LABEL[firstFault]}". Tracking faults come before speed.`);
+    }
+  } else if (!ctx.measurements.some((m) => m.status === "ok" && m.ad_signal)) {
+    no("No measurement found a Google Ads tag or a Meta Pixel. Without the ad signal it doesn't qualify.");
+  }
 
   // ---------- the tokens ----------
   const firstMeasurement = measurementFor.get("finding") ?? measurementFor.get("why_and_fix");
@@ -184,6 +210,14 @@ export function verifySubmission(ctx: SubmitContext, input: SubmitInput): Verifi
   }
 
   function fillToken(name: Token, slot: SlotName, fault: Fault | undefined, m: MeasurementRow | undefined): string | null {
+    if (name === "ad_platform") {
+      // From the ad-library checks, not a page measurement.
+      if (!adWords) {
+        no(`[[ad_platform]] in {${slot}}: no fresh ad-library check shows live ads${ads ? "" : ", and this template isn't the ads template"}.`);
+        return null;
+      }
+      return adWords;
+    }
     const allowedFor = Object.entries(FAULT_TOKENS).find(([, ts]) => ts?.includes(name))?.[0] as Fault | undefined;
     if (allowedFor && fault !== allowedFor) {
       no(`[[${name}]] in {${slot}} only goes with "${FAULT_LABEL[allowedFor]}".`);
@@ -245,7 +279,7 @@ export function verifySubmission(ctx: SubmitContext, input: SubmitInput): Verifi
   }
 
   // ---------- the lint ----------
-  for (const r of describe(lintSlots(input.slots, filled))) no(r);
+  for (const r of describe(lintSlots(input.slots, filled, { ads }))) no(r);
 
   // ---------- personal ----------
   // Facts true only of this business in the first email: each token Pulse
@@ -255,7 +289,7 @@ export function verifySubmission(ctx: SubmitContext, input: SubmitInput): Verifi
     no("Fewer than two things in the first email are backed by this business's own measurements. Use tokens like [[page]], [[day]] or [[area]].");
   }
 
-  if (reasons.length > 0 || !firstFault || !secondFault || !ctx.contact || !ctx.lane) {
+  if (reasons.length > 0 || !firstFault || (wantsFollowUp && !secondFault) || !ctx.contact || !ctx.lane) {
     return { ok: false, reasons: [...new Set(reasons)] };
   }
 
@@ -265,7 +299,8 @@ export function verifySubmission(ctx: SubmitContext, input: SubmitInput): Verifi
     firstName: ctx.contact.first_name,
     otherFaults,
     optOut: ctx.settings.opt_out_line,
-    slots: filled,
+    slots: { ...filled, second_finding: wantsFollowUp ? filled.second_finding : "" },
+    adPlatform: adWords,
   });
   if (r.problems.length) return { ok: false, reasons: r.problems };
   if (input.subject && input.subject.trim().toLowerCase() !== r.first.subject.toLowerCase()) {
@@ -297,14 +332,17 @@ export function verifySubmission(ctx: SubmitContext, input: SubmitInput): Verifi
         broken_page_name: input.broken_page_name?.trim() || null,
       },
     },
-    followUp: {
-      ...common,
-      kind: "follow_up",
-      ...r.followUp,
-      fault: secondFault,
-      slots: { second_finding: input.slots.second_finding, broken_page_name: input.broken_page_name?.trim() || null },
-    },
-    claims: input.claims.map((c) => ({
+    followUp:
+      r.followUp && secondFault
+        ? {
+            ...common,
+            kind: "follow_up",
+            ...r.followUp,
+            fault: secondFault,
+            slots: { second_finding: input.slots.second_finding, broken_page_name: input.broken_page_name?.trim() || null },
+          }
+        : null,
+    claims: input.claims.filter((c) => r.followUp || c.slot !== "second_finding").map((c) => ({
       message: c.slot === "second_finding" ? ("follow_up" as const) : ("first" as const),
       measurement_id: c.measurement_id,
       fault: c.fault,

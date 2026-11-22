@@ -7,6 +7,8 @@ import { isBlockPage } from "./measure-rules.ts";
 import { addressOnPage, onOwnSite } from "./contact.ts";
 import { verifySubmission, type MeasurementRow, type SubmitContext, type SubmitInput } from "./verify.ts";
 import type { Fault } from "./rules.ts";
+import { adsEvidenceFor } from "./ads.ts";
+import { ADS_MAX_AGE_HOURS, liveAds } from "./ads-rules.ts";
 
 /**
  * outreach_submit (Stage 4). The connector (Stage 7) calls this with the
@@ -24,10 +26,10 @@ export async function submitDraft(
   db: SupabaseClient,
   input: SubmitInput,
   actor: "claude" | "kyle",
-): Promise<{ ok: true; messageIds: { first: string; followUp: string } } | { ok: false; reasons: string[] }> {
+): Promise<{ ok: true; messageIds: { first: string; followUp: string | null } } | { ok: false; reasons: string[] }> {
   const { data: p, error: pErr } = await db
     .from("outreach_prospects")
-    .select("id, status, suburb, postcode, lane_id, business_name, domain, abn, phone, services")
+    .select("id, status, suburb, postcode, lane_id, business_name, domain, abn, phone, services, gst_registered")
     .eq("id", input.prospect_id)
     .maybeSingle();
   if (pErr) return { ok: false, reasons: [`Couldn't read the prospect: ${pErr.message}`] };
@@ -35,7 +37,9 @@ export async function submitDraft(
   const prospect = p as {
     id: string; status: string; suburb: string | null; postcode: string | null; lane_id: number | null;
     business_name: string | null; domain: string | null; abn: string | null; phone: string | null; services: string[];
+    gst_registered: boolean | null;
   };
+  const evidence = await adsEvidenceFor(db, prospect.id).catch(() => []);
 
   const [contactRes, laneRes, templateRes, settingsRes, stateRes, measuresRes, messagesRes, refusedRes] = await Promise.all([
     db.from("outreach_contacts").select("email, first_name, address_kind, mx_provider, source_url").eq("prospect_id", prospect.id).maybeSingle(),
@@ -113,6 +117,8 @@ export async function submitDraft(
     measurements: (measuresRes.data as MeasurementRow[] | null) ?? [],
     existingMessages: messagesRes.count ?? 0,
     refusals: refusedRes.count ?? 0,
+    ads: liveAds(evidence, new Date(), ADS_MAX_AGE_HOURS.submit),
+    gstRegistered: prospect.gst_registered,
   };
   const v = verifySubmission(ctx, input);
   if (!v.ok) reasons.push(...v.reasons);
@@ -127,15 +133,15 @@ export async function submitDraft(
   const row = (m: typeof v.first) => ({ ...m, prospect_id: prospect.id, created_by: actor });
   const { data: inserted, error: insErr } = await db
     .from("outreach_messages")
-    .insert([row(v.first), row(v.followUp)])
+    .insert(v.followUp ? [row(v.first), row(v.followUp)] : [row(v.first)])
     .select("id, kind");
   if (insErr || !inserted) return { ok: false, reasons: [`Couldn't store the draft: ${insErr?.message ?? "no rows"}`] };
-  const ids = Object.fromEntries((inserted as { id: string; kind: string }[]).map((m) => [m.kind, m.id])) as Record<"first" | "follow_up", string>;
+  const ids = Object.fromEntries((inserted as { id: string; kind: string }[]).map((m) => [m.kind, m.id])) as Partial<Record<"first" | "follow_up", string>> & { first: string };
   const { error: claimErr } = await db.from("outreach_claims").insert(
-    v.claims.map((c) => ({ message_id: ids[c.message], measurement_id: c.measurement_id, fault: c.fault, slot: c.slot, quote: c.quote })),
+    v.claims.filter((c) => ids[c.message]).map((c) => ({ message_id: ids[c.message], measurement_id: c.measurement_id, fault: c.fault, slot: c.slot, quote: c.quote })),
   );
   if (claimErr) {
-    await db.from("outreach_messages").delete().in("id", Object.values(ids));
+    await db.from("outreach_messages").delete().in("id", Object.values(ids).filter(Boolean) as string[]);
     return { ok: false, reasons: [`Couldn't store the claims: ${claimErr.message}`] };
   }
   await Promise.all([
@@ -143,5 +149,5 @@ export async function submitDraft(
     db.from("outreach_prospects").update({ status: "measured" }).eq("id", prospect.id).eq("status", "found"),
     db.from("outreach_events").insert({ prospect_id: prospect.id, message_id: ids.first, kind: "submitted", actor }),
   ]);
-  return { ok: true, messageIds: { first: ids.first, followUp: ids.follow_up } };
+  return { ok: true, messageIds: { first: ids.first, followUp: ids.follow_up ?? null } };
 }

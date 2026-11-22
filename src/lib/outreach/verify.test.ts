@@ -90,14 +90,14 @@ test("a good draft passes, rendered in Kyle's words with Pulse's figures", () =>
   assert.equal(v.ok, true, v.ok ? "" : v.reasons.join("\n"));
   if (!v.ok) return;
   assert.equal(v.first.subject, "your canopy page");
-  assert.equal(v.followUp.subject, "Re: your canopy page");
+  assert.equal(v.followUp!.subject, "Re: your canopy page");
   assert.match(v.first.body, /^Hi Sam,\n\nWe were looking at 4WD fit-out shops around the Sunshine Coast on Wednesday/);
   assert.match(v.first.body, /your canopy page took a little over six seconds to show anything/);
   assert.match(v.first.body, /We noticed a couple of other things while we were there, and we're happy to write them up and email them over/);
   assert.match(v.first.body, /If this isn't relevant, just reply and say so, and we won't email again\.\n\nKyle Hartwell\nHartwell Digital, ABN 44 286 503 049\n0494 791 078$/);
-  assert.match(v.followUp.body, /One last thing we noticed, in case it's useful\. Your contact page, in your main menu, showed an error page/);
+  assert.match(v.followUp!.body, /One last thing we noticed, in case it's useful\. Your contact page, in your main menu, showed an error page/);
   assert.equal(v.first.fault, "slow_mobile");
-  assert.equal(v.followUp.fault, "broken_page");
+  assert.equal(v.followUp!.fault, "broken_page");
   assert.equal(v.first.status, "awaiting_confirmation");
   assert.equal(v.first.personal_backed, 5); // area, day, page, first_paint, and the fault
   assert.equal(v.claims.length, 3);
@@ -203,5 +203,5 @@ test("one other fault on record says another thing, and it", () => {
 test("option B's opt-out line goes in the follow-up", () => {
   const v = verifySubmission(ctx({ settings: { version: 2, opt_out_line: "B" } }), GOOD);
   assert.equal(v.ok, true, v.ok ? "" : v.reasons.join("\n"));
-  if (v.ok) assert.ok(v.followUp.body.includes(TEMPLATE.opt_out_b));
+  if (v.ok) assert.ok(v.followUp!.body.includes(TEMPLATE.opt_out_b));
 });
