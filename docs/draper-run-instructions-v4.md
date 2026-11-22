@@ -1,0 +1,25 @@
+Draper plan 2 (22 November 2026), library-first from 23 November. Every business needs live Google or Meta ads, shown by the ad libraries, and one fault Pulse measured on its website. Two runs each morning: the 5:30am cloud run finds and measures from web search; the 7:35am PC run, which has a browser, checks the ad libraries, finds more businesses there, writes and submits.
+
+A. THE CLOUD RUN (5:30am, no browser)
+1. Call outreach_brief, then outreach_ads_queue. Work only in the active lane. Aim to leave three businesses waiting for the ads check for every email the target still needs (count the ones already waiting); also stop after reading 8 sites for each business you're aiming to add (never more than 200 sites). If the target is 0, only label replies.
+2. Don't stop early. Search one service and one area at a time, working through the lane's services and areas, until the number waiting reaches the aim or you hit the site limit. Favour businesses likely to advertise: sponsored results, online booking or quote forms, specials, more than one location, hiring. A directory may be used only to find a business's name; then search for its own site and read that. No site of its own: skip it.
+3. Check each one with outreach_check_business. Blocked: move on.
+4. Read their own site. Confirm they do the lane's work in the lane's areas and note their main services. Find a published email on their own site: never guess one, build one from a pattern, or take one from a directory or finder tool; skip it if a "no marketing" note sits near it. Prefer a named owner's address.
+5. Check the ABN on ABN Lookup (abr.business.gov.au). Keep them only if the ABN is active, certainly theirs, and registered for GST (the Goods & Services Tax line shows "Registered from" a date). Pass abn_status and gst_registered.
+6. outreach_add_prospect, then outreach_measure on the home page and the main service page. Neither page has a fault: outreach_drop with "no faults".
+7. Never submit in the cloud run: the ads check needs a browser. Leave measured businesses waiting.
+8. Label replies: outreach_replies_to_label, then outreach_label_reply for each whose meaning is plain.
+9. outreach_finish_run with the counts (submitted 0), then a two-line summary.
+
+B. THE PC RUN (7:35am, Kyle's computer, with a browser)
+1. Call outreach_brief, then outreach_ads_queue. The target is how many to submit today; stop when it's met.
+2. First the businesses already waiting (outreach_ads_queue, best first). For each, check both ad libraries (step 4) and submit or drop (step 5).
+3. Then find more in Meta's Ad Library, which lists only businesses advertising right now. Take the lane's services one at a time:
+   a. Open the keyword search https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=AU&q=SERVICE&search_type=keyword_unordered&media_type=all with the service's words in place of SERVICE (for example q=ute%20canopy). Wait for the results and read the page's visible text. For more results, scroll to the bottom, wait, and read again; try a second wording of the service before moving on.
+   b. Pick advertisers whose ads show a website domain (in capitals under the ad) that is their own business's site: not a marketplace, a social page, a national chain, franchise, dealership or manufacturer, or anything on the lane's skip list or the never list.
+   c. For each: outreach_check_business with the domain and name; blocked, move on. Read their own site: are they in the lane's areas, doing the lane's work, with an email published on their own site? Check the ABN as in A5 (active, theirs, GST registered). Then outreach_add_prospect, and outreach_measure on the home page and the main service page; neither page has a fault, outreach_drop with "no faults".
+   d. Then check both libraries for it (step 4) and submit or drop (step 5).
+4. The ads check, for one business, using its own domain: open the meta search https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=AU&q=DOMAIN&search_type=keyword_unordered&media_type=all, wait for results, and call outreach_record_ads with platform meta and the page's visible text. Open the google search https://adstransparency.google.com/?region=AU&domain=DOMAIN and record its text; if it lists ads, open up to three to find the latest "Last shown", and record with that ad's address as ad_url and its text as ad_text. (outreach_ads_queue gives both addresses for businesses already added.)
+5. Neither library shows live ads pointing to their website: outreach_drop with "no live ads". Live ads: write the slots by the template's slot rules and call outreach_submit with the template_version from the brief. Refused: fix it once; refused again: drop it with the reason.
+6. Never click an ad (the business pays for that click), never sign in, and never get past a login page or a captcha: if either appears, stop the run and say so. At most 250 library pages and sites in a run.
+7. outreach_finish_run with pages and sites read, and how many were added, measured, submitted and dropped by reason. Then a two-line summary.

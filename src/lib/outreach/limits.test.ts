@@ -9,20 +9,21 @@ import {
   rampCap,
 } from "./limits.ts";
 
-test("the ramp: 5, 10, 15 and 20, five sending days each, then the slider", () => {
-  const caps = Array.from({ length: 22 }, (_, done) => rampCap(done));
-  assert.deepEqual(caps.slice(0, 5), [5, 5, 5, 5, 5]);
-  assert.deepEqual(caps.slice(5, 10), [10, 10, 10, 10, 10]);
-  assert.deepEqual(caps.slice(10, 15), [15, 15, 15, 15, 15]);
-  assert.deepEqual(caps.slice(15, 20), [20, 20, 20, 20, 20]);
-  assert.equal(caps[20], null);
-  assert.equal(caps[21], null);
+test("the ramp: 10, 15 and 20, five sending days each, then the slider", () => {
+  const caps = Array.from({ length: 17 }, (_, done) => rampCap(done));
+  assert.deepEqual(caps.slice(0, 5), [10, 10, 10, 10, 10]);
+  assert.deepEqual(caps.slice(5, 10), [15, 15, 15, 15, 15]);
+  assert.deepEqual(caps.slice(10, 15), [20, 20, 20, 20, 20]);
+  assert.equal(caps[15], null);
+  assert.equal(caps[16], null);
 });
 
 test("the cap is the lower of the slider and the ramp", () => {
-  assert.equal(firstEmailCap(25, 0), 5);
+  assert.equal(firstEmailCap(25, 0), 10);
   assert.equal(firstEmailCap(3, 0), 3);
-  assert.equal(firstEmailCap(25, 7), 10);
+  assert.equal(firstEmailCap(25, 7), 15);
+  assert.equal(firstEmailCap(25, 12), 20);
+  assert.equal(firstEmailCap(25, 15), 25);
   assert.equal(firstEmailCap(12, 40), 12);
 });
 

@@ -65,7 +65,7 @@ test("it can't send, and its business check only ever says allowed or blocked", 
 });
 
 test("the advisor's three writes are advisor only", () => {
-  for (const name of ["outreach_clear_unsent", "outreach_redo_draft", "outreach_set_template", "outreach_set_lessons", "outreach_set_run_instructions", "outreach_set_test"]) {
+  for (const name of ["outreach_clear_unsent", "outreach_redo_draft", "outreach_set_lane", "outreach_set_template", "outreach_set_lessons", "outreach_set_run_instructions", "outreach_set_test"]) {
     const at = src.indexOf(`name: "${name}"`);
     assert.ok(at > 0, name);
     const next = src.indexOf("name: \"outreach_", at + 10);

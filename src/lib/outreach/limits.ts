@@ -20,10 +20,13 @@ export const CHECK_THESE_AFTER = 12;
 export const CHECK_THESE_FROM = "12:30";
 
 /**
- * The warm-up: 5 a day for the first 5 sending days, then 10, 15 and 20,
- * rising every 5 sending days. After that the slider decides.
+ * The warm-up: 10 a day for the first 5 sending days, then 15, then 20,
+ * rising every 5 sending days. After that the slider decides. Kyle chose
+ * this faster ramp on 23 November 2026 (it was 5, 10, 15, 20) to reach about
+ * 20 a day in two weeks; the auto-pause rules still stop everything on 3
+ * bounces or 3 no-thanks in the last 40.
  */
-export const RAMP = [5, 10, 15, 20] as const;
+export const RAMP = [10, 15, 20] as const;
 export const RAMP_STEP_DAYS = 5;
 
 /** A whole number, or the fallback when it is not a number at all. */

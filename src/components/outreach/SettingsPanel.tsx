@@ -106,7 +106,7 @@ export function SettingsPanel({
               <span className="data-mono text-pulse-gold">{daily}</span>
             </span>
           }
-          detail="Warms up at 5 a day for five sending days, then 10, 15 and 20. Past 12 a day wait in Check these until 12:30pm."
+          detail="Warms up at 10 a day for five sending days, then 15 and 20. Past 12 a day wait in Check these until 12:30pm."
         >
           <input
             type="range"

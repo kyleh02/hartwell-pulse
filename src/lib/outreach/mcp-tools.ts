@@ -998,6 +998,41 @@ export const DRAPER_TOOLS: Tool[] = [
     },
   },
   {
+    name: "outreach_set_lane",
+    title: "Change a lane's areas or services",
+    description:
+      "Replace a lane's areas, and optionally its services, as Kyle has asked. The lane's skip list, the never list, the client-area exclusions and the defence lane are untouched. Only after Kyle has said yes in this chat.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        lane_id: { type: "integer" },
+        areas: { type: "array", items: { type: "string" }, description: "Where its businesses must be, e.g. \"Greater Melbourne VIC\"." },
+        services: { type: "array", items: { type: "string" }, description: "Leave out to keep the services as they are." },
+        why: { type: "string", description: "What changed and why, for the change log." },
+      },
+      required: ["lane_id", "areas", "why"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    advisorOnly: true,
+    async run(a, ctx) {
+      const id = int(a, "lane_id");
+      if (id === undefined || id < 1 || id > 99 || id === 4) throw new InputError("lane_id is a lane's number (never 4, the defence lane).");
+      const areas = list(a, "areas");
+      if (!areas.length) throw new InputError("areas lists at least one area.");
+      const services = a.services === undefined ? undefined : list(a, "services");
+      const why = need(a, "why", 1000);
+      const patch: Record<string, unknown> = { areas };
+      if (services?.length) patch.services = services;
+      const { data, error } = await ctx.sb.from("outreach_lanes").update(patch).eq("id", id).select("id, name, areas, services");
+      if (error) throw new Error(error.message);
+      const lane = (data as { id: number; name: string; areas: string[]; services: string[] }[] | null)?.[0];
+      if (!lane) throw new InputError(`There's no lane ${id}.`);
+      await log(ctx, `Lane ${lane.id} (${lane.name}): areas now ${lane.areas.join(", ")}${services?.length ? `; services now ${lane.services.join(", ")}` : ""}`, why);
+      return { text: `Lane ${lane.id} (${lane.name}) areas: ${lane.areas.join(", ")}.${services?.length ? ` Services: ${lane.services.join(", ")}.` : ""}` };
+    },
+  },
+  {
     name: "outreach_set_template",
     title: "Install a template",
     description:

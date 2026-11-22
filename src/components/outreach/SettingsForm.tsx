@@ -89,7 +89,7 @@ export function SettingsForm({ s }: { s: DraperSettings }) {
       <Field label="Test inboxes" hint="One Gmail and one Outlook, separated by commas.">
         <input className={field} value={f.test_inboxes} onChange={(e) => set("test_inboxes", e.target.value)} placeholder="you@gmail.com, you@outlook.com" />
       </Field>
-      <Field label={`First emails a sending day: ${f.daily_first_emails}`} hint="Warms up at 5 a day for five sending days, then 10, 15 and 20. Past 12 a day go in Check these.">
+      <Field label={`First emails a sending day: ${f.daily_first_emails}`} hint="Warms up at 10 a day for five sending days, then 15 and 20. Past 12 a day go in Check these.">
         <input type="range" min={1} max={25} className="w-full" value={f.daily_first_emails} onChange={(e) => set("daily_first_emails", Number(e.target.value))} />
       </Field>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
