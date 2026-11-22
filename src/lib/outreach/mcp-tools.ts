@@ -763,11 +763,27 @@ export const DRAPER_TOOLS: Tool[] = [
         if (!p.domain) continue;
         const [{ count: msgs }, { data: runs }, evidence] = await Promise.all([
           ctx.sb.from("outreach_messages").select("id", { count: "exact", head: true }).eq("prospect_id", p.id),
-          ctx.sb.from("outreach_measurements").select("id, url, faults, ad_signal, tags").eq("prospect_id", p.id).eq("status", "ok"),
+          ctx.sb.from("outreach_measurements").select("id, url, faults, ad_signal, tags, psi_fcp_ms, psi_lcp_ms, pixel_pageviews, menu_links").eq("prospect_id", p.id).eq("status", "ok"),
           adsEvidenceFor(ctx.sb, p.id).catch(() => []),
         ]);
         if (msgs) continue;
-        const ok = (runs as { id: string; url: string; faults: Fault[]; ad_signal: boolean | null; tags: Record<string, string[]> | null }[] | null) ?? [];
+        const ok = (runs as {
+          id: string; url: string; faults: Fault[]; ad_signal: boolean | null; tags: Record<string, string[]> | null;
+          psi_fcp_ms: number | null; psi_lcp_ms: number | null; pixel_pageviews: Record<string, number> | null;
+          menu_links: { url: string; label: string; status: number | null }[] | null;
+        }[] | null) ?? [];
+        // What each page's figures allow, so the slots use a token that holds.
+        const pageLine = (r: (typeof ok)[number]) => {
+          const bits = [
+            r.faults.length ? `faults ${r.faults.join(", ")}` : "no faults",
+            r.psi_fcp_ms !== null ? `first paint ${secondsWords(r.psi_fcp_ms)}${r.psi_fcp_ms >= 4000 ? " ([[first_paint]] holds)" : ""}` : "",
+            r.psi_lcp_ms !== null ? `largest paint ${secondsWords(r.psi_lcp_ms)}${r.psi_lcp_ms >= 6000 ? " ([[largest_paint]] holds)" : ""}` : "",
+            Math.max(0, ...Object.values(r.pixel_pageviews ?? {})) >= 2 ? "the Meta Pixel counts a visit more than once ([[pageviews]] holds)" : "",
+            (r.menu_links ?? []).filter((l) => l.status !== null && (l.status === 404 || l.status === 410 || l.status >= 500)).map((l) => `broken menu page "${l.label || l.url}"`).join(", "),
+            `[[page]] may name it: ${[...pageNamesFor(r.url, (r.menu_links ?? []).filter((l) => l.url === r.url).map((l) => l.label))].slice(0, 4).join(", ")}`,
+          ].filter(Boolean);
+          return `${r.url} (measurement_id ${r.id}: ${bits.join("; ")})`;
+        };
         const faults = FAULT_RANK.filter((f) => ok.some((r) => r.faults.includes(f)));
         const tags = [...new Set(ok.flatMap((r) => [r.tags?.aw?.length ? "Google Ads tag" : "", r.tags?.meta_pixel?.length ? "Meta Pixel" : ""]).filter(Boolean))];
         const urls = libraryUrls(p.domain);
@@ -782,7 +798,7 @@ export const DRAPER_TOOLS: Tool[] = [
           text: [
             `${p.business_name ?? "A business"} (prospect_id ${p.id}, ${p.domain}, ${p.suburb ?? "?"}, found ${p.found_on})${p.gst_registered === false ? ": NOT registered for GST, drop it" : p.gst_registered === null ? ": GST unknown, check ABN Lookup before writing" : ""}`,
             `  faults, best first: ${faults.length ? faults.map((f) => `${f} (${FAULT_LABEL[f]})`).join(", ") : "none: drop it (\"no faults\")"}`,
-            `  measured pages: ${ok.map((r) => `${r.url} (measurement_id ${r.id}${r.faults.length ? `: ${r.faults.join(", ")}` : ""})`).join("; ") || "none"}`,
+            `  measured pages:\n${ok.map((r) => `    ${pageLine(r)}`).join("\n") || "    none"}`,
             `  tags seen on the site: ${tags.join(", ") || "none (Shopify and Tag Manager sites often hide them; check the libraries anyway)"}`,
             `  meta search: ${urls.meta}`,
             `  google search: ${urls.google}`,
