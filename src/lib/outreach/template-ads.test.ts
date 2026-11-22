@@ -231,3 +231,29 @@ test("a load time always says it was Google's own speed test", () => {
   const v = slow("Your [[ad_platform]] ads send people to your website. In Google's own speed test, your [[page]] page took [[largest_paint]] to show its main content on a phone.");
   assert.equal(v.ok, true, v.ok ? "" : v.reasons.join("\n"));
 });
+
+test("a page's natural name is fine when its words are the address's", () => {
+  const susp = { ...vans, id: "m3", url: "https://ssc4wd.com.au/services/4wd-suspension-lifts-airbags/", menu_links: [], faults: ["slow_mobile" as const], pixel_pageviews: {} };
+  const v = verifySubmission(
+    ctx({ measurements: [susp] }),
+    draft(
+      { page_name: "4WD suspension lifts and airbags", claims: [{ fault: "slow_mobile", measurement_id: "m3", slot: "finding" }] },
+      {
+        finding: "Your [[ad_platform]] ads send people to your website. In Google's own speed test, your [[page]] page took [[largest_paint]] to show its main content on a phone.",
+        why_and_fix: "Those are paid clicks, and plenty of people on a phone won't wait that long. A lighter page is the fix.",
+      },
+    ),
+  );
+  assert.equal(v.ok, true, v.ok ? "" : v.reasons.join("\n"));
+  if (v.ok) assert.match(v.first.body, /your 4WD suspension lifts and airbags page took a little over seven seconds/);
+  // Words the address doesn't have are still refused.
+  refused(verifySubmission(ctx({ measurements: [susp] }), draft({ page_name: "lift kits", claims: [{ fault: "slow_mobile", measurement_id: "m3", slot: "finding" }] })), /page_name/);
+});
+
+test("a follow-up about another page says which page", () => {
+  const withSecond = (second_finding: string) =>
+    verifySubmission(ctx(), draft({ claims: [...GOOD.claims, { fault: "phone_not_tappable", measurement_id: "m2", slot: "second_finding" }] }, { second_finding }));
+  refused(withSecond("The phone number on the page can't be tapped to ring, so people on a phone have to copy it out by hand."), /different page from the first email/);
+  const v = withSecond("The phone number on your home page can't be tapped to ring, so people on a phone have to copy it out by hand.");
+  assert.equal(v.ok, true, v.ok ? "" : v.reasons.join("\n"));
+});

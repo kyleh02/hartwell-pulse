@@ -104,6 +104,14 @@ export type Verified =
 
 const BROKEN = (s: number | null) => s !== null && (s === 404 || s === 410 || s >= 500);
 
+/** A name key without the small words an address leaves out. */
+function looseKey(key: string): string {
+  return key
+    .split(" ")
+    .filter((w) => w && !["and", "the", "of", "for", "a", "our", "your"].includes(w))
+    .join(" ");
+}
+
 /**
  * A page name as it reads mid-sentence: lower case, but trade words keep
  * their capitals ("4WD", "UTE"), and "4wd" typed from an address becomes
@@ -198,7 +206,12 @@ export function verifySubmission(ctx: SubmitContext, input: SubmitInput): Verifi
     const want = nameKey(input.page_name);
     if (!want || !firstMeasurement) return false;
     const labels = firstMeasurement.menu_links.filter((l) => l.url === firstMeasurement.url).map((l) => l.label);
-    if (pageNamesFor(firstMeasurement.url, labels).has(want)) return true;
+    const names = pageNamesFor(firstMeasurement.url, labels);
+    if (names.has(want)) return true;
+    // The ads template may use the page's natural name when its words are the
+    // address's: "4WD suspension lifts and airbags" for
+    // /4wd-suspension-lifts-airbags/, where "and" is the only difference.
+    if (ads && [...names].some((n) => looseKey(n) === looseKey(want))) return true;
     return (
       firstFault === "broken_page" &&
       firstMeasurement.menu_links.some((l) => BROKEN(l.status) && (nameKey(l.label) === want || pageNamesFor(l.url).has(want)))
@@ -306,6 +319,20 @@ export function verifySubmission(ctx: SubmitContext, input: SubmitInput): Verifi
 
   // ---------- the lint ----------
   for (const r of describe(lintSlots(input.slots, filled, { ads }))) no(r);
+
+  // The follow-up's fault on a different page from the first email's: it must
+  // say which page, or "the page" reads as the first email's and is wrong.
+  const secondMeasurement = measurementFor.get("second_finding");
+  if (ads && wantsFollowUp && secondMeasurement && firstMeasurement && secondMeasurement.url !== firstMeasurement.url) {
+    const names = pageNamesFor(
+      secondMeasurement.url,
+      secondMeasurement.menu_links.filter((l) => l.url === secondMeasurement.url).map((l) => l.label),
+    );
+    const said = looseKey(nameKey(input.slots.second_finding ?? ""));
+    if (![...names].some((n) => looseKey(n) && ` ${said} `.includes(` ${looseKey(n)} `))) {
+      no(`{second_finding} is about a different page from the first email (${secondMeasurement.url}): name it in words, as its menu or address does (for example "your home page").`);
+    }
+  }
 
   // ---------- personal ----------
   // Facts true only of this business in the first email: each token Pulse
