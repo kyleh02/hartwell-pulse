@@ -66,9 +66,11 @@ hartwelldigital.com`,
 
 Every business in this template has live ads, from the ad-library checks you recorded with outreach_record_ads. The libraries prove their ads point at their website, not which page the ads land on, so say "send people to your website" and name a page only where Pulse measured the fault.
 
-{finding}: two sentences, 35 words at most. Starts "Your [[ad_platform]] ads send people to your website". Then the one fault Pulse measured, on the page it measured (named with [[page]]), with its token. It must be the best-ranked fault on record: outreach_ads_queue and outreach_measure list them best first.
+{finding}: two sentences, 35 words at most. Starts "Your [[ad_platform]] ads send people to your website". Then the one fault Pulse measured, on the page it measured (named with [[page]]), with its token. It must be the best-ranked fault on record: outreach_ads_queue and outreach_measure list them best first. A load time always says it was Google's own speed test: "In Google's own speed test, your [[page]] page took [[largest_paint]] to show its main content on a phone."
+page_name: the page as its menu names it, or its natural name in the words of its address ("4WD suspension lifts and airbags" for /4wd-suspension-lifts-airbags/), never the address squashed into words. Pulse writes it the way the site's menu does.
 {why_and_fix}: two sentences, 30 words at most. What the fault does to the people their ads send, or for a tracking fault, to the numbers they judge their ads by. Say once that these are paid clicks or paid ads. Then the fix, plainly.
-{second_finding}: leave it empty when only one fault is on record; then there's no follow-up. Otherwise one or two sentences, 40 words at most: a different fault, with its token and what it does. Nothing about their ads.
+{second_finding}: leave it empty when only one fault is on record; then there's no follow-up. Otherwise one or two sentences, 40 words at most: a different fault, with its token and what it does. Nothing about their ads. If it was measured on a different page from the first email's, name that page in words ("your home page"); "the page" would read as the first email's.
+personal_count: 2 or more.
 
 Never, in any slot: how, when or where we found them ([[day]] and [[area]] are refused in the first email), praise, a question, "now" or "currently", "mobile" (say "on a phone"), jargon (SEO, ROI, conversion rate, LCP), "some issues", "quick fix", promises, who should fix it, what they spend, a link, a figure you typed, a dash or an exclamation mark.`,
   example: `Subject: your Facebook ads

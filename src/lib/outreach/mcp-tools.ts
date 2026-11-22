@@ -798,7 +798,7 @@ export const DRAPER_TOOLS: Tool[] = [
           text: [
             `${p.business_name ?? "A business"} (prospect_id ${p.id}, ${p.domain}, ${p.suburb ?? "?"}, found ${p.found_on})${p.gst_registered === false ? ": NOT registered for GST, drop it" : p.gst_registered === null ? ": GST unknown, check ABN Lookup before writing" : ""}`,
             `  faults, best first: ${faults.length ? faults.map((f) => `${f} (${FAULT_LABEL[f]})`).join(", ") : "none: drop it (\"no faults\")"}`,
-            `  measured pages:\n${ok.map((r) => `    ${pageLine(r)}`).join("\n") || "    none"}`,
+            `  measured pages (page_name may also be a page's natural name in its address's words):\n${ok.map((r) => `    ${pageLine(r)}`).join("\n") || "    none"}`,
             `  tags seen on the site: ${tags.join(", ") || "none (Shopify and Tag Manager sites often hide them; check the libraries anyway)"}`,
             `  meta search: ${urls.meta}`,
             `  google search: ${urls.google}`,
@@ -1011,10 +1011,13 @@ export const DRAPER_TOOLS: Tool[] = [
       const laneIds = Array.isArray(a.lane_ids) ? (a.lane_ids as unknown[]).filter((x): x is number => typeof x === "number" && Number.isInteger(x) && x > 0 && x < 100) : [];
       if (!laneIds.length) throw new InputError("lane_ids lists the lanes to move onto it.");
       const t = TEMPLATE_ADS;
-      const { data: rows, error: rErr } = await ctx.sb.from("outreach_templates").select("version, first_subject, first_body, followup_body").order("version", { ascending: false });
+      const { data: rows, error: rErr } = await ctx.sb.from("outreach_templates").select("version, first_subject, first_body, followup_body, slot_rules").order("version", { ascending: false });
       if (rErr) throw new Error(rErr.message);
-      const all = (rows as { version: number; first_subject: string; first_body: string; followup_body: string }[] | null) ?? [];
-      let version = all.find((r) => r.first_subject === t.first_subject && r.first_body === t.first_body && r.followup_body === t.followup_body)?.version;
+      const all = (rows as { version: number; first_subject: string; first_body: string; followup_body: string; slot_rules: string }[] | null) ?? [];
+      // A template row never changes, so new slot rules are a new version too.
+      let version = all.find(
+        (r) => r.first_subject === t.first_subject && r.first_body === t.first_body && r.followup_body === t.followup_body && r.slot_rules === t.slot_rules,
+      )?.version;
       const installed = !version;
       if (!version) {
         version = (all[0]?.version ?? 0) + 1;
