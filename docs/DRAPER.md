@@ -1009,3 +1009,22 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
   session); the 5:30am routine's prompt now follows part A. The
   browser-step scheduled task was refused by the permission check: Kyle
   creates it. The plan: docs/DRAPER-PLAN-2.md.
+- 22 November 2026, later the same night: **the end-to-end test on real
+  businesses.** The cloud run (part A) read 4 sites in five minutes and left
+  2 waiting (EzToolbox, Laverton North; Sunshine Coast 4WD Centre,
+  Maroochydore), far short of the 15 it aimed for: the routine prompt now
+  says don't stop early, one service and one suburb a search. The browser
+  step was done by hand in Chrome and handed to a one-off cloud run on
+  Draper advisor: `outreach_record_ads` read both libraries for both (live
+  on Google and Facebook), the lint refused "wasted" (spend), both were
+  submitted. Reading the drafts back before anything sent found three
+  faults, each now refused or fixed in code (48e71c0, 3a466b0, 7f71f2f):
+  a page named from its address ("4wd suspension lift airbag"; now the
+  menu's name, or the natural name in the address's words), a load time
+  not said to be Google's test (a bare "a phone took 27 seconds" reads as
+  wrong to an owner on fast wifi), and a follow-up about the home page
+  saying "the page". `outreach_redo_draft` (advisor) withdrew and rewrote
+  them; refusals count afresh after a withdrawal. The slot rules now say
+  all this up front: template 3 (same email, new rules), lanes 1, 2, 3, 5.
+  The brief's target no longer counts emails queued for an earlier day.
+  Both drafts were waiting for Pulse's hour-later re-measure at 11pm.

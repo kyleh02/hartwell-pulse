@@ -122,7 +122,16 @@ async function target(ctx: DraperContext, s: DraperSettings): Promise<{ day: str
   const state = st as { paused: boolean; paused_reason: string | null } | null;
   const [{ data: sent }, { count: waiting }, { count: fus }] = await Promise.all([
     ctx.sb.from("outreach_messages").select("sent_at").eq("kind", "first").eq("test_mode", false).not("sent_at", "is", null),
-    ctx.sb.from("outreach_messages").select("id", { count: "exact", head: true }).eq("kind", "first").in("status", ["awaiting_confirmation", "queued"]),
+    // Waiting for the day being filled: unconfirmed, or queued for it or later.
+    // One queued for an earlier day (sending this morning) isn't the day's.
+    day
+      ? ctx.sb
+          .from("outreach_messages")
+          .select("id", { count: "exact", head: true })
+          .eq("kind", "first")
+          .in("status", ["awaiting_confirmation", "queued"])
+          .or(`send_on.is.null,send_on.gte.${day}`)
+      : ctx.sb.from("outreach_messages").select("id", { count: "exact", head: true }).eq("kind", "first").in("status", ["awaiting_confirmation", "queued"]),
     day
       ? ctx.sb.from("outreach_messages").select("id", { count: "exact", head: true }).eq("kind", "follow_up").eq("status", "queued").eq("send_on", day)
       : Promise.resolve({ count: 0 }),
