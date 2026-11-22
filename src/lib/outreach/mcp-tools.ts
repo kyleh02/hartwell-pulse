@@ -194,7 +194,7 @@ export const DRAPER_TOOLS: Tool[] = [
           off.length ? `Faults switched off (never claim these): ${off.map((f) => `${f} (${FAULT_LABEL[f]})`).join(", ")}.` : "",
           process.env.ABR_GUID
             ? "ABNs: Pulse checks them itself when you add a prospect. Give the ABN from their site or ABN Lookup."
-            : "ABNs: Pulse can't check them yet. Read the public ABN Lookup site and give abn_status and gst_registered with the ABN; keep a business only if it's active and certainly theirs.",
+            : "ABNs: Pulse can't check them yet. Read the public ABN Lookup site and give abn_status and gst_registered with the ABN; keep a business only if it's active, certainly theirs, and registered for GST.",
           "",
           template
             ? [

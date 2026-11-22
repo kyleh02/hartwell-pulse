@@ -737,6 +737,20 @@ Live at https://portal.hartwelldigital.com
   sends on public holidays except the seven national ones, which
   `nationalHolidays()` in `schedule.ts` works out for any year (Kyle, 20 Nov
   2026); the pause dates in Settings still stop everything.
+- **Plan 2 (22 November 2026, docs/DRAPER-PLAN-2.md): live ads or nothing.**
+  Template 2 ("ads", `template-ads.ts`) only writes to a business whose ads
+  Meta's Ad Library or Google's Transparency Centre shows live, pointing at
+  its own domain. Pulse can't open the libraries (Meta forbids automated
+  collection; Google's page is a script shell), so the browser step reads
+  them in Chrome and hands over the PAGE TEXT; `ads-rules.ts` reads it, never
+  Claude's account of it. Checks are `outreach_events` of kind `checked`
+  (`ads.ts`). A template is the ads template when it uses `{ad_platform}`
+  (`isAdsTemplate`), and only then do the stricter lint, the GST floor,
+  `FAULT_RANK` and the optional follow-up apply; template 1's rules are
+  untouched. Freshness: 36 hours at submit, 48 at confirmation, 96 at send.
+- **New connector tools reach an open session only after it reconnects**:
+  Claude Code and claude.ai cache a connector's tool list at connect. A
+  fresh cloud run (RemoteTrigger) sees them at once.
 - **Replies are `checkReplies()` in `src/lib/outreach/replies.ts`**, from the
   same tick every ten minutes, paused or not. Opt-out words match their own
   words only (our template lines, quoted text and legal footers removed);

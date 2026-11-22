@@ -1,5 +1,17 @@
 # Draper: automatic outreach (handover)
 
+**Status, 22 November 2026 (night): Draper is LIVE and on plan 2
+(docs/DRAPER-PLAN-2.md).** Every business needs live Google or Meta ads,
+read by Pulse from the ad libraries' own page text, a GST-registered ABN,
+and one measured fault; the first email leads with the best-ranked fault
+(tracking before speed), on template 2 ("ads"); the follow-up only comes
+with a second fault. The 5:30am cloud routine finds and measures and never
+submits; the browser step (docs/draper-browser-step.md) checks the libraries
+in Chrome and submits. Kyle's evening run under the old approach was cleared
+before anything sent. Template 2 and run instructions v3 installed through
+Draper advisor with Kyle's yes. The browser step's scheduled task is Kyle's
+to create (the permission check wouldn't let a session do it). No migration.
+
 **Status, 20 November 2026: Stage 1 (data) done and verified: Kyle pasted
 0062 and its probe passed 36 of 36 on the live database; merged into `main`
 with `OUTREACH_ENABLED` unset (Draper hidden). Stage 2 (the no-repeat rule)
@@ -728,6 +740,15 @@ Can start now:
    Check the pause dates in Settings: 18 December to 11 January stops all
    sending unless he changes them.
 
+12. **Plan 2 (22 Nov), the browser step:** create the scheduled task from
+   `docs/draper-browser-step.md` (Claude desktop app, every day 7:30am,
+   Auto, Run now once to approve it). Keep the computer awake around then.
+13. **Plan 2, safer Chrome:** a separate Chrome profile for Draper with no
+   Facebook or Google sign-in, Claude in Chrome connected to it.
+14. **Plan 2, read the first emails** on Monday's 8am summary (Tuesday's
+   queue); stop any with the Draper page's Don't send. Set the follow-up
+   opt-out to B if not already (its reply words feed the labels).
+
 When a stage asks: the Google Cloud project, Gmail and PageSpeed APIs, the
 Internal OAuth screen, the OAuth client and API key (Stage 5 gives the clicks);
 the cron-job.org jobs; the Vercel variables; pasting each migration; the test
@@ -963,3 +984,28 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
     site. The advisory chat's directory wording (find the name in a
     directory, then the business's own site; the address only from there)
     is the fix, through Draper advisor with Kyle's yes.
+- 22 November 2026, night: **Draper plan 2.** Kyle asked for a hypercritical
+  audit of the prompt and targeting (focus Google and Meta ads with the
+  websites they point at; LinkedIn later), then three agents (evidence and
+  targeting with hands-on tests of both ad libraries in Kyle's Chrome;
+  message and offer; operations and red team) and a plan; he chose: Meta
+  and Google only, ad libraries per business, the email rewritten around ad
+  money, a GST floor, tracking faults above speed, one strong fault
+  qualifies. Asked for it fixed, tested and running by morning. Built
+  (a99435e, 144 tests): `ads-rules.ts` (Pulse builds the library searches
+  and reads their text itself; fixtures are real page text), evidence as
+  `outreach_events` kind `checked` (no migration), tools
+  `outreach_ads_queue`, `outreach_record_ads`, `outreach_preview`, advisor
+  `outreach_set_template`, `outreach_queue`, `outreach_clear_unsent`;
+  `template-ads.ts` (template 2), `[[ad_platform]]`, `FAULT_RANK`, the
+  ads-template lint (the slop checklist), optional follow-up, freshness
+  36/48/96 hours at submit/confirm/send, GST refused at add. Kyle also
+  asked to clear the run made earlier that evening under the old approach:
+  `outreach_clear_unsent` removed 14 never-emailed businesses (5 with
+  drafts due Monday); its first try failed on the claims foreign key
+  (fixed 5c938d9, proved on PGlite). Template 2 and run instructions v3
+  installed through a one-off cloud run on Draper advisor (this session's
+  connector tool lists are cached at connect, so new tools need a fresh
+  session); the 5:30am routine's prompt now follows part A. The
+  browser-step scheduled task was refused by the permission check: Kyle
+  creates it. The plan: docs/DRAPER-PLAN-2.md.
