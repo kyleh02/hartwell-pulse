@@ -46,13 +46,19 @@ test("it can't send, and its business check only ever says allowed or blocked", 
   assert.ok(!/sendRaw|buildMessage|gmail-access|from "\.\/gmail\.ts"|sender\.ts/.test(src), "imports the sending path");
   assert.ok(!/verdict\.blocks/.test(src), "hands block details back");
   assert.equal((src.match(/publicVerdict\(/g) ?? []).length, 2);
-  // One delete only: a prospect it inserted a moment earlier whose contact failed to save.
-  assert.equal((src.match(/\.delete\(\)/g) ?? []).length, 1);
+  // Two deletes only: a prospect it inserted a moment earlier whose contact
+  // failed to save, and the advisor's clear of a day's never-emailed work.
+  assert.equal((src.match(/\.delete\(\)/g) ?? []).length, 2);
+  const clearAt = src.indexOf('name: "outreach_clear_unsent"');
+  const clearBlock = src.slice(clearAt, src.indexOf('name: "outreach_set_lessons"'));
+  assert.match(clearBlock, /advisorOnly: true/);
+  assert.match(clearBlock, /\.eq\("test", false\)/);
+  assert.match(clearBlock, /\.not\("sent_at", "is", null\)/);
   assert.match(src, /if \(cErr\) \{\s*await ctx\.sb\.from\("outreach_prospects"\)\.delete\(\)\.eq\("id", id\);/);
 });
 
 test("the advisor's three writes are advisor only", () => {
-  for (const name of ["outreach_set_lessons", "outreach_set_run_instructions", "outreach_set_test"]) {
+  for (const name of ["outreach_clear_unsent", "outreach_set_lessons", "outreach_set_run_instructions", "outreach_set_test"]) {
     const at = src.indexOf(`name: "${name}"`);
     assert.ok(at > 0, name);
     const next = src.indexOf("name: \"outreach_", at + 10);
@@ -74,7 +80,7 @@ test("the advisor's three writes are advisor only", () => {
   ]);
   // The run report is the morning run's own; it isn't an advisor write.
   const at = src.indexOf('name: "outreach_finish_run"');
-  assert.ok(!/advisorOnly: true/.test(src.slice(at, src.indexOf('name: "outreach_set_lessons"'))));
+  assert.ok(!/advisorOnly: true/.test(src.slice(at, src.indexOf('name: "outreach_queue"'))));
 });
 
 test("an address's mail provider, from its MX records", () => {

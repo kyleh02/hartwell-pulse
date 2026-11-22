@@ -683,7 +683,72 @@ export const DRAPER_TOOLS: Tool[] = [
     },
   },
 
-  // ---------- the advisor's three writes ----------
+  {
+    name: "outreach_queue",
+    title: "What's waiting",
+    description: "Every email not yet sent: the business, first email or follow-up, its status (being checked, queued), and the day it's due. Read only.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    async run(_a, ctx) {
+      const { data } = await ctx.sb
+        .from("outreach_messages")
+        .select("prospect_id, kind, status, send_on, fault, created_at")
+        .in("status", ["awaiting_confirmation", "queued", "sending"])
+        .order("created_at")
+        .limit(100);
+      const rows = (data as { prospect_id: string; kind: string; status: string; send_on: string | null; fault: Fault | null; created_at: string }[] | null) ?? [];
+      if (!rows.length) return { text: "Nothing is waiting." };
+      const { data: ps } = await ctx.sb.from("outreach_prospects").select("id, business_name, found_on, test").in("id", [...new Set(rows.map((r) => r.prospect_id))]);
+      const p = new Map(((ps as { id: string; business_name: string | null; found_on: string; test: boolean }[] | null) ?? []).map((x) => [x.id, x]));
+      return {
+        text: rows
+          .map((r) => {
+            const x = p.get(r.prospect_id);
+            return `${x?.business_name ?? "A business"} (prospect_id ${r.prospect_id}, found ${x?.found_on ?? "?"}${x?.test ? ", test" : ""}): ${r.kind === "first" ? "first email" : "follow-up"}, ${r.status === "awaiting_confirmation" ? "being checked" : r.status}${r.send_on ? `, due ${r.send_on}` : ""}, about ${r.fault ? FAULT_LABEL[r.fault].toLowerCase() : "?"}.`;
+          })
+          .join("\n"),
+      };
+    },
+  },
+
+  // ---------- the advisor's writes ----------
+  {
+    name: "outreach_clear_unsent",
+    title: "Clear a day's unsent work",
+    description:
+      "Remove every business the morning run found on one day that has never been emailed, with its drafts and measurements, so a later run can look at them afresh. For when Kyle has said to clear a run (for example one made under rules he has since changed). Never touches a business that has been emailed, test businesses, or businesses added by hand. Pass confirm: \"clear\". Only after Kyle has said yes in this chat.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        found_on: { type: "string", description: "The day the run found them, YYYY-MM-DD (Melbourne)." },
+        confirm: { type: "string", description: "Must be exactly \"clear\"." },
+      },
+      required: ["found_on", "confirm"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    advisorOnly: true,
+    async run(a, ctx) {
+      const day = need(a, "found_on", 10);
+      if (!DATE_RE.test(day)) throw new InputError("found_on is YYYY-MM-DD.");
+      if (str(a, "confirm", 10) !== "clear") throw new InputError('Pass confirm: "clear" once Kyle has said yes.');
+      const { data: ps } = await ctx.sb.from("outreach_prospects").select("id, business_name").eq("source", "claude_run").eq("test", false).eq("found_on", day);
+      const all = (ps as { id: string; business_name: string | null }[] | null) ?? [];
+      if (!all.length) return { text: `The run found nothing on ${day}.` };
+      const { data: sent } = await ctx.sb.from("outreach_messages").select("prospect_id").in("prospect_id", all.map((p) => p.id)).not("sent_at", "is", null);
+      const emailed = new Set(((sent as { prospect_id: string }[] | null) ?? []).map((m) => m.prospect_id));
+      const clear = all.filter((p) => !emailed.has(p.id));
+      if (!clear.length) return { text: `Every business found on ${day} has been emailed; nothing was cleared.` };
+      // Unsent drafts, their claims, measurements, contacts and events go with
+      // the business (cascades). Nothing was fingerprinted: that happens only
+      // when a business is really emailed.
+      const { error } = await ctx.sb.from("outreach_prospects").delete().in("id", clear.map((p) => p.id));
+      if (error) throw new Error(error.message);
+      const names = clear.map((p) => p.business_name ?? "A business");
+      await log(ctx, `Cleared ${clear.length} unsent business${clear.length === 1 ? "" : "es"} found ${day}`, names.join("; ").slice(0, 1000));
+      return { text: `Cleared ${clear.length} (never emailed): ${names.join(", ")}.${emailed.size ? ` Kept ${emailed.size} already emailed.` : ""}` };
+    },
+  },
   {
     name: "outreach_set_lessons",
     title: "Write the lessons",
