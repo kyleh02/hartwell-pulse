@@ -46,14 +46,16 @@ test("it can't send, and its business check only ever says allowed or blocked", 
   assert.ok(!/sendRaw|buildMessage|gmail-access|from "\.\/gmail\.ts"|sender\.ts/.test(src), "imports the sending path");
   assert.ok(!/verdict\.blocks/.test(src), "hands block details back");
   assert.equal((src.match(/publicVerdict\(/g) ?? []).length, 2);
-  // Two deletes only: a prospect it inserted a moment earlier whose contact
-  // failed to save, and the advisor's clear of a day's never-emailed work.
-  assert.equal((src.match(/\.delete\(\)/g) ?? []).length, 2);
+  // Three deletes only: a prospect it inserted a moment earlier whose contact
+  // failed to save, and the advisor's clear of a day's never-emailed work
+  // (its unsent drafts, then the businesses).
+  assert.equal((src.match(/\.delete\(\)/g) ?? []).length, 3);
   const clearAt = src.indexOf('name: "outreach_clear_unsent"');
   const clearBlock = src.slice(clearAt, src.indexOf('name: "outreach_set_lessons"'));
   assert.match(clearBlock, /advisorOnly: true/);
   assert.match(clearBlock, /\.eq\("test", false\)/);
   assert.match(clearBlock, /\.not\("sent_at", "is", null\)/);
+  assert.match(clearBlock, /\.delete\(\)\.in\("prospect_id", ids\)\.is\("sent_at", null\)/);
   assert.match(src, /if \(cErr\) \{\s*await ctx\.sb\.from\("outreach_prospects"\)\.delete\(\)\.eq\("id", id\);/);
 });
 

@@ -739,10 +739,15 @@ export const DRAPER_TOOLS: Tool[] = [
       const emailed = new Set(((sent as { prospect_id: string }[] | null) ?? []).map((m) => m.prospect_id));
       const clear = all.filter((p) => !emailed.has(p.id));
       if (!clear.length) return { text: `Every business found on ${day} has been emailed; nothing was cleared.` };
-      // Unsent drafts, their claims, measurements, contacts and events go with
-      // the business (cascades). Nothing was fingerprinted: that happens only
-      // when a business is really emailed.
-      const { error } = await ctx.sb.from("outreach_prospects").delete().in("id", clear.map((p) => p.id));
+      // The unsent drafts go first, taking their claims with them: a claim
+      // points at a measurement, so removing the business (which takes its
+      // measurements) while a claim still stands is refused. Then the business,
+      // with its measurements, contact and events. Nothing was fingerprinted:
+      // that happens only when a business is really emailed.
+      const ids = clear.map((p) => p.id);
+      const { error: mErr } = await ctx.sb.from("outreach_messages").delete().in("prospect_id", ids).is("sent_at", null);
+      if (mErr) throw new Error(mErr.message);
+      const { error } = await ctx.sb.from("outreach_prospects").delete().in("id", ids);
       if (error) throw new Error(error.message);
       const names = clear.map((p) => p.business_name ?? "A business");
       await log(ctx, `Cleared ${clear.length} unsent business${clear.length === 1 ? "" : "es"} found ${day}`, names.join("; ").slice(0, 1000));
