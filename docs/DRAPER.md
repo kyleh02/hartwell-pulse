@@ -1028,3 +1028,16 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
   all this up front: template 3 (same email, new rules), lanes 1, 2, 3, 5.
   The brief's target no longer counts emails queued for an earlier day.
   Both drafts were waiting for Pulse's hour-later re-measure at 11pm.
+- 23 November 2026: both test drafts confirmed and queued for Monday 23
+  November. Kyle had made the browser step a cloud routine ("Draper
+  Automated"); the cloud has no browser, so it was paused and the task
+  created on his PC instead ("Draper ads check", 7:35am daily; Kyle leaves
+  the PC on). He wants about 20 a day: chose the warm-up 10, 15, 20 (2257a4d;
+  it was 5, 10, 15, 20) and library-first finding: run instructions v4 (the
+  PC run works through what the cloud run left, then finds advertisers in
+  Meta's Ad Library by the lane's services) and lane 1 widened to Greater
+  Melbourne and south-east Queensland through the new advisor tool
+  `outreach_set_lane`. hartwelldigital.com has SPF and DKIM but no DMARC:
+  Kyle to add `_dmarc` TXT `v=DMARC1; p=none; rua=mailto:admin@hartwelldigital.com`.
+  Same-day sends stay impossible by design (the hour-later re-measure and the
+  8am summary), so a day's emails are always found the day before.
