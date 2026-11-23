@@ -781,8 +781,10 @@ Live at https://portal.hartwelldigital.com
   conditional on no answer yet, so the first answer stands.
 - **A score of 6 or under emails Kyle at once** (direct send, plus a bell
   notification on `in_portal` so the email job does not send a second). Other
-  scores go out through the instant channel as usual. A 9 or 10 is shown Kyle's
-  Google review link if he has saved one.
+  scores go out through the instant channel as usual. With Kyle's Google review
+  link saved, the email leads with a Google review button for everyone and the
+  thank-you screen offers it after any score (23 Nov 2026): offering it only to
+  9s and 10s is review gating, which Google's review policy forbids.
 - `/admin/feedback`: the score over 12 months (promoters minus detractors, -100
   to +100), the counts, response rate, the trend by quarter, and every answer
   with its reason.
