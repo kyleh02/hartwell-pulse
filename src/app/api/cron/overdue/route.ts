@@ -7,6 +7,8 @@ import { invoiceRecipients } from "@/lib/invoices-send";
 import type { Invoice } from "@/lib/types/database";
 import { businessToday } from "@/lib/business-time";
 import { outstandingOf } from "@/lib/invoices-shared";
+import { daysOverdue, reminderDue } from "@/lib/invoice-reminders";
+import { isMissingColumn } from "@/lib/db-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -21,13 +23,15 @@ function prettyDate(iso: string) {
   });
 }
 
-// Daily, each morning (see vercel.json). Two jobs:
+// Daily at 08:00 UTC, 7pm Melbourne in summer (see vercel.json). Two jobs:
 //
 //   1. A heads-up a few days BEFORE the due date, once per invoice. This is the
 //      one that prevents lateness rather than chasing it: paying is still
 //      ordinary admin at that point, not an apology.
-//   2. The overdue nudge afterwards, at most once a week per invoice, plus an
-//      alert to Kyle the first time one tips over so he is not the last to know.
+//   2. The overdue chase afterwards: a gentle nudge, a firmer one two days
+//      later, then the firm one weekly (invoice-reminders.ts, Kyle 23 Nov
+//      2026), plus an alert to Kyle when it first tips over and when the
+//      firmer one first goes.
 export async function GET(req: NextRequest) {
   const auth = cronAuthorized(req);
   if (!auth.ok) {
@@ -39,8 +43,6 @@ export async function GET(req: NextRequest) {
 
   const supabase = createAdminSupabase();
   const today = businessToday();
-  const weekAgo = new Date();
-  weekAgo.setDate(weekAgo.getDate() - 7);
 
   const { data: settingsRow } = await supabase
     .from("business_settings")
@@ -123,12 +125,21 @@ export async function GET(req: NextRequest) {
 
   let reminders = 0;
   for (const inv of overdue) {
-    if (inv.reminder_sent_at && new Date(inv.reminder_sent_at) > weekAgo) continue;
+    // Gentle first, firmer two days later, then the firm one weekly
+    // (invoice-reminders.ts). Without migration 0069 the count is unknown and
+    // the old weekly gentle nudge stands.
+    const count = (inv as Invoice & { reminder_count?: number }).reminder_count;
+    const step = reminderDue(count, inv.reminder_sent_at, new Date());
+    if (!step.due) continue;
 
     const users = await invoiceRecipients(supabase, inv);
     if (users.length === 0) continue;
 
-    const title = `Reminder: invoice ${inv.invoice_number} is overdue`;
+    const urgent = step.tone === "urgent";
+    const late = daysOverdue(inv.due_date, today);
+    const title = urgent
+      ? `Overdue: invoice ${inv.invoice_number}, ${late} day${late === 1 ? "" : "s"} late`
+      : `Reminder: invoice ${inv.invoice_number} is overdue`;
     const body = `${formatMoney(outstandingOf(inv))} was due ${prettyDate(inv.due_date)}.`;
     const now = new Date().toISOString();
 
@@ -144,12 +155,19 @@ export async function GET(req: NextRequest) {
         emailed_at: now,
       });
       if (u.email) {
-        const html = emailLayout(
-          "A quick reminder",
-          `<p>Hi,</p><p>Just a gentle nudge that invoice <strong>${inv.invoice_number}</strong> for ${formatMoney(outstandingOf(inv))} was due on ${prettyDate(inv.due_date)}. You can view and pay it in your portal.</p>`,
-          "View invoice",
-          `/invoices/${inv.id}`,
-        );
+        const html = urgent
+          ? emailLayout(
+              "Payment overdue",
+              `<p>Hi,</p><p>Invoice <strong>${inv.invoice_number}</strong> for ${formatMoney(outstandingOf(inv))} was due on ${prettyDate(inv.due_date)} and is now ${late} day${late === 1 ? "" : "s"} overdue. Please pay it today, or reply and let me know when it will be paid.</p><p>If it has already gone through, thank you. Please send the remittance so I can match it up.</p>`,
+              "View and pay invoice",
+              `/invoices/${inv.id}`,
+            )
+          : emailLayout(
+              "A quick reminder",
+              `<p>Hi,</p><p>Just a gentle nudge that invoice <strong>${inv.invoice_number}</strong> for ${formatMoney(outstandingOf(inv))} was due on ${prettyDate(inv.due_date)}. You can view and pay it in your portal.</p>`,
+              "View invoice",
+              `/invoices/${inv.id}`,
+            );
         await sendEmail({ to: u.email, subject: title, html });
       }
     }
@@ -170,7 +188,27 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // The first time the firmer one goes, Kyle hears about it too.
+    if (urgent && count === 1) {
+      for (const adminId of admins) {
+        await supabase.from("notifications").insert({
+          recipient_user_id: adminId,
+          client_id: inv.client_id,
+          type: "invoice",
+          title: `${inv.invoice_number}: firmer reminder sent`,
+          body: `${formatMoney(outstandingOf(inv))}, ${late} days overdue. Weekly from here until it's paid.`,
+          link: `/admin/invoices/${inv.id}`,
+          channel: "in_portal",
+        });
+      }
+    }
+
     await supabase.from("invoices").update({ reminder_sent_at: now }).eq("id", inv.id);
+    // The count in its own update, so a database without 0069 refuses only this.
+    if (count !== undefined && count !== null) {
+      const { error: cErr } = await supabase.from("invoices").update({ reminder_count: count + 1 }).eq("id", inv.id);
+      if (cErr && !isMissingColumn(cErr)) console.error("[overdue] reminder_count:", cErr.message);
+    }
     reminders += 1;
   }
 
