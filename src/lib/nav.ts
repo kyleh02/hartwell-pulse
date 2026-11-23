@@ -6,7 +6,7 @@ import {
   MessageSquare,
   Users,
   Settings,
-  CalendarRange,
+  CalendarDays, CalendarRange,
   ClipboardCheck,
   Receipt,
   PenLine,
@@ -47,6 +47,7 @@ export const clientNav: NavItem[] = [
 
 export const adminNav: NavItem[] = [
   { label: "Dashboard", href: "/admin", icon: CalendarRange },
+  { label: "Calendar", href: "/admin/calendar", icon: CalendarDays },
   { label: "Clients", href: "/admin/clients", icon: Users },
   { label: "Reports", href: "/admin/reports", icon: FileText },
   { label: "Assets", href: "/admin/assets", icon: FolderOpen },

@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/ui/PageHeader";
+import { CalendarStrip } from "@/components/admin/CalendarStrip";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { listWork, getWorkStrip } from "@/lib/work";
 import { WorkStrip } from "@/components/work/WorkStrip";
@@ -40,6 +41,7 @@ export default async function AdminDashboardPage() {
         title="Dashboard"
         description="Everything you owe someone, in one list. Tick it, snooze it, or say you are not doing it."
       />
+      <CalendarStrip />
       <WorkStrip strip={strip} />
       <WorkDashboard rows={rows} clients={clients} />
     </div>

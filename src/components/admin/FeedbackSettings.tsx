@@ -39,7 +39,7 @@ export function FeedbackSettings({ enabled, reviewUrl }: { enabled: boolean; rev
           </span>
         </label>
         <label className="grid gap-1.5">
-          <span className="text-sm text-pulse-text-dim">Your Google review link, shown to anyone who answers 9 or 10</span>
+          <span className="text-sm text-pulse-text-dim">Your Google review link, sent with every review request</span>
           <input className={field} type="url" placeholder="https://g.page/r/..." value={url} onChange={(e) => setUrl(e.target.value)} />
         </label>
         {note && <p className={note.ok ? "text-xs text-pulse-success" : "text-xs text-pulse-danger"}>{note.text}</p>}

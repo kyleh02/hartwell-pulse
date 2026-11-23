@@ -758,6 +758,25 @@ Live at https://portal.hartwelldigital.com
   do-not-contact, no fingerprints, no auto-pause from it. Labels go through
   `applyLabel()`, which the Stage 7 connector must use too.
 
+## Google Calendar (0070)
+- **admin@'s Google Calendar, in the portal** (Kyle, 23 November 2026):
+  `/admin/calendar` (week and month, Add event) and today and tomorrow on the
+  dashboard (`CalendarStrip`). Connected in Settings through the same Internal
+  OAuth client as Draper's Gmail (`GOOGLE_OAUTH_CLIENT_ID/SECRET`), scopes
+  `calendar.events` and `userinfo.email`, redirect
+  `/api/google-calendar/callback`; the callback refuses any account but
+  admin@. The refresh token is sealed with `OUTREACH_TOKEN_KEY` in
+  `google_calendar` (service role only).
+- **The portal's dated items go onto the calendar by themselves**
+  (`src/lib/gcal/sync.ts`, from the 15-minute email job and Sync now): sent
+  invoices' due dates (not split, not recurring templates), open leads'
+  follow-ups, and open work items with a due date that weren't generated from
+  an invoice or a lead (those would show twice). `calendar_links` maps each
+  to its Google event: a changed item updates it, a paid, voided, won, lost or
+  done one removes it, one deleted in Google comes back while the portal still
+  has it. The rules are pure in `src/lib/gcal/rules.ts`. Events Kyle adds are
+  his: the portal never edits or deletes them (edit them in Google).
+
 ## Client feedback, NPS (0058)
 - One question, 0 to 10, "How likely are you to recommend Hartwell Digital to
   a friend or colleague?", then an optional reason. Asked of every person on a

@@ -1,4 +1,5 @@
 import { type NextRequest } from "next/server";
+import { syncCalendar } from "@/lib/gcal/sync";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { sendEmail, emailLayout, escapeHtml } from "@/lib/email";
 import { cronAuthorized } from "@/lib/cron-auth";
@@ -8,6 +9,7 @@ import { QUIET_BEFORE_EMAIL_MS, digestEmail, type Transcript } from "@/lib/assis
 import type { Notification } from "@/lib/types/database";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 // Notification bodies are already capped at 140 chars by the DB triggers; trim
 // further for email so a preview stays a glance, not a wall of text.
@@ -260,7 +262,16 @@ export async function GET(req: NextRequest) {
   const checkins = await sendCheckins(supabase);
   const assistant = await sendAssistantDigests(supabase);
 
-  return Response.json({ processed: notes.length, sent, nudged, checkins, assistant });
+  // Google Calendar: the portal's dated items onto admin@'s calendar. Never
+  // stops the emails above; a calendar that isn't connected is a no-op.
+  let calendar: unknown = null;
+  try {
+    calendar = await syncCalendar(supabase, process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "https://portal.hartwelldigital.com");
+  } catch (e) {
+    calendar = { error: e instanceof Error ? e.message : String(e) };
+  }
+
+  return Response.json({ processed: notes.length, sent, nudged, checkins, assistant, calendar });
 }
 
 /** How late a check-in may go out before it is dropped. "How's your first

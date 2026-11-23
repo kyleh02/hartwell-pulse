@@ -9,16 +9,23 @@ import { AssistantSettings } from "@/components/admin/AssistantSettings";
 import { aiConfigured } from "@/lib/ai/claude";
 import { listConnections } from "@/app/admin/settings/connector-actions";
 import { requestOrigin } from "@/lib/mcp/http";
+import { GoogleCalendarSettings } from "@/components/admin/GoogleCalendarSettings";
+import { calendarConnection } from "@/lib/gcal/access";
+import { createAdminSupabase } from "@/lib/supabase/admin";
+import { getPulseSession } from "@/lib/auth/session";
 
 export const metadata = { title: "Settings" };
 
-export default async function AdminSettingsPage() {
+export default async function AdminSettingsPage({ searchParams }: { searchParams: Promise<{ calendar?: string; why?: string }> }) {
   const supabase = await createServerSupabase();
-  const [business, pricing, connections, origin] = await Promise.all([
+  const session = await getPulseSession();
+  const sp = await searchParams;
+  const [business, pricing, connections, origin, calendar] = await Promise.all([
     getBusinessSettings(supabase),
     listPricingItems(supabase),
     listConnections(),
     requestOrigin(),
+    session?.role === "admin" ? calendarConnection(createAdminSupabase()) : Promise.resolve(null),
   ]);
 
   return (
@@ -27,6 +34,10 @@ export default async function AdminSettingsPage() {
         label={["Settings"]}
         title="Settings"
         description="Your business details for invoices, your pricing catalogue, how new clients are welcomed, client feedback, the portal assistant, and Claude's access to your pipeline."
+      />
+      <GoogleCalendarSettings
+        connection={calendar}
+        outcome={sp.calendar ? { kind: sp.calendar, why: sp.why ?? null } : null}
       />
       <OnboardingSettings
         kickoffUrl={(business as { kickoff_url?: string | null } | null)?.kickoff_url ?? null}
