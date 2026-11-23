@@ -78,11 +78,34 @@ export async function planRound(sb: SupabaseClient, now: Date = new Date()): Pro
   return out;
 }
 
-export function npsEmail(opts: { origin: string; first: string; token: string }): { subject: string; html: string } {
+/**
+ * The survey email. With Kyle's Google review link saved, it leads with a
+ * Google review button for EVERYONE, the 0 to 10 below it as private feedback:
+ * Google's review policy forbids asking only happy customers ("review
+ * gating"), and a Google review is the trust signal prospects actually see
+ * (Kyle, 23 November 2026). Without a link, the rating alone.
+ */
+export function npsEmail(opts: { origin: string; first: string; token: string; reviewUrl?: string | null }): { subject: string; html: string } {
   const cell = (n: number) =>
     `<td style="padding:0 3px 0 0"><a href="${opts.origin}/nps/${opts.token}?s=${n}" style="display:block;width:36px;height:36px;line-height:36px;text-align:center;border:1px solid #d8d0bc;border-radius:2px;color:#0e0d0b;font-weight:700;font-size:14px;text-decoration:none">${n}</a></td>`;
   const scale = `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 6px"><tr>${Array.from({ length: 11 }, (_, i) => cell(i)).join("")}</tr></table>
   <table role="presentation" width="100%" style="max-width:429px;font-size:12px;color:#888"><tr><td>Not likely</td><td style="text-align:right">Very likely</td></tr></table>`;
+  if (opts.reviewUrl && /^https:\/\//.test(opts.reviewUrl)) {
+    const button = `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 18px"><tr><td style="background:#b5a675;border-radius:2px"><a href="${escapeHtml(opts.reviewUrl)}" style="display:inline-block;padding:13px 22px;color:#0e0d0b;font-weight:700;font-size:13px;letter-spacing:0.12em;text-transform:uppercase;text-decoration:none">Leave a Google review</a></td></tr></table>`;
+    return {
+      subject: `Would you leave us a Google review, ${opts.first}?`,
+      html: brandedEmail(
+        opts.origin,
+        `${emailPara(`Hi ${escapeHtml(opts.first)},`)}${emailPara(
+          "Would you leave us a quick Google review? A sentence or two is plenty, and it takes about a minute.",
+        )}${emailPara(
+          "For a small business like ours, a Google review helps a great deal. It's the first thing new clients look at when they're deciding whether to trust us.",
+        )}${button}${emailPara(
+          `Rather tell us privately? ${escapeHtml(QUESTION)} Tap a number:`,
+        )}${scale}${emailPara("Whatever you say, we read every word. Thank you for working with us.")}`,
+      ),
+    };
+  }
   return {
     subject: `Would you leave us a quick review, ${opts.first}?`,
     html: brandedEmail(
@@ -127,7 +150,7 @@ export async function runSurveys(sb: SupabaseClient, origin: string, now: Date =
         .single();
       if (error || !data) continue; // already asked this round, or a write that failed: never email without a row
       const first = person.name?.trim().split(/\s+/)[0] || "there";
-      const mail = npsEmail({ origin, first, token });
+      const mail = npsEmail({ origin, first, token, reviewUrl: settings.reviewUrl });
       const res = await sendEmail({ to: person.email, subject: mail.subject, html: mail.html, ref: { kind: "other", id: (data as { id: string }).id } });
       if (!res.error && !res.skipped) {
         await sb.from("nps_surveys").update({ sent_at: new Date().toISOString() }).eq("id", (data as { id: string }).id);
@@ -212,7 +235,8 @@ export async function recordAnswer(
   }
 
   let reviewUrl: string | null = null;
-  if (g === "promoter" && settings.reviewUrl) {
+  // Offered whatever the score: asking only happy clients breaks Google's rules.
+  if (settings.reviewUrl) {
     reviewUrl = settings.reviewUrl;
     await sb.from("nps_surveys").update({ review_asked_at: new Date().toISOString() }).eq("id", survey.id);
   }

@@ -43,7 +43,7 @@ export function NpsForm({ initialScore = null, ...src }: Source & { initialScore
         {done.reviewUrl && (
           <div className="mt-4">
             <p className="mb-3 text-sm leading-relaxed text-pulse-text-dim">
-              Would you mind saying so on Google? A sentence or two helps other businesses find me.
+              {done.group === "promoter" ? "Would you mind saying so on Google? A sentence or two" : "If you're happy to, a Google review in your own words"} helps other businesses find us.
             </p>
             <a
               href={done.reviewUrl}
