@@ -21,7 +21,7 @@ export function NpsCard({ surveyId }: { surveyId: string }) {
       >
         Not now <X size={13} aria-hidden="true" />
       </button>
-      <h2 className="card-title mb-2 pr-20">A quick question</h2>
+      <h2 className="card-title mb-2 pr-20">A quick review</h2>
       <NpsForm surveyId={surveyId} />
     </section>
   );

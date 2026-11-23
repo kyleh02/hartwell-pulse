@@ -3,7 +3,7 @@ import { surveyByToken } from "@/lib/nps";
 import { Wordmark } from "@/components/brand/Wordmark";
 import { NpsForm } from "@/components/nps/NpsForm";
 
-export const metadata = { title: "A quick question", robots: { index: false } };
+export const metadata = { title: "A quick review", robots: { index: false } };
 export const dynamic = "force-dynamic";
 
 /**

@@ -84,12 +84,14 @@ export function npsEmail(opts: { origin: string; first: string; token: string })
   const scale = `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 6px"><tr>${Array.from({ length: 11 }, (_, i) => cell(i)).join("")}</tr></table>
   <table role="presentation" width="100%" style="max-width:429px;font-size:12px;color:#888"><tr><td>Not likely</td><td style="text-align:right">Very likely</td></tr></table>`;
   return {
-    subject: `A quick question, ${opts.first}`,
+    subject: `Would you leave us a quick review, ${opts.first}?`,
     html: brandedEmail(
       opts.origin,
-      `${emailPara(`Hi ${escapeHtml(opts.first)},`)}${emailPara(`One question, and it takes ten seconds. ${escapeHtml(QUESTION)} Tap a number:`)}${scale}${emailPara(
-        "You can add a sentence on the next screen if you like. Whatever the number, I read every one, and I'd rather hear it than not.",
-      )}`,
+      `${emailPara(`Hi ${escapeHtml(opts.first)},`)}${emailPara(
+        `Would you leave us a quick review? It takes ten seconds. ${escapeHtml(QUESTION)} Tap a number:`,
+      )}${scale}${emailPara(
+        "For a small business like ours, a review helps a great deal. It's how new clients find us and decide to trust us, and it tells us what to keep doing and what to do better.",
+      )}${emailPara("You can add a line on the next screen if you like. Whatever the number, we read every one. Thank you for working with us.")}`,
     ),
   };
 }
