@@ -32,6 +32,10 @@ create table if not exists public.calendar_links (
 );
 alter table public.calendar_links enable row level security;
 
+-- Explicit, because this project doesn't grant new tables to the API roles by
+-- itself: without it the portal saw neither table (23 Nov 2026).
+grant select, insert, update, delete on public.google_calendar, public.calendar_links to service_role;
+
 notify pgrst, 'reload schema';
 
 -- Check: both tables, RLS on.
