@@ -134,6 +134,25 @@ async function putBack(db: SupabaseClient, m: Msg, error: string, now: Date) {
     .eq("id", m.id);
 }
 
+// ---------- 0. sends a run was cut off in the middle of ----------
+
+/**
+ * A send runs in one tick, inside the 60-second limit, and includes a fresh
+ * measurement that can take 40 seconds. When the limit cuts a run off, the
+ * catch never runs and the message stays "sending" for good (Ozzy Auto
+ * Electrics, 25 November 2026, until this). Ten minutes on, put it back: the
+ * retry asks Gmail for its Message-ID before sending (send_attempts > 0), so
+ * one that did go is recorded rather than sent twice, and the next morning's
+ * queue fix gives a past-day email a new slot.
+ */
+async function recoverCutOffSends(db: SupabaseClient, now: Date): Promise<number> {
+  const cutoff = new Date(now.getTime() - 10 * 60_000).toISOString();
+  const { data } = await db.from("outreach_messages").select(MSG_COLS).eq("status", "sending").lt("updated_at", cutoff).limit(10);
+  const stuck = (data as Msg[] | null) ?? [];
+  for (const m of stuck) await putBack(db, m, "The send was cut off by the time limit before it finished; retrying", now);
+  return stuck.length;
+}
+
 // ---------- 1. approvals that ran out ----------
 
 async function expireApprovals(db: SupabaseClient, now: Date): Promise<number> {
@@ -648,6 +667,9 @@ export async function tick(db: SupabaseClient, now = new Date()): Promise<string
 
   const expired = await expireApprovals(db, now);
   if (expired) return finish(`Expired ${expired} unapproved email${expired === 1 ? "" : "s"}`);
+
+  const stale = await recoverCutOffSends(db, now);
+  if (stale) return finish(`Put back ${stale} send${stale === 1 ? "" : "s"} a run was cut off in the middle of`);
 
   // Replies, whatever else is going on: an opt-out is honoured paused or not.
   // If Gmail can't be read, say so and carry on; a follow-up checks its own
