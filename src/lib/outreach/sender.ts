@@ -21,7 +21,7 @@ import {
   type Calendar,
 } from "./schedule.ts";
 import { fillTokens } from "./tokens.ts";
-import { isAdsTemplate, renderFollowUp, renderMessages, type TemplateText } from "./render.ts";
+import { isAdsTemplate, isGiveFirstTemplate, needsLiveAds, renderFollowUp, renderMessages, type TemplateText } from "./render.ts";
 import { adsEvidenceFor } from "./ads.ts";
 import { ADS_MAX_AGE_HOURS, liveAds, platformWords } from "./ads-rules.ts";
 import { gmailAccessToken } from "./gmail-access.ts";
@@ -338,9 +338,11 @@ async function sendClaimed(db: SupabaseClient, m: Msg, s: DraperSettings, cal: C
   // The ads template says where their ads run. The ad-library check behind
   // that must still be fresh when it goes (four days covers a weekend); Pulse
   // can't re-read the libraries itself, so a stale check drops the email.
+  const { data: tKind } = await db.from("outreach_templates").select("first_subject, first_body").eq("version", m.template_version).maybeSingle();
+  const giveFirst = !!tKind && isGiveFirstTemplate(tKind as { first_subject: string; first_body: string });
   if (m.kind === "first") {
-    const { data: tRow } = await db.from("outreach_templates").select("first_subject, first_body").eq("version", m.template_version).maybeSingle();
-    if (tRow && isAdsTemplate(tRow as { first_subject: string; first_body: string })) {
+    const tRow = tKind;
+    if (tRow && needsLiveAds(tRow as { first_subject: string; first_body: string })) {
       const live = liveAds(await adsEvidenceFor(db, p.id), now, ADS_MAX_AGE_HOURS.send);
       if (!live.platforms.length) {
         await dropMessage(db, m, "Its ad-library check was more than four days old by the time it could send");
@@ -362,8 +364,10 @@ async function sendClaimed(db: SupabaseClient, m: Msg, s: DraperSettings, cal: C
   }
 
   // The fault, measured again now. Fixed: dropped. Couldn't check: later.
-  const { data: claimRows } = await db.from("outreach_claims").select("measurement_id").eq("message_id", m.id).eq("fault", m.fault).limit(1);
-  const claimId = (claimRows as { measurement_id: string }[] | null)?.[0]?.measurement_id;
+  const { data: claimRows } = await db.from("outreach_claims").select("measurement_id, fault").eq("message_id", m.id);
+  const claimList = (claimRows as { measurement_id: string; fault: Fault }[] | null) ?? [];
+  const claimId = (claimList.find((c) => c.fault === m.fault) ?? claimList[0])?.measurement_id;
+  const stated = [...new Set([m.fault, ...claimList.map((c) => c.fault)])];
   const { data: claimed } = claimId ? await db.from("outreach_measurements").select("url").eq("id", claimId).maybeSingle() : { data: null };
   const url = (claimed as { url: string } | null)?.url;
   if (!url) {
@@ -376,14 +380,15 @@ async function sendClaimed(db: SupabaseClient, m: Msg, s: DraperSettings, cal: C
     await putBack(db, m, `Couldn't re-check the page before sending: ${fresh.error ?? fresh.status}`, now);
     return "Put back: the page couldn't be re-checked";
   }
-  if (!fresh.faults.includes(m.fault)) {
-    await dropMessage(db, m, `"${FAULT_LABEL[m.fault]}" was fixed before it went`);
-    return `Dropped: ${FAULT_LABEL[m.fault]} was fixed before sending`;
+  const fixed = stated.find((f) => !fresh.faults.includes(f));
+  if (fixed) {
+    await dropMessage(db, m, `"${FAULT_LABEL[fixed]}" was fixed before it went`);
+    return `Dropped: ${FAULT_LABEL[fixed]} was fixed before sending`;
   }
 
   // A follow-up carries this morning's figures.
   let body = m.body;
-  if (m.kind === "follow_up") {
+  if (m.kind === "follow_up" && !giveFirst) {
     const { data: t } = await db.from("outreach_templates").select("*").eq("version", m.template_version).single();
     const filled = fillTokens(m.slots.second_finding ?? "", {
       measuredAt: fresh.measuredAt,
@@ -441,7 +446,7 @@ async function sendClaimed(db: SupabaseClient, m: Msg, s: DraperSettings, cal: C
   if (m.kind === "first") {
     await db
       .from("outreach_messages")
-      .update({ send_on: followUpDay(today, p.state, cal) })
+      .update({ send_on: followUpDay(today, p.state, cal, giveFirst ? 4 : 7) })
       .eq("prospect_id", p.id)
       .eq("kind", "follow_up")
       .eq("status", "queued");
@@ -565,19 +570,42 @@ async function confirmNext(db: SupabaseClient, s: DraperSettings, cal: Calendar,
     }
     if (waiting) continue;
 
-    // Both runs are in: did each email's fault show on both?
+    // Both runs are in: did each email's faults show on both? (The
+    // give-first email can state two, a missing Pixel and Google tag.)
+    const allClaims = (claimRows as { message_id: string; measurement_id: string; fault: Fault }[] | null) ?? [];
     for (const t of targets) {
       const onPage = runs.filter((r) => r.url === t.run!.url);
       const confirmed = confirmedFaults(onPage.map((r) => ({ measuredAt: r.measured_at, status: r.status as "ok" | "blocked" | "failed", faults: r.faults })));
-      if (!confirmed.includes(t.msg.fault)) {
-        await dropMessage(db, first, `"${FAULT_LABEL[t.msg.fault]}" didn't show again an hour later`);
-        return `Dropped a draft: ${FAULT_LABEL[t.msg.fault]} didn't repeat`;
+      const stated = [...new Set([t.msg.fault, ...allClaims.filter((c) => c.message_id === t.msg.id && c.measurement_id === t.run!.id).map((c) => c.fault)])];
+      const missing = stated.find((f) => !confirmed.includes(f));
+      if (missing) {
+        await dropMessage(db, first, `"${FAULT_LABEL[missing]}" didn't show again an hour later`);
+        return `Dropped a draft: ${FAULT_LABEL[missing]} didn't repeat`;
       }
     }
 
     // The ads template: the ad-library check must still be fresh at
     // confirmation, and it fills [[ad_platform]] and the subject.
     const { data: tFirst } = await db.from("outreach_templates").select("*").eq("version", first.template_version).single();
+    if (tFirst && isGiveFirstTemplate(tFirst as TemplateText)) {
+      const live = liveAds(await adsEvidenceFor(db, first.prospect_id), now, ADS_MAX_AGE_HOURS.confirm).platforms;
+      // The platforms the email is about: a missing Google tag is Google's; a Pixel missing or doubled is Facebook's.
+      const claimed = String((first.slots as Record<string, unknown> | null)?.claimed ?? first.fault).split(",");
+      const needs = [...new Set(claimed.map((f) => (f === "no_google_tag" ? "google" : f === "no_meta_pixel" || f === "pixel_double" ? "meta" : "")))].filter(Boolean);
+      if (!needs.length || needs.some((pl) => !live.includes(pl as "google" | "meta"))) {
+        await dropMessage(db, first, "Its ad-library check was more than two days old at confirmation, or no longer showed the ads it's about");
+        return "Dropped a draft: its ads check went stale";
+      }
+      const { data: pRow } = await db.from("outreach_prospects").select("state").eq("id", first.prospect_id).single();
+      const stamp = now.toISOString();
+      const sendOn = nextSendingDay(melbourneDate(now), (pRow as { state: string | null }).state, cal);
+      await db.from("outreach_messages").update({ status: "queued", queued_at: stamp, confirmed_at: stamp, send_on: sendOn }).eq("id", first.id);
+      if (followUp) await db.from("outreach_messages").update({ status: "queued", queued_at: stamp, confirmed_at: stamp, send_on: null }).eq("id", followUp.id);
+      await db.from("outreach_prospects").update({ status: "queued" }).eq("id", first.prospect_id);
+      await event(db, first.prospect_id, "confirmed", { send_on: sendOn }, first.id);
+      await event(db, first.prospect_id, "queued", { send_on: sendOn }, first.id);
+      return `Confirmed a draft; queued for ${sendOn ?? "the first day with holiday dates loaded"}`;
+    }
     const adsTemplate = !!tFirst && isAdsTemplate(tFirst as TemplateText);
     let adPlatform: string | null = null;
     if (adsTemplate) {

@@ -55,6 +55,8 @@ old_analytics: only the old Google Analytics tag, which Google has switched off,
 layout_shift: on Google's phone test the page jumps about while it loads (in Google's poor range). Things move as it loads, so people tap the wrong thing.
 page_freezes: on Google's phone test the page is too busy to respond for a stretch after it shows (in Google's poor range). It doesn't answer a tap straight away.
 no_mobile_layout: the page has no phone layout, so a phone shows the desktop page shrunk down and people pinch and zoom.
+no_meta_pixel: no Meta Pixel anywhere: not in the page, its tag manager containers, Shopify's pixel settings, or the requests Google's phone test saw. Only claimed when Pulse can tell (the phone test ran, every container was read, no cookie consent banner).
+no_google_tag: no Google tag of any kind (no Google Ads tag, no Google Analytics old or new, nothing Google's in the tag manager), when Pulse can tell.
 Where they tend to be: builders that load a lot of script freeze; sliders and late banners jump; older hand-built sites have no phone layout and plain-text phone numbers.`;
 
 /** Every [[token]] in a text, unknown ones included. */

@@ -22,9 +22,15 @@ import {
   phoneInHtml,
   pixelPageViews,
   summarisePsi,
+  gtmIds,
+  readGtmContainer,
+  trackingFacts,
+  withContainerTags,
   type Facts,
+  type GtmReading,
   type PsiSummary,
   type Tags,
+  type TrackingFacts,
 } from "./measure-rules.ts";
 import type { Fault } from "./rules.ts";
 import { setDefaultResultOrder } from "node:dns";
@@ -161,8 +167,24 @@ export interface Measurement {
   faults: Fault[];
   /** PageSpeed's phone screenshot as a data: URI. */
   screenshot: string | null;
+  /** 0071: what measures the site's ads (null when the page couldn't be read). Also kept in raw.tracking. */
+  tracking: TrackingFacts | null;
   /** What gets stored as the raw record (PageSpeed's request list, capped). */
   raw: Record<string, unknown>;
+}
+
+/**
+ * The public script of each tag manager container (what every visitor's
+ * browser loads). One that can't be fetched reads as "not ok", and then
+ * nothing about the site's tracking is claimed.
+ */
+async function readContainers(ids: string[]): Promise<GtmReading[]> {
+  return Promise.all(
+    ids.map(async (id) => {
+      const r = await fetchPage(`https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(id)}`, { timeoutMs: 10_000 });
+      return r.status === 200 ? readGtmContainer(id, r.html) : { id, ok: false, empty: false, metaPixel: false, googleTag: false, ga4: [], aw: [] };
+    }),
+  );
 }
 
 /** The address to measure, as https://host/path. Null when it isn't a web address. */
@@ -202,9 +224,12 @@ export async function measureSite(input: string): Promise<Measurement> {
   const readable = page.status !== null && page.status < 400 && !blocked;
 
   const links = readable ? menuLinks(page.html, page.finalUrl ?? url, MAX_MENU_LINKS) : [];
-  const [psi, menu] = await Promise.all([psiP, checkLinks(links)]);
+  // 0071: the page's tag manager containers, read alongside the phone test.
+  const containerIds = readable ? gtmIds(page.html).slice(0, 3) : [];
+  const [psi, menu, containers] = await Promise.all([psiP, checkLinks(links), readContainers(containerIds)]);
 
-  const tags = findTags(page.html, psi.requestUrls);
+  const tags = withContainerTags(findTags(page.html, psi.requestUrls), containers);
+  const tracking: TrackingFacts | null = readable ? trackingFacts(page.html, psi.requestUrls, containers) : null;
   const views = pixelPageViews(psi.requestUrls);
   const phone = readable ? phoneInHtml(page.html) : null;
   const telLink = hasTelLink(page.html);
@@ -227,6 +252,7 @@ export async function measureSite(input: string): Promise<Measurement> {
     cls: psi.cls,
     tbtMs: psi.tbtMs,
     mobileViewport: readable ? hasMobileViewport(page.html) : null,
+    tracking,
   };
 
   const error =
@@ -259,7 +285,10 @@ export async function measureSite(input: string): Promise<Measurement> {
     adSignal: hasAdSignal(tags),
     faults: faultsOf(facts),
     screenshot: psi.screenshot,
+    tracking,
     raw: {
+      tracking,
+      containers: containers.map((c) => ({ id: c.id, ok: c.ok, empty: c.empty, metaPixel: c.metaPixel, googleTag: c.googleTag })),
       https: { status: https.status, finalUrl: https.finalUrl, errorCode: https.errorCode, error: https.error },
       http: { status: http.status, finalUrl: http.finalUrl, errorCode: http.errorCode, error: http.error },
       psi: { ok: psi.ok, error: psi.error, fcpMs: psi.fcpMs, lcpMs: psi.lcpMs, cls: psi.cls, tbtMs: psi.tbtMs, finalUrl: psi.finalUrl },

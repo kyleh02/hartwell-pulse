@@ -7,8 +7,14 @@ import { isBlockPage } from "./measure-rules.ts";
 import { addressOnPage, onOwnSite } from "./contact.ts";
 import { verifySubmission, type MeasurementRow, type SubmitContext, type SubmitInput } from "./verify.ts";
 import type { Fault } from "./rules.ts";
-import { adsEvidenceFor } from "./ads.ts";
+import { adsEvidenceFor, metaCheckFor } from "./ads.ts";
 import { ADS_MAX_AGE_HOURS, liveAds } from "./ads-rules.ts";
+import { isGiveFirstTemplate } from "./render.ts";
+import { verifyGiveFirst, type GiveFirstContext, type GiveFirstInput } from "./verify-give-first.ts";
+import type { TrackingFacts } from "./measure-rules.ts";
+
+/** What outreach_submit hands over: the slots for the older templates, the short name and lead word for give-first. */
+export type SubmitRequest = SubmitInput & Partial<Pick<GiveFirstInput, "short_name" | "lead_word" | "ad_quote">>;
 
 /**
  * outreach_submit (Stage 4). The connector (Stage 7) calls this with the
@@ -24,7 +30,7 @@ import { ADS_MAX_AGE_HOURS, liveAds } from "./ads-rules.ts";
  */
 export async function submitDraft(
   db: SupabaseClient,
-  input: SubmitInput,
+  input: SubmitRequest,
   actor: "claude" | "kyle",
 ): Promise<{ ok: true; messageIds: { first: string; followUp: string | null } } | { ok: false; reasons: string[] }> {
   const { data: p, error: pErr } = await db
@@ -51,7 +57,7 @@ export async function submitDraft(
     db.from("outreach_state").select("faults_off").maybeSingle(),
     db
       .from("outreach_measurements")
-      .select("id, prospect_id, url, status, measured_at, psi_fcp_ms, psi_lcp_ms, menu_links, pixel_pageviews, ad_signal, faults")
+      .select("id, prospect_id, url, status, measured_at, psi_fcp_ms, psi_lcp_ms, menu_links, pixel_pageviews, ad_signal, faults, tracking:raw->tracking")
       .eq("prospect_id", prospect.id)
       .order("measured_at"),
     db.from("outreach_messages").select("id", { count: "exact", head: true }).eq("prospect_id", prospect.id),
@@ -125,7 +131,28 @@ export async function submitDraft(
     ads: liveAds(evidence, new Date(), ADS_MAX_AGE_HOURS.submit),
     gstRegistered: prospect.gst_registered,
   };
-  const v = verifySubmission(ctx, input);
+  // The give-first template (27 November 2026): Pulse writes the emails itself.
+  let v: ReturnType<typeof verifySubmission>;
+  if (isGiveFirstTemplate(ctx.template)) {
+    const meta = await metaCheckFor(db, prospect.id, new Date(), ADS_MAX_AGE_HOURS.submit).catch(() => null);
+    const rows = (measuresRes.data as (MeasurementRow & { tracking: TrackingFacts | null })[] | null) ?? [];
+    const gctx: GiveFirstContext = {
+      ...ctx,
+      prospect: { ...ctx.prospect, business_name: prospect.business_name, domain: prospect.domain },
+      measurements: rows.map((m) => ({ ...m, tracking: m.tracking ?? null })),
+      meta,
+      today: new Intl.DateTimeFormat("en-CA", { timeZone: "Australia/Melbourne" }).format(new Date()),
+    };
+    v = verifyGiveFirst(gctx, {
+      prospect_id: input.prospect_id,
+      template_version: input.template_version,
+      short_name: input.short_name ?? "",
+      lead_word: input.lead_word ?? "",
+      ad_quote: input.ad_quote ?? null,
+    });
+  } else {
+    v = verifySubmission(ctx, input);
+  }
   if (!v.ok) reasons.push(...v.reasons);
 
   if (reasons.length > 0 || !v.ok) {

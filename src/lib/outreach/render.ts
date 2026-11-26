@@ -30,6 +30,52 @@ export function isAdsTemplate(t: Pick<TemplateText, "first_subject" | "first_bod
   return /\{ad_platform\}/.test(`${t.first_subject}\n${t.first_body}`);
 }
 
+/** The give-first template (27 November 2026): Pulse writes the finding, the fix and the steps itself. */
+export function isGiveFirstTemplate(t: Pick<TemplateText, "first_subject" | "first_body">): boolean {
+  return /\{fix\}/.test(t.first_body);
+}
+
+/** Either template that needs live ads from a fresh ad-library check. */
+export function needsLiveAds(t: Pick<TemplateText, "first_subject" | "first_body">): boolean {
+  return isAdsTemplate(t) || isGiveFirstTemplate(t);
+}
+
+/**
+ * The give-first pair, filled from Pulse's own copy (give-first.ts). The same
+ * proof as renderMessages: no placeholder left, and every line Kyle wrote
+ * arrives word for word.
+ */
+export function renderGiveFirst(
+  t: TemplateText,
+  r: { firstName: string | null; optOut: "A" | "B"; gapPlatform: string; subjectTail: string; finding: string; fix: string; steps: string },
+): { first: RenderedEmail; followUp: RenderedEmail; problems: string[] } {
+  const problems: string[] = [];
+  const optOutLine = r.optOut === "B" ? t.opt_out_b : t.opt_out_a;
+  const values: Record<string, string> = {
+    first_name_or_there: greeting(r.firstName),
+    gap_platform: r.gapPlatform,
+    subject_tail: r.subjectTail,
+    finding: r.finding.trim(),
+    fix: r.fix.trim(),
+    steps: r.steps.trim(),
+    opt_out_line: optOutLine,
+  };
+  const subject = fill(t.first_subject, values);
+  const first = { subject, body: fill(t.first_body, values) };
+  const followUp = { subject: fill(t.followup_subject, { ...values, subject }), body: fill(t.followup_body, values) };
+  for (const [name, email, source] of [
+    ["first email", first, t.first_body],
+    ["follow-up", followUp, t.followup_body],
+  ] as const) {
+    if (/\{[a-z_]+\}/.test(`${email.subject}\n${email.body}`)) problems.push(`The ${name} still has a placeholder in it.`);
+    for (const line of fixedLines(source)) if (!email.body.includes(line)) problems.push(`The ${name} is missing Kyle's fixed text: "${line}"`);
+    if (/[—–]|\s-\s|--|!/.test(`${email.subject}\n${email.body}`)) problems.push(`The ${name} has a dash or an exclamation mark in it.`);
+  }
+  if (!first.body.includes(t.opt_out_a)) problems.push("The first email is missing its opt-out line.");
+  if (!followUp.body.includes(optOutLine)) problems.push("The follow-up is missing its opt-out line.");
+  return { first, followUp, problems };
+}
+
 /**
  * The ads template's offer line, by how many other faults are on record.
  * Kyle's offer from the brand direction: a free ads review, emailed within two

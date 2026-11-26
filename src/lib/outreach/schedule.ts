@@ -166,10 +166,13 @@ export function nextSendingDay(date: string, state: string | null, cal: Calendar
   return null;
 }
 
-/** The follow-up's day: seven days after the first went, or the next sending day after that. */
-export function followUpDay(firstSent: string, state: string | null, cal: Calendar): string | null {
-  const day7 = addDays(firstSent, 7);
-  return sendingDay(day7, state, cal).ok ? day7 : nextSendingDay(day7, state, cal);
+/**
+ * The follow-up's day: seven days after the first went (four for the
+ * give-first template's steps), or the next sending day after that.
+ */
+export function followUpDay(firstSent: string, state: string | null, cal: Calendar, days = 7): string | null {
+  const due = addDays(firstSent, days);
+  return sendingDay(due, state, cal).ok ? due : nextSendingDay(due, state, cal);
 }
 
 export interface PlanItem {

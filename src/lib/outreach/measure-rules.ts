@@ -243,6 +243,142 @@ export interface Facts {
   cls?: number | null;
   tbtMs?: number | null;
   mobileViewport?: boolean | null;
+  /** 0071: what measures the site's ads, from the page, its tag manager containers and the phone test's requests. */
+  tracking?: TrackingFacts | null;
+}
+
+// ---------- 0071: the tracking gaps (Kyle, 27 November 2026) ----------
+
+export type SiteKind = "shopify" | "wix" | "squarespace" | "wordpress" | "duda" | "webflow" | "other";
+
+/** What the site is built on, from its own markers. Only used to word the fix. */
+export function siteKind(html: string): SiteKind {
+  if (/cdn\.shopify\.com|Shopify\.theme|shopify-section/i.test(html)) return "shopify";
+  if (/static\.wixstatic\.com|wix-bolt|wixstatic|_wixCIDX|X-Wix-/i.test(html)) return "wix";
+  if (/static1\.squarespace\.com|SQUARESPACE_CONTEXT|squarespace-cdn\.com/i.test(html)) return "squarespace";
+  if (/multiscreensite\.com|dmAlbum|data-duda|duda_website/i.test(html)) return "duda";
+  if (/assets\.website-files\.com|data-wf-page|data-wf-site/i.test(html)) return "webflow";
+  if (/\/wp-content\/|\/wp-includes\/|\/wp-json\//i.test(html)) return "wordpress";
+  return "other";
+}
+
+/** Google Tag Manager containers the page loads, from its source and the phone test's requests. */
+export function gtmIds(html: string, requestUrls: string[] = []): string[] {
+  return uniq(all(/\bGTM-[A-Z0-9]{4,9}\b/g, `${html}\n${requestUrls.join("\n")}`));
+}
+
+export interface GtmReading {
+  id: string;
+  /** The container's script was fetched and looks like a container. */
+  ok: boolean;
+  /** It has no tags at all. */
+  empty: boolean;
+  metaPixel: boolean;
+  /** Any Google measurement tag: the Google tag, Analytics, Ads conversion or remarketing, or the old Universal Analytics. */
+  googleTag: boolean;
+  ga4: string[];
+  aw: string[];
+}
+
+/**
+ * Pulse's reading of a tag manager container (the public gtm.js any browser
+ * loads). A Meta Pixel in it shows as Meta's script address or an fbq call,
+ * whether in a custom HTML tag or a template; Google's tags by their own
+ * function names. A script that isn't a container is "not ok": can't tell.
+ */
+export function readGtmContainer(id: string, js: string): GtmReading {
+  const ok = /"resource"\s*:/.test(js) && /"tags"\s*:\s*\[/.test(js);
+  const empty = /"tags"\s*:\s*\[\s*\]/.test(js);
+  return {
+    id,
+    ok,
+    empty: ok && empty,
+    metaPixel: /fbevents|connect\.facebook\.net|fbq\(|facebook\.com\\?\/tr/i.test(js),
+    googleTag: /"function"\s*:\s*"__(googtag|gaawc|gaawe|awct|sp|ua|gas)"/.test(js) || /\b(G-[A-Z0-9]{8,12}|AW-[0-9]{6,12})\b/.test(js),
+    ga4: uniq(all(/\bG-[A-Z0-9]{8,12}\b/g, js)),
+    aw: uniq(all(/\bAW-[0-9]{6,12}\b/g, js)),
+  };
+}
+
+/** Shopify's own pixel settings name a Meta Pixel (its Facebook and Instagram app adds it at run time). */
+export function shopifyMetaPixel(html: string): boolean {
+  return /webPixelsConfigList[\s\S]{0,20000}?pixel_type\\*"\s*:\s*\\*"facebook_pixel/.test(html);
+}
+
+/**
+ * A consent banner tool actually loaded on the page, which can hold tags back
+ * until someone clicks: then a missing tag can't be told. Matched by the
+ * tool's own script address, not its name: Duda sites and pixel plugins
+ * mention Cookiebot in settings without loading it (found 27 November 2026).
+ */
+export function hasConsentTool(html: string, requestUrls: string[] = []): boolean {
+  return /consent\.cookiebot\.(com|eu)|id=["']Cookiebot["']|cdn-cookieyes\.com|\/plugins\/cookie-law-info\/|cdn\.cookielaw\.org|optanon\.blob\.core|otSDKStub|app\.termly\.io|cdn\.iubenda\.com|\/plugins\/complianz-gdpr\/|cmplz-cookiebanner|app\.usercentrics\.eu|web\.cmp\.usercentrics|cmp\.quantcast\.com|quantcast\.mgr\.consensu\.org|cmp\.osano\.com|consent\.cookiefirst\.com|cdn\.cookie-script\.com|cdn\.consentmanager\.net|sdk\.privacy-center\.org|consent\.trustarc\.com|\/plugins\/borlabs-cookie\/|static\.axept\.io|cookiehub\.net\/|cc\.cdn\.civiccomputing\.com|\/plugins\/gdpr-cookie-consent\/|\/plugins\/cookie-notice\/|cdn\.enzuzo\.com|cdn\.termsfeed\.com/i.test(
+    `${html.slice(0, 600_000)}\n${requestUrls.join("\n")}`,
+  );
+}
+
+/** Any sign of a Meta Pixel in the page or the requests it made. */
+export function metaPixelSeen(html: string, requestUrls: string[] = []): boolean {
+  return /connect\.facebook\.net\/[a-zA-Z_]+\/fbevents\.js|connect\.facebook\.net\/signals|fbq\(|facebook\.com\/tr[/?]/.test(`${html}\n${requestUrls.join("\n")}`);
+}
+
+/** Any sign of a Google tag (Ads, Analytics old or new, the Google tag) in the page or its requests. */
+export function googleTagSeen(html: string, requestUrls: string[] = []): boolean {
+  const text = `${html}\n${requestUrls.join("\n")}`;
+  return (
+    /googletagmanager\.com\/gtag\/js|google-analytics\.com|googleadservices\.com\/pagead\/conversion|googleads\.g\.doubleclick\.net\/pagead|gtag\(\s*['"]config/.test(text) ||
+    /\b(G-[A-Z0-9]{8,12}|GT-[A-Z0-9]{6,12}|AW-[0-9]{6,12}|UA-[0-9]{4,10}-[0-9]{1,4})\b/.test(text)
+  );
+}
+
+export interface TrackingFacts {
+  siteKind: SiteKind;
+  /** Tag manager containers on the page. */
+  gtm: string[];
+  /** Every container was read. False when one couldn't be: then nothing about tracking is claimed. */
+  gtmRead: boolean;
+  /** There's a tag manager and every container in it is empty. */
+  gtmEmpty: boolean;
+  metaSeen: boolean;
+  googleSeen: boolean;
+  consent: boolean;
+}
+
+/** The tracking facts of one page, from its source, its containers and the phone test's requests. */
+export function trackingFacts(html: string, requestUrls: string[], containers: GtmReading[]): TrackingFacts {
+  const ids = gtmIds(html, requestUrls);
+  const read = ids.every((id) => containers.some((c) => c.id === id && c.ok));
+  return {
+    siteKind: siteKind(html),
+    gtm: ids,
+    gtmRead: read,
+    gtmEmpty: ids.length > 0 && read && containers.filter((c) => ids.includes(c.id)).every((c) => c.empty),
+    metaSeen: metaPixelSeen(html, requestUrls) || shopifyMetaPixel(html) || containers.some((c) => c.ok && c.metaPixel),
+    googleSeen: googleTagSeen(html, requestUrls) || containers.some((c) => c.ok && c.googleTag),
+    consent: hasConsentTool(html, requestUrls),
+  };
+}
+
+/** A page's tags with what its tag manager containers hold added in. */
+export function withContainerTags(tags: Tags, containers: GtmReading[]): Tags {
+  const ok = containers.filter((c) => c.ok);
+  return {
+    ...tags,
+    ga4: uniq([...tags.ga4, ...ok.flatMap((c) => c.ga4)]),
+    aw: uniq([...tags.aw, ...ok.flatMap((c) => c.aw)]),
+  };
+}
+
+/**
+ * Whether the tracking facts are good enough to say a tag is missing: the
+ * page read properly, Google's phone test ran it (so a tag added by script,
+ * by Wix or Squarespace, or by a container would have shown in its requests),
+ * every container was read, and no consent banner can be holding tags back.
+ * Errs one way only: when in doubt, no claim.
+ */
+export function canTellTracking(f: Pick<Facts, "status" | "psiOk" | "tracking">): boolean {
+  const t = f.tracking;
+  return f.status === "ok" && f.psiOk && !!t && t.gtmRead && !t.consent;
 }
 
 export const SLOW_FCP_MS = 4000;
@@ -291,6 +427,12 @@ export function faultsOf(f: Facts): Fault[] {
   if (f.psiOk && (f.cls ?? 0) >= POOR_CLS) out.push("layout_shift");
   if (f.psiOk && (f.tbtMs ?? 0) >= POOR_TBT_MS) out.push("page_freezes");
   if (f.mobileViewport === false && !f.scriptBuilt) out.push("no_mobile_layout");
+  // 0071. No Meta Pixel anywhere, or no Google tag of any kind (an old
+  // Universal Analytics tag is old_analytics instead), when Pulse can tell.
+  if (canTellTracking(f)) {
+    if (!f.tracking!.metaSeen && f.tags.metaPixel.length === 0) out.push("no_meta_pixel");
+    if (!f.tracking!.googleSeen && f.tags.aw.length === 0 && f.tags.ga4.length === 0 && f.tags.ua.length === 0) out.push("no_google_tag");
+  }
   return out;
 }
 

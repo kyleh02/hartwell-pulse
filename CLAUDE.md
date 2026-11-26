@@ -748,6 +748,22 @@ Live at https://portal.hartwelldigital.com
   (`isAdsTemplate`), and only then do the stricter lint, the GST floor,
   `FAULT_RANK` and the optional follow-up apply; template 1's rules are
   untouched. Freshness: 36 hours at submit, 48 at confirmation, 96 at send.
+- **Template 4, give first (27 November 2026; `give-first.ts`,
+  `template-give-first.ts`, `verify-give-first.ts`, migration 0071).** Only a
+  tracking gap on a platform the business's ads run on gets an email:
+  `no_meta_pixel` with live Facebook ads, `no_google_tag` with live Google ads,
+  `pixel_double` on the home page. Pulse writes both emails itself from its
+  records (the run passes only `short_name`, `lead_word` and an optional
+  `ad_quote`, each checked). The fix is in email 1, the steps in email 2 (four
+  days later). A tag is only called missing when Pulse can tell: the phone
+  test ran (its requests show tags added by script, Wix or Squarespace),
+  every Google Tag Manager container was read (`gtm.js`, public), Shopify's
+  pixel settings were read, and no consent banner script is loaded. Matching
+  is by script address, never a bare name: Duda sites and pixel plugins name
+  Cookiebot in settings without loading it, and a pixel plugin's noscript
+  `facebook.com/tr` image is a Pixel. Both mistakes were in the hand-done paper
+  test and the code caught them. A give-first template is one whose body uses
+  `{fix}` (`isGiveFirstTemplate`).
 - **New connector tools reach an open session only after it reconnects**:
   Claude Code and claude.ai cache a connector's tool list at connect. A
   fresh cloud run (RemoteTrigger) sees them at once.

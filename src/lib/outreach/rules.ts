@@ -12,8 +12,10 @@
  * The faults Pulse measures. Nothing else is ever claimed. The first six are
  * 0062's; the last three are 0067's (Kyle, 21 Nov 2026), added after the first
  * morning run found that most sites in the 4WD lane are only slow, so the
- * two-fault rule let nothing through. All nine come from the one measurement
- * and none needs a form sent.
+ * two-fault rule let nothing through. The last two are 0071's (Kyle, 27 Nov
+ * 2026): the paper test found that ads running to a site that can't measure
+ * them is the one finding strong enough to write about. All eleven come from
+ * the one measurement and none needs a form sent.
  */
 export const FAULTS = [
   "slow_mobile",
@@ -25,6 +27,8 @@ export const FAULTS = [
   "layout_shift",
   "page_freezes",
   "no_mobile_layout",
+  "no_meta_pixel",
+  "no_google_tag",
 ] as const;
 export type Fault = (typeof FAULTS)[number];
 
@@ -39,7 +43,16 @@ export const FAULT_LABEL: Record<Fault, string> = {
   layout_shift: "Jumps around while loading",
   page_freezes: "Freezes after it appears",
   no_mobile_layout: "Not set up for phones",
+  no_meta_pixel: "No Meta Pixel",
+  no_google_tag: "No Google tag",
 };
+
+/**
+ * The tracking gaps (template 4, give-first, 27 November 2026): a site that
+ * can't measure the ads sent to it. Only these lead a give-first email, and
+ * only on a platform the business's ads run on.
+ */
+export const TRACKING_GAPS: readonly Fault[] = ["no_meta_pixel", "no_google_tag", "pixel_double"];
 
 /**
  * Which fault an email leads with (Kyle, 22 November 2026: tracking faults
@@ -48,6 +61,8 @@ export const FAULT_LABEL: Record<Fault, string> = {
  * then what a paid visitor meets on arrival, then speed and layout.
  */
 export const FAULT_RANK: readonly Fault[] = [
+  "no_meta_pixel",
+  "no_google_tag",
   "pixel_double",
   "old_analytics",
   "not_secure",

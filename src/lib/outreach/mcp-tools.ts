@@ -19,8 +19,11 @@ import { LABEL_TEXT, isReplyLabel } from "./replies-rules.ts";
 import { AU_STATES, FAULT_LABEL, FAULT_RANK, FAULTS, type Fault } from "./rules.ts";
 import { adsEvidenceFor } from "./ads.ts";
 import { ADS_MAX_AGE_HOURS, libraryUrls, liveAds, platformWords, readAdsCheck } from "./ads-rules.ts";
-import { isAdsTemplate } from "./render.ts";
+import { isAdsTemplate, isGiveFirstTemplate, needsLiveAds } from "./render.ts";
 import { TEMPLATE_ADS } from "./template-ads.ts";
+import { TEMPLATE_GIVE_FIRST } from "./template-give-first.ts";
+import { LEAD_WORDS } from "./give-first.ts";
+import type { TrackingFacts } from "./measure-rules.ts";
 import type { DraperSettings, Lane } from "./types.ts";
 
 /**
@@ -94,7 +97,28 @@ async function adsTemplateActive(ctx: DraperContext): Promise<boolean> {
   const lane = await activeLane(ctx);
   if (!lane) return false;
   const { data } = await ctx.sb.from("outreach_templates").select("first_subject, first_body").eq("version", lane.template_version).maybeSingle();
-  return !!data && isAdsTemplate(data as { first_subject: string; first_body: string });
+  return !!data && needsLiveAds(data as { first_subject: string; first_body: string });
+}
+
+async function giveFirstActive(ctx: DraperContext): Promise<boolean> {
+  const lane = await activeLane(ctx);
+  if (!lane) return false;
+  const { data } = await ctx.sb.from("outreach_templates").select("first_subject, first_body").eq("version", lane.template_version).maybeSingle();
+  return !!data && isGiveFirstTemplate(data as { first_subject: string; first_body: string });
+}
+
+/** One line on what measures a site's ads, for the run. */
+function trackingLine(t: TrackingFacts | null | undefined, psiOk: boolean): string {
+  if (!t) return "Tracking: couldn't be read.";
+  const bits = [
+    `built on ${t.siteKind}`,
+    t.gtm.length ? `tag manager ${t.gtm.join(", ")}${t.gtmEmpty ? " (empty)" : ""}${t.gtmRead ? "" : " (couldn't be read)"}` : "no tag manager",
+    `Meta Pixel ${t.metaSeen ? "seen" : "not seen"}`,
+    `Google tag ${t.googleSeen ? "seen" : "not seen"}`,
+    t.consent ? "a cookie consent banner (tags may be held back)" : "",
+  ].filter(Boolean);
+  const tell = psiOk && t.gtmRead && !t.consent;
+  return `Tracking: ${bits.join("; ")}. ${tell ? "Pulse can tell what's missing." : "Pulse can't tell what's missing, so no tracking gap is claimed from this page."}`;
 }
 
 async function prospectOf(ctx: DraperContext, id: string) {
@@ -205,7 +229,21 @@ export const DRAPER_TOOLS: Tool[] = [
             ? "ABNs: Pulse checks them itself when you add a prospect. Give the ABN from their site or ABN Lookup."
             : "ABNs: Pulse can't check them yet. Read the public ABN Lookup site and give abn_status and gst_registered with the ABN; keep a business only if it's active, certainly theirs, and registered for GST.",
           "",
-          template
+          template && isGiveFirstTemplate(template)
+            ? [
+                `TEMPLATE v${template.version}, GIVE FIRST (pass template_version ${template.version} to outreach_submit). Pulse writes both emails itself from its own records; you pass short_name, lead_word and, when one stands out, ad_quote.`,
+                `Subject: ${template.first_subject}`,
+                "First email:",
+                template.first_body,
+                "",
+                `Follow-up, four days later, same thread (subject: ${template.followup_subject}):`,
+                template.followup_body,
+                "",
+                "WHAT YOU PASS, AND WHO GETS AN EMAIL:",
+                template.slot_rules,
+                ...(template.example ? ["", "EXAMPLE (made up):", template.example] : []),
+              ].join("\n")
+            : template
             ? [
                 `TEMPLATE v${template.version} (pass template_version ${template.version} to outreach_submit). Pulse fills every {placeholder}; you write only the three slots.`,
                 `Subject: ${template.first_subject}`,
@@ -220,7 +258,15 @@ export const DRAPER_TOOLS: Tool[] = [
                 ...(adsT && template.example ? ["", "EXAMPLE (made up, tokens filled):", template.example] : []),
               ].join("\n")
             : "The template is missing: don't submit anything.",
-          adsT
+          template && isGiveFirstTemplate(template)
+            ? [
+                "",
+                "ADS CHECK (this template): a business only gets an email when Meta's Ad Library or Google's Ads Transparency Centre shows its ads live, pointing to its own website, AND its site can't measure the ads on that platform. A tag on the site isn't proof of ads: tags outlive the ads by years.",
+                "The libraries only open in a browser. A run without one (the 5:30am cloud run) finds, checks, adds and measures businesses, then leaves them waiting: it never submits. The browser step calls outreach_ads_queue, records both libraries for each business with outreach_record_ads, then submits the ones with live ads and a tracking gap, best first, until the target is met.",
+                'Drop with a reason: "no live ads" when neither library shows them; "no tracking gap" when the site measures the platforms their ads run on (however slow or broken it is otherwise); "not registered for GST" when ABN Lookup shows no GST registration (the size floor).',
+                "Measure the home page first: a missing Pixel or Google tag shows there. outreach_measure says what measures the site and whether Pulse can tell.",
+              ].join("\n")
+            : adsT
             ? [
                 "",
                 "ADS CHECK (this template): a business only gets an email when Meta's Ad Library or Google's Ads Transparency Centre shows its ads live, pointing to its own website. A tag on the site isn't proof: tags outlive the ads by years.",
@@ -230,8 +276,7 @@ export const DRAPER_TOOLS: Tool[] = [
               ].join("\n")
             : "",
           "",
-          "TOKENS:",
-          TOKEN_GUIDE,
+          template && isGiveFirstTemplate(template) ? "" : `TOKENS:\n${TOKEN_GUIDE}`,
           "",
           "FAULTS:",
           FAULT_GUIDE,
@@ -447,12 +492,18 @@ export const DRAPER_TOOLS: Tool[] = [
               m.psi.fcpMs !== null ? `First paint ${secondsWords(m.psi.fcpMs)}, largest paint ${m.psi.lcpMs !== null ? secondsWords(m.psi.lcpMs) : "not measured"} (write [[first_paint]] or [[largest_paint]], never the figure).` : "No speed test result.",
               `Layout shift ${m.psi.cls ?? "not measured"} (poor from 0.25), blocking time ${m.psi.tbtMs !== null ? `${m.psi.tbtMs} ms` : "not measured"} (poor from 600 ms), phone layout ${m.mobileViewport === null ? "couldn't tell" : m.mobileViewport ? "yes" : "no"}. For choosing only: never put these figures in a slot.`,
               broken.length ? `Broken menu pages: ${broken.map((l) => `${l.label || l.url} (${l.status})`).join(", ")} (use [[broken_page]] and pass broken_page_name).` : "",
+              trackingLine(m.tracking, m.psi.ok),
               `[[page]] may name this page as: ${[...pageNamesFor(m.url, m.menu.map((l) => l.label))].slice(0, 8).join(", ")}.`,
             ]
               .filter(Boolean)
               .join("\n")
           : "Nothing on this page can be claimed. A page Pulse couldn't read is never a broken page.",
-        (await adsTemplateActive(ctx))
+        (await giveFirstActive(ctx))
+          ? (() => {
+              const gaps = ["no_meta_pixel", "no_google_tag", "pixel_double"].filter((f) => allFaults.includes(f as Fault));
+              return `So far for this business: tracking gaps ${gaps.length ? gaps.join(", ") : "none"}. ${gaps.length ? "It may be one to write to, if its ads are live on the platform with the gap. It still needs its ads check in the browser (outreach_ads_queue) before any draft: don't submit it from a run without a browser." : 'No tracking gap on record: drop it ("no tracking gap") unless the page above couldn\'t tell, in which case try its main service page.'}`;
+            })()
+          : (await adsTemplateActive(ctx))
           ? `So far for this business: faults ${allFaults.length ? FAULT_RANK.filter((f) => allFaults.includes(f)).join(", ") : "none"} (best first: the first email is about the first one); tags on the site ${ad ? "yes" : "none seen"}. ${allFaults.length ? "It has a fault to write about. It still needs its ads check in the browser (outreach_ads_queue) before any draft: don't submit it from a run without a browser." : "No faults yet: measure its main service page, or drop it (\"no faults\")."}`
           : `So far for this business: ad signal ${ad ? "yes" : "no"}; faults ${allFaults.length ? allFaults.join(", ") : "none"}. ${qualifies(ad, allFaults) ? "It qualifies: write the slots and submit." : "It doesn't qualify yet (it needs the ad signal and two faults). Measure the main service page, or drop it."}`,
       ];
@@ -463,7 +514,7 @@ export const DRAPER_TOOLS: Tool[] = [
     name: "outreach_submit",
     title: "Submit the draft",
     description:
-      "Submit the slots for a prospect. Pulse checks the business again, fetches the contact page again, checks every claim against its measurements (and, for the ads template, against the ad-library checks you recorded), checks the wording, fills the tokens and renders the emails from Kyle's template. In the ads template second_finding may be empty: then there's no follow-up. Refused: you get the reasons; fix it once, and if it's refused again, drop it. Accepted: it waits for Pulse's own second measurement an hour on, then queues. You never send anything.",
+      "Submit a prospect's draft. Give-first template (the brief says which): pass only prospect_id, template_version, short_name, lead_word and optionally ad_quote; Pulse writes both emails itself and refuses a business without a tracking gap on a platform its ads run on. Older templates: pass the slots and claims. Pulse checks the business again, fetches the contact page again, checks every claim against its measurements (and, for the ads template, against the ad-library checks you recorded), checks the wording, fills the tokens and renders the emails from Kyle's template. In the ads template second_finding may be empty: then there's no follow-up. Refused: you get the reasons; fix it once, and if it's refused again, drop it. Accepted: it waits for Pulse's own second measurement an hour on, then queues. You never send anything.",
     inputSchema: {
       type: "object",
       properties: {
@@ -484,15 +535,19 @@ export const DRAPER_TOOLS: Tool[] = [
           },
         },
         personal_count: { type: "integer", description: "How many sentences are true only of this business." },
+        short_name: { type: "string", description: "Give-first template: the name the business goes by, its name on file or a run of its words, without Pty Ltd." },
+        lead_word: { type: "string", enum: [...LEAD_WORDS], description: "Give-first template: what their customers send them, from their own site's buttons: quotes, bookings or enquiries." },
+        ad_quote: { type: "string", description: "Give-first template, optional: three to eight words copied exactly from one of their live Facebook ads." },
       },
-      required: ["prospect_id", "template_version", "page_name", "slots", "claims", "personal_count"],
+      required: ["prospect_id", "template_version"],
       additionalProperties: false,
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     async run(a, ctx) {
       const prospectId = need(a, "prospect_id", 40);
       await prospectOf(ctx, prospectId);
-      const slotsIn = a.slots;
+      const giveFirst = a.slots === undefined && a.claims === undefined;
+      const slotsIn = giveFirst ? { finding: "-", why_and_fix: "-" } : a.slots;
       if (!slotsIn || typeof slotsIn !== "object" || Array.isArray(slotsIn)) throw new InputError("slots must be an object with finding, why_and_fix and second_finding.");
       const slots = {} as Record<SlotName, string>;
       for (const k of SLOTS) {
@@ -504,8 +559,8 @@ export const DRAPER_TOOLS: Tool[] = [
         if (typeof v !== "string" || !v.trim()) throw new InputError(`slots.${k} is required.`);
         slots[k] = v.trim().slice(0, 1200);
       }
-      const claimsIn = a.claims;
-      if (!Array.isArray(claimsIn) || claimsIn.length === 0 || claimsIn.length > 6) throw new InputError("claims must list one claim per email.");
+      const claimsIn = giveFirst ? [] : a.claims;
+      if (!Array.isArray(claimsIn) || (!giveFirst && claimsIn.length === 0) || claimsIn.length > 6) throw new InputError("claims must list one claim per email.");
       const claims = claimsIn.map((c) => {
         const o = (c ?? {}) as Record<string, unknown>;
         if (!(FAULTS as readonly string[]).includes(String(o.fault))) throw new InputError(`Each claim's fault must be one of: ${FAULTS.join(", ")}.`);
@@ -514,19 +569,22 @@ export const DRAPER_TOOLS: Tool[] = [
         return { fault: o.fault as Fault, measurement_id: o.measurement_id, slot: o.slot as SlotName };
       });
       const tv = int(a, "template_version");
-      const pc = int(a, "personal_count");
+      const pc = giveFirst ? 0 : int(a, "personal_count");
       if (tv === undefined || pc === undefined) throw new InputError("template_version and personal_count are whole numbers.");
       const r = await submitDraft(
         ctx.sb,
         {
           prospect_id: prospectId,
-          page_name: need(a, "page_name", 80),
+          page_name: giveFirst ? "" : need(a, "page_name", 80),
           area: str(a, "area", 80) ?? null,
           broken_page_name: str(a, "broken_page_name", 80) ?? null,
           slots,
           claims,
           personal_count: pc,
           template_version: tv,
+          short_name: str(a, "short_name", 60) ?? undefined,
+          lead_word: str(a, "lead_word", 20) ?? undefined,
+          ad_quote: str(a, "ad_quote", 120) ?? undefined,
         },
         ACTOR,
       );
@@ -768,11 +826,12 @@ export const DRAPER_TOOLS: Tool[] = [
         .limit(60);
       const rows = (ps as { id: string; business_name: string | null; domain: string | null; suburb: string | null; found_on: string; gst_registered: boolean | null }[] | null) ?? [];
       const out: { rank: number; text: string }[] = [];
+      const giveFirst = await giveFirstActive(ctx);
       for (const p of rows) {
         if (!p.domain) continue;
         const [{ count: msgs }, { data: runs }, evidence] = await Promise.all([
           ctx.sb.from("outreach_messages").select("id", { count: "exact", head: true }).eq("prospect_id", p.id),
-          ctx.sb.from("outreach_measurements").select("id, url, faults, ad_signal, tags, psi_fcp_ms, psi_lcp_ms, pixel_pageviews, menu_links").eq("prospect_id", p.id).eq("status", "ok"),
+          ctx.sb.from("outreach_measurements").select("id, url, faults, ad_signal, tags, psi_fcp_ms, psi_lcp_ms, pixel_pageviews, menu_links, tracking:raw->tracking").eq("prospect_id", p.id).eq("status", "ok"),
           adsEvidenceFor(ctx.sb, p.id).catch(() => []),
         ]);
         if (msgs) continue;
@@ -780,6 +839,7 @@ export const DRAPER_TOOLS: Tool[] = [
           id: string; url: string; faults: Fault[]; ad_signal: boolean | null; tags: Record<string, string[]> | null;
           psi_fcp_ms: number | null; psi_lcp_ms: number | null; pixel_pageviews: Record<string, number> | null;
           menu_links: { url: string; label: string; status: number | null }[] | null;
+          tracking: TrackingFacts | null;
         }[] | null) ?? [];
         // What each page's figures allow, so the slots use a token that holds.
         const pageLine = (r: (typeof ok)[number]) => {
@@ -790,6 +850,7 @@ export const DRAPER_TOOLS: Tool[] = [
             Math.max(0, ...Object.values(r.pixel_pageviews ?? {})) >= 2 ? "the Meta Pixel counts a visit more than once ([[pageviews]] holds)" : "",
             (r.menu_links ?? []).filter((l) => l.status !== null && (l.status === 404 || l.status === 410 || l.status >= 500)).map((l) => `broken menu page "${l.label || l.url}"`).join(", "),
             `[[page]] may name it: ${[...pageNamesFor(r.url, (r.menu_links ?? []).filter((l) => l.url === r.url).map((l) => l.label))].slice(0, 4).join(", ")}`,
+            r.tracking ? `site on ${r.tracking.siteKind}${r.tracking.gtm.length ? ", tag manager" : ""}${r.tracking.gtmEmpty ? " (empty)" : ""}` : "tracking not on record (measured before 28 November: measure it again for give-first)",
           ].filter(Boolean);
           return `${r.url} (measurement_id ${r.id}: ${bits.join("; ")})`;
         };
@@ -803,7 +864,7 @@ export const DRAPER_TOOLS: Tool[] = [
         const live = liveAds(evidence, new Date(), ADS_MAX_AGE_HOURS.submit);
         const best = faults[0];
         out.push({
-          rank: (live.platforms.length ? 0 : 100) + (best ? FAULT_RANK.indexOf(best) * 10 : 90) + (tags.length ? 0 : 5),
+          rank: (live.platforms.length ? 0 : 100) + (best ? FAULT_RANK.indexOf(best) * 10 : 90) + (tags.length ? 0 : 5) + (giveFirst && !faults.some((f) => f === "no_meta_pixel" || f === "no_google_tag" || f === "pixel_double") ? 400 : 0),
           text: [
             `${p.business_name ?? "A business"} (prospect_id ${p.id}, ${p.domain}, ${p.suburb ?? "?"}, found ${p.found_on})${p.gst_registered === false ? ": NOT registered for GST, drop it" : p.gst_registered === null ? ": GST unknown, check ABN Lookup before writing" : ""}`,
             `  faults, best first: ${faults.length ? faults.map((f) => `${f} (${FAULT_LABEL[f]})`).join(", ") : "none: drop it (\"no faults\")"}`,
@@ -862,7 +923,7 @@ export const DRAPER_TOOLS: Tool[] = [
         melbourneDate(now),
       );
       if ("problems" in read) throw new InputError(read.problems.join(" "));
-      await event(ctx, p.id, "checked", { ads: read.evidence, page_text: pageText.slice(0, 4000), ad_text: adText?.slice(0, 1500) ?? null });
+      await event(ctx, p.id, "checked", { ads: read.evidence, page_text: pageText.slice(0, platform === "meta" ? 12000 : 4000), ad_text: adText?.slice(0, 1500) ?? null });
       const all = await adsEvidenceFor(ctx.sb, p.id);
       const live = liveAds(all, now, ADS_MAX_AGE_HOURS.submit);
       const done = new Set(all.filter((e) => now.getTime() - Date.parse(e.checked_at) <= ADS_MAX_AGE_HOURS.submit * 3_600_000).map((e) => e.platform));
@@ -1036,11 +1097,11 @@ export const DRAPER_TOOLS: Tool[] = [
     name: "outreach_set_template",
     title: "Install a template",
     description:
-      "Install a template written in Pulse's code as the next template version (or find it, if it's already installed) and move lanes onto it. \"ads\" is template 2 from Draper plan 2 (22 November 2026): live ads from the ad libraries, one best-ranked fault, the /work proof line, a named offer, optional follow-up. Only after Kyle has said yes in this chat.",
+      "Install a template written in Pulse's code as the next template version (or find it, if it's already installed) and move lanes onto it. \"ads\" is template 2 from Draper plan 2 (22 November 2026): live ads from the ad libraries, one best-ranked fault, the /work proof line, a named offer, optional follow-up. \"give_first\" is template 4 (27 November 2026): tracking gaps only, the fix in the first email, the steps in the second, the free review offered with why it's free. Only after Kyle has said yes in this chat.",
     inputSchema: {
       type: "object",
       properties: {
-        template: { type: "string", enum: ["ads"] },
+        template: { type: "string", enum: ["ads", "give_first"] },
         lane_ids: { type: "array", items: { type: "integer" }, description: "The lanes to move onto it." },
         why: { type: "string", description: "What changed and why, for the change log." },
       },
@@ -1050,11 +1111,12 @@ export const DRAPER_TOOLS: Tool[] = [
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     advisorOnly: true,
     async run(a, ctx) {
-      if (need(a, "template", 10) !== "ads") throw new InputError('template is "ads".');
+      const which = need(a, "template", 12);
+      if (which !== "ads" && which !== "give_first") throw new InputError('template is "ads" or "give_first".');
       const why = need(a, "why", 1000);
       const laneIds = Array.isArray(a.lane_ids) ? (a.lane_ids as unknown[]).filter((x): x is number => typeof x === "number" && Number.isInteger(x) && x > 0 && x < 100) : [];
       if (!laneIds.length) throw new InputError("lane_ids lists the lanes to move onto it.");
-      const t = TEMPLATE_ADS;
+      const t = which === "give_first" ? TEMPLATE_GIVE_FIRST : TEMPLATE_ADS;
       const { data: rows, error: rErr } = await ctx.sb.from("outreach_templates").select("version, first_subject, first_body, followup_body, slot_rules").order("version", { ascending: false });
       if (rErr) throw new Error(rErr.message);
       const all = (rows as { version: number; first_subject: string; first_body: string; followup_body: string; slot_rules: string }[] | null) ?? [];
@@ -1083,8 +1145,8 @@ export const DRAPER_TOOLS: Tool[] = [
       const { data: moved, error: lErr } = await ctx.sb.from("outreach_lanes").update({ template_version: version }).in("id", laneIds).select("id");
       if (lErr) throw new Error(lErr.message);
       const ids = ((moved as { id: number }[] | null) ?? []).map((l) => l.id);
-      await log(ctx, `Template ${version} (ads) ${installed ? "installed" : "already installed"}; lanes ${ids.join(", ") || "none"} moved onto it`, why);
-      return { text: `Template ${version} (ads) ${installed ? "installed" : "was already installed"}. Lanes now on it: ${ids.join(", ") || "none (check the lane ids)"}.` };
+      await log(ctx, `Template ${version} (${which}) ${installed ? "installed" : "already installed"}; lanes ${ids.join(", ") || "none"} moved onto it`, why);
+      return { text: `Template ${version} (${which}) ${installed ? "installed" : "was already installed"}. Lanes now on it: ${ids.join(", ") || "none (check the lane ids)"}.` };
     },
   },
   {

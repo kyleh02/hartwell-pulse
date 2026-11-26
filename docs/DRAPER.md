@@ -1041,3 +1041,24 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
   Kyle to add `_dmarc` TXT `v=DMARC1; p=none; rua=mailto:admin@hartwelldigital.com`.
   Same-day sends stay impossible by design (the hour-later re-measure and the
   8am summary), so a day's emails are always found the day before.
+- 27 November 2026: the give-first rules, made live the same day (Kyle). A
+  Hutch Campers reply ("email us again and we will invoice you for our
+  time") to a plain-text-phone-number email showed the website faults
+  weren't a reason to write. A paper test of ten live advertisers ("Draper
+  paper test, 27 Nov 2026.md" in Drive) found one finding strong enough: ad
+  money nobody can measure. Kyle's changes, all now rules: no proof line (the
+  franchise read as irrelevant); why the review is free and the offer asked
+  as a friendly question, not "reply yes"; the business's name in the subject
+  ("can Facebook see Coastal Tint Co's quotes?", a question because a
+  statement would be untrue for a business using Facebook's own quote forms);
+  the fix in the first email so even a non-replier gets something; the exact
+  steps in the second. Built as template 4 with two new faults (migration
+  0071: `no_meta_pixel`, `no_google_tag`), Pulse's own copy in `give-first.ts`,
+  and a tracking check that reads the page, each Google Tag Manager container,
+  Shopify's pixel settings and the phone test's requests. Live runs against
+  the paper test's sites found two of its hand-checked claims wrong (The Tint
+  Joint has a Pixel through a plugin's noscript image; Southeast Fibreglass
+  has Google's tag through Site Kit); the code gets both right and a test pins
+  each. Ozzy Auto Electrics' queued old-template email was withdrawn
+  (`outreach_redo_draft`) before it could send. First week: lane approval on.
+

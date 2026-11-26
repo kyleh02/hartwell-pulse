@@ -28,8 +28,8 @@ const sql = readFileSync(
   "utf8",
 ).replace(/\r/g, "");
 
-/** Later migrations that redefine a constraint, newest first. 0067 widened the four fault lists. */
-const LATER = ["0067_draper_faults.sql"].map((f) =>
+/** Later migrations that redefine a constraint, newest first. 0067 and 0071 widened the four fault lists. */
+const LATER = ["0071_draper_tracking_gaps.sql", "0067_draper_faults.sql"].map((f) =>
   readFileSync(new URL(`../../../supabase/migrations/${f}`, import.meta.url), "utf8").replace(/\r/g, ""),
 );
 

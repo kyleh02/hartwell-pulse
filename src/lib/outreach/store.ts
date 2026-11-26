@@ -17,7 +17,20 @@ export async function storeMeasurement(
   m: Measurement,
   purpose: MeasurementPurpose,
 ): Promise<{ id: string; screenshotError?: string }> {
-  const { data, error } = await db
+  const first = await insertMeasurement(db, prospectId, m, purpose, m.faults);
+  // A database without 0071 yet refuses the two tracking gaps: keep the
+  // measurement with the faults it knows (the gaps stay in raw.tracking).
+  const { data, error } =
+    first.error && /faults_check/.test(first.error.message)
+      ? await insertMeasurement(db, prospectId, m, purpose, m.faults.filter((f) => f !== "no_meta_pixel" && f !== "no_google_tag"))
+      : first;
+  if (error) throw new Error(`Couldn't store the measurement: ${error.message}`);
+  const id = (data as { id: string }).id;
+  return finishMeasurement(db, prospectId, id, m);
+}
+
+function insertMeasurement(db: SupabaseClient, prospectId: string, m: Measurement, purpose: MeasurementPurpose, faults: Measurement["faults"]) {
+  return db
     .from("outreach_measurements")
     .insert({
       prospect_id: prospectId,
@@ -39,14 +52,15 @@ export async function storeMeasurement(
       tel_link: m.telLink,
       script_built: m.scriptBuilt,
       ad_signal: m.adSignal,
-      faults: m.faults,
+      faults,
       error: m.error,
       raw: { ...m.raw, phone: m.phone, httpsOutcome: m.https, httpLoads: m.httpLoads },
     })
     .select("id")
     .single();
-  if (error) throw new Error(`Couldn't store the measurement: ${error.message}`);
-  const id = (data as { id: string }).id;
+}
+
+async function finishMeasurement(db: SupabaseClient, prospectId: string, id: string, m: Measurement): Promise<{ id: string; screenshotError?: string }> {
   // 0067's readings, in their own write so a database without the columns
   // still keeps the measurement (the faults themselves are in `faults`).
   await db
