@@ -185,6 +185,7 @@ export default async function DraperPage({
       test: !!m?.test_mode,
       thread_url: m?.gmail_thread_id ? gmailThreadUrl(m.gmail_thread_id) : null,
       lead_id: r.lead_id,
+      review_url: r.kind === "reply" ? `/admin/outreach/review/${r.prospect_id}` : null,
     };
   };
   const needs = ((needsRes.data as RRaw[] | null) ?? []).map(toRow);

@@ -20,6 +20,8 @@ export interface ReplyRow {
   test: boolean;
   thread_url: string | null;
   lead_id: string | null;
+  /** Pulse's draft of the free ads review for this business (27 Nov 2026), for a reply. */
+  review_url: string | null;
 }
 
 export interface LaterRow {
@@ -111,6 +113,11 @@ export function RepliesPanel({ needs, recent, later, faultsOff }: { needs: Reply
                   Open the thread in Gmail
                 </a>
               )}
+              {r.review_url && (
+                <Link href={r.review_url} className="mt-1 ml-3 inline-block text-[12px] text-pulse-gold underline underline-offset-2">
+                  Draft the free review
+                </Link>
+              )}
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {REPLY_LABELS.map((l) => (
                   <Button
@@ -192,6 +199,11 @@ export function RepliesPanel({ needs, recent, later, faultsOff }: { needs: Reply
                 {r.lead_id && (
                   <Link href={`/admin/pipeline/${r.lead_id}`} className="ml-0 block text-[12px] text-pulse-gold underline underline-offset-2">
                     In the pipeline
+                  </Link>
+                )}
+                {r.review_url && (r.label === "interested" || r.label === "question") && (
+                  <Link href={r.review_url} className="ml-0 block text-[12px] text-pulse-gold underline underline-offset-2">
+                    Draft the free review
                   </Link>
                 )}
                 {open === r.id && r.quote && (

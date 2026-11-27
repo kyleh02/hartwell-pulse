@@ -1061,4 +1061,10 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
   has Google's tag through Site Kit); the code gets both right and a test pins
   each. Ozzy Auto Electrics' queued old-template email was withdrawn
   (`outreach_redo_draft`) before it could send. First week: lane approval on.
-
+  Kyle ran 0071 and switched lane approval on for lanes 1, 2, 3 and 5 the
+  same morning. Then the free review drafts he approved: every reply links to
+  /admin/outreach/review/[prospectId], where Pulse drafts the review from its
+  records (review-draft.ts: their live ads with their opening words, what
+  measures them, what a visitor meets, what we'd change in order, the
+  give-first steps first) with Kyle's own judgement of the ads left in square
+  brackets. Copy, finish and send from kyle@'s Gmail; nothing there sends.

@@ -764,6 +764,10 @@ Live at https://portal.hartwelldigital.com
   `facebook.com/tr` image is a Pixel. Both mistakes were in the hand-done paper
   test and the code caught them. A give-first template is one whose body uses
   `{fix}` (`isGiveFirstTemplate`).
+- **The free ads review is drafted by Pulse** (`review-draft.ts`, page
+  `/admin/outreach/review/[prospectId]`, linked from each reply): facts from
+  the records only, Kyle's view of the ads in square brackets, the fee
+  described never priced. It never sends.
 - **New connector tools reach an open session only after it reconnects**:
   Claude Code and claude.ai cache a connector's tool list at connect. A
   fresh cloud run (RemoteTrigger) sees them at once.
