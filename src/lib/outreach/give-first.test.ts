@@ -88,6 +88,9 @@ test("Southeast Fibreglass: both platforms live, an empty tag manager", () => {
   assert.deepEqual(c.claimed, ["no_meta_pixel", "no_google_tag"]);
   const r = renderGiveFirst(T, { firstName: "Sam", optOut: "B", ...c });
   assert.deepEqual(r.problems, []);
+  // Line B (Kyle, 27 November): the follow-up's own close, not a survey.
+  assert.match(r.followUp.body, /\n\nIf the timing's wrong or someone already looks after your ads, just reply and say so and we'll leave it there\.\n\nKyle Hartwell\n/);
+  assert.doesNotMatch(r.followUp.body, /one word back|won't email again/);
   assert.equal(r.first.subject, "can Google and Facebook see Southeast Fibreglass's quotes?");
   assert.match(r.first.body, /^Hi Sam,/);
   assert.ok(r.followUp.body.includes(T.opt_out_b));

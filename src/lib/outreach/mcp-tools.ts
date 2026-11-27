@@ -1117,12 +1117,19 @@ export const DRAPER_TOOLS: Tool[] = [
       const laneIds = Array.isArray(a.lane_ids) ? (a.lane_ids as unknown[]).filter((x): x is number => typeof x === "number" && Number.isInteger(x) && x > 0 && x < 100) : [];
       if (!laneIds.length) throw new InputError("lane_ids lists the lanes to move onto it.");
       const t = which === "give_first" ? TEMPLATE_GIVE_FIRST : TEMPLATE_ADS;
-      const { data: rows, error: rErr } = await ctx.sb.from("outreach_templates").select("version, first_subject, first_body, followup_body, slot_rules").order("version", { ascending: false });
+      const { data: rows, error: rErr } = await ctx.sb.from("outreach_templates").select("version, first_subject, first_body, followup_body, opt_out_a, opt_out_b, slot_rules").order("version", { ascending: false });
       if (rErr) throw new Error(rErr.message);
-      const all = (rows as { version: number; first_subject: string; first_body: string; followup_body: string; slot_rules: string }[] | null) ?? [];
-      // A template row never changes, so new slot rules are a new version too.
+      const all = (rows as { version: number; first_subject: string; first_body: string; followup_body: string; opt_out_a: string; opt_out_b: string; slot_rules: string }[] | null) ?? [];
+      // A template row never changes, so new slot rules or a new opt-out line
+      // are a new version too (a new line B alone used to read as installed).
       let version = all.find(
-        (r) => r.first_subject === t.first_subject && r.first_body === t.first_body && r.followup_body === t.followup_body && r.slot_rules === t.slot_rules,
+        (r) =>
+          r.first_subject === t.first_subject &&
+          r.first_body === t.first_body &&
+          r.followup_body === t.followup_body &&
+          r.opt_out_a === t.opt_out_a &&
+          r.opt_out_b === t.opt_out_b &&
+          r.slot_rules === t.slot_rules,
       )?.version;
       const installed = !version;
       if (!version) {

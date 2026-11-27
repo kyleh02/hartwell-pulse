@@ -1079,3 +1079,12 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
   choice (A is now this line; B is the "sorted, later or no thanks" line).
   The old line stays in the older templates and in the stored bodies of the
   old-template follow-ups still queued (EzToolbox, TDI).
+- 27 November 2026, later still: the follow-up's line B (Kyle). The "one word
+  back is a real help: sorted, later or no thanks" line read as a survey. B
+  is now "If the timing's wrong or someone already looks after your ads, just
+  reply and say so and we'll leave it there." It's the last email in the
+  thread and any reply stops Draper writing again, so that's literally true.
+  Installed as template 6 on lanes 1, 2, 3 and 5. `outreach_set_template` now
+  compares both opt-out lines too: a new line B alone read as "already
+  installed" before. Settings' "Follow-up's last line" must be on B for the
+  follow-up to use it (A would repeat email 1's last line in the same thread).

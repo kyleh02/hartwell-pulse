@@ -21,6 +21,11 @@
  *    to stop folded in (Kyle, 27 November: "If this isn't relevant" read as a
  *    mass email, when each one is written for that business). Reply to opt
  *    out stays in every email: the Spam Act needs it.
+ *  - The follow-up's line B (the Settings choice) is "If the timing's wrong
+ *    or someone already looks after your ads, just reply and say so and
+ *    we'll leave it there" (Kyle, 27 November), in place of the "one word
+ *    back is a real help" survey line. It's the last email in the thread,
+ *    and any reply stops Draper writing again, so that's literally true.
  *
  * Pulse writes every sentence from its own records ({finding}, {fix},
  * {steps}); the morning run only names the business and picks the word for
@@ -57,7 +62,7 @@ The free ads review still stands. If you'd like one, let us know and it'll be wi
 
 ${SIGNATURE}`,
   opt_out_a: "No obligation at all. Just reply if you'd rather we didn't write again.",
-  opt_out_b: `If it's not for you, one word back is a real help: "sorted" if someone already looks after your ads, "later" if the timing's off, or "no thanks" and we won't email again.`,
+  opt_out_b: "If the timing's wrong or someone already looks after your ads, just reply and say so and we'll leave it there.",
   slot_rules: `Pulse writes every sentence of both emails from its own records: the measurement (with the site's tag manager and Shopify settings read), and the ad-library checks you recorded. You write no slots. You pass three things to outreach_submit:
 
 short_name: the name the business goes by, as its own website or Facebook page shows it, without "Pty Ltd". It must be its name on file or a run of its words ("Black Diamond Tinting" for "Black Diamond Tinting Co."). It goes in the subject.
@@ -83,5 +88,5 @@ We run Google and Facebook ads for small and medium Australian businesses, and i
 No obligation at all. Just reply if you'd rather we didn't write again.
 
 ${SIGNATURE}`,
-  note: "Template 4, give first (27 November 2026): tracking gaps only, the fix in the first email, the steps in the second, the review offered with why it's free. Closes on no obligation instead of \"If this isn't relevant\" (27 November).",
+  note: "Template 4, give first (27 November 2026): tracking gaps only, the fix in the first email, the steps in the second, the review offered with why it's free. Closes on no obligation instead of \"If this isn't relevant\", and the follow-up's line B is \"just reply and say so and we'll leave it there\" (27 November).",
 };
