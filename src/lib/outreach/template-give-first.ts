@@ -17,6 +17,10 @@
  *  - No proof line: the franchise result read as irrelevant to a tint shop.
  *  - Why the review is free, and the offer asked as a friendly question,
  *    instead of "reply yes".
+ *  - The first email closes on "No obligation at all", with the way
+ *    to stop folded in (Kyle, 27 November: "If this isn't relevant" read as a
+ *    mass email, when each one is written for that business). Reply to opt
+ *    out stays in every email: the Spam Act needs it.
  *
  * Pulse writes every sentence from its own records ({finding}, {fix},
  * {steps}); the morning run only names the business and picks the word for
@@ -39,7 +43,7 @@ export const TEMPLATE_GIVE_FIRST: TemplateText & { slot_rules: string; example: 
 
 We run Google and Facebook ads for small and medium Australian businesses, and instead of a pitch we offer a free review of your ads, yours to keep either way. Would you like one? Let us know and it'll be with you within two working days.
 
-If this isn't relevant, just reply and say so, and we won't email again.
+No obligation at all. Just reply if you'd rather we didn't write again.
 
 ${SIGNATURE}`,
   followup_subject: "Re: {subject}",
@@ -52,7 +56,7 @@ The free ads review still stands. If you'd like one, let us know and it'll be wi
 {opt_out_line}
 
 ${SIGNATURE}`,
-  opt_out_a: "If this isn't relevant, just reply and say so, and we won't email again.",
+  opt_out_a: "No obligation at all. Just reply if you'd rather we didn't write again.",
   opt_out_b: `If it's not for you, one word back is a real help: "sorted" if someone already looks after your ads, "later" if the timing's off, or "no thanks" and we won't email again.`,
   slot_rules: `Pulse writes every sentence of both emails from its own records: the measurement (with the site's tag manager and Shopify settings read), and the ad-library checks you recorded. You write no slots. You pass three things to outreach_submit:
 
@@ -76,8 +80,8 @@ Here's the fix: your site already has Google's tag manager, so the Pixel can go 
 
 We run Google and Facebook ads for small and medium Australian businesses, and instead of a pitch we offer a free review of your ads, yours to keep either way. Would you like one? Let us know and it'll be with you within two working days.
 
-If this isn't relevant, just reply and say so, and we won't email again.
+No obligation at all. Just reply if you'd rather we didn't write again.
 
 ${SIGNATURE}`,
-  note: "Template 4, give first (27 November 2026): tracking gaps only, the fix in the first email, the steps in the second, the review offered with why it's free.",
+  note: "Template 4, give first (27 November 2026): tracking gaps only, the fix in the first email, the steps in the second, the review offered with why it's free. Closes on no obligation instead of \"If this isn't relevant\" (27 November).",
 };

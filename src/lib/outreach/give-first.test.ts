@@ -51,6 +51,10 @@ test("the template's example is exactly what Pulse writes", () => {
   assert.match(r.followUp.body, /a second tag that sends a Lead event when your quote form is sent\./);
   assert.match(r.followUp.body, /The free ads review still stands\. If you'd like one, let us know/);
   assert.equal(r.followUp.subject, "Re: can Facebook see Coastal Tint Co's quotes?");
+  // Kyle, 27 November: close on no obligation, not "If this isn't relevant"
+  // (it read as a mass email). The reply-to-stop part is the Spam Act's.
+  assert.match(r.first.body, /\n\nNo obligation at all\. Just reply if you'd rather we didn't write again\.\n\nKyle Hartwell\n/);
+  assert.doesNotMatch(r.first.body, /isn't relevant|won't email again/);
 });
 
 test("a quote names the ad and how long it has run", () => {

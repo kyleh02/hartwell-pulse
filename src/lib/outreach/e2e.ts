@@ -39,7 +39,8 @@ export interface E2ECheck {
   by: string | null;
 }
 
-const OPT_OUT = /won't email again/i;
+// Every template's opt-out line, old ("won't email again") and give first's.
+const OPT_OUT = /won't email again|didn't write again/i;
 
 export function e2eChecklist(prospects: E2EProspect[], messages: E2EMessage[], replies: E2EReply[]): E2ECheck[] {
   const name = new Map(prospects.map((p) => [p.id, p.name]));

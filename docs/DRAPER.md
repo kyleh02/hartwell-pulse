@@ -1068,3 +1068,14 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
   measures them, what a visitor meets, what we'd change in order, the
   give-first steps first) with Kyle's own judgement of the ads left in square
   brackets. Copy, finish and send from kyle@'s Gmail; nothing there sends.
+- 27 November 2026, later: the first email's last line (Kyle). "If this
+  isn't relevant, just reply and say so, and we won't email again" read as a
+  mass email, when each one is written for that business. It now closes "No
+  obligation at all. Just reply if you'd rather we didn't write again." The
+  reply-to-stop part can't go: under the Spam Act every email needs a way to
+  unsubscribe, and replying is ours. Installed as template 5 (the same
+  give-first template with that line; `outreach_set_template`), lanes 1, 2,
+  3 and 5 moved onto it. The follow-up's last line is still the Settings
+  choice (A is now this line; B is the "sorted, later or no thanks" line).
+  The old line stays in the older templates and in the stored bodies of the
+  old-template follow-ups still queued (EzToolbox, TDI).

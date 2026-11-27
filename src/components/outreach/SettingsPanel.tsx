@@ -122,7 +122,7 @@ export function SettingsPanel({
             onBlur={commitDaily}
           />
         </Row>
-        <Row stack label="Follow-up's last line" detail={s.opt_out_line === "B" ? "“One word back is a real help: sorted, later, or no thanks.”" : "“If this isn't relevant, just reply and say so.”"}>
+        <Row stack label="Follow-up's last line" detail={s.opt_out_line === "B" ? "“One word back is a real help: sorted, later, or no thanks.”" : "“No obligation at all. Just reply if you'd rather we didn't write again.”"}>
           <Segmented<"A" | "B">
             ariaLabel="Follow-up's last line"
             value={s.opt_out_line}
