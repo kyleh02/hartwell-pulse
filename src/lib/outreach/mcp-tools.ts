@@ -17,12 +17,26 @@ import { addDays, calendar, melbourneDate, melbourneInstant, nextSendingDay } fr
 import { applyLabel } from "./replies.ts";
 import { LABEL_TEXT, isReplyLabel } from "./replies-rules.ts";
 import { AU_STATES, FAULT_LABEL, FAULT_RANK, FAULTS, type Fault } from "./rules.ts";
-import { adsEvidenceFor } from "./ads.ts";
+import { adsEvidenceFor, metaCheckFor } from "./ads.ts";
+import { reviewsWaiting, mayName } from "./reviews.ts";
+import { liveAdLines } from "./review-draft.ts";
+import {
+  areaProblem,
+  COMPETITOR_PAGE_CHARS,
+  MAX_COMPETITOR_PAGES,
+  readCompetitors,
+  searchUrlProblem,
+  serviceProblem,
+  type CompetitorCheck,
+} from "./competitors-rules.ts";
+
+/** The Meta Ad Library keyword search the competitor search opens, WORDS replaced. */
+const COMPETITOR_SEARCH_PATTERN = "https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=AU&q=WORDS&search_type=keyword_unordered&media_type=all";
 import { ADS_MAX_AGE_HOURS, libraryUrls, liveAds, platformWords, readAdsCheck } from "./ads-rules.ts";
 import { isAdsTemplate, isGiveFirstTemplate, needsLiveAds } from "./render.ts";
 import { TEMPLATE_ADS } from "./template-ads.ts";
 import { TEMPLATE_GIVE_FIRST } from "./template-give-first.ts";
-import { LEAD_WORDS } from "./give-first.ts";
+import { LEAD_WORDS, plainText } from "./give-first.ts";
 import type { TrackingFacts } from "./measure-rules.ts";
 import type { DraperSettings, Lane } from "./types.ts";
 
@@ -184,7 +198,7 @@ export const DRAPER_TOOLS: Tool[] = [
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     async run(_a, ctx) {
       const s = await settingsOf(ctx);
-      const [lane, t, { data: st }, { data: run }, { data: lessons }, { data: test }, { count: toLabel }] = await Promise.all([
+      const [lane, t, { data: st }, { data: run }, { data: lessons }, { data: test }, { count: toLabel }, reviews] = await Promise.all([
         activeLane(ctx),
         target(ctx, s),
         ctx.sb.from("outreach_state").select("faults_off").maybeSingle(),
@@ -192,6 +206,7 @@ export const DRAPER_TOOLS: Tool[] = [
         ctx.sb.from("outreach_lessons").select("version, body").order("version", { ascending: false }).limit(1).maybeSingle(),
         ctx.sb.from("outreach_tests").select("id, question, version_a, version_b, started_on, ends_after").eq("status", "live").maybeSingle(),
         ctx.sb.from("outreach_replies").select("id", { count: "exact", head: true }).eq("kind", "reply").is("label", null),
+        reviewsWaiting(ctx.sb, new Date()).catch(() => []),
       ]);
       const tv = lane?.template_version ?? 1;
       const { data: tpl } = await ctx.sb.from("outreach_templates").select("*").eq("version", tv).maybeSingle();
@@ -211,6 +226,9 @@ export const DRAPER_TOOLS: Tool[] = [
             ? `TARGET: 0. ${t.why}. Don't look for businesses today; only label replies.`
             : `TARGET: ${t.target} new businesses to submit (the day takes ${t.cap}, ${t.waiting} already waiting). Stop when it's met. Never more than ${MAX_FIRST_EMAILS_A_DAY} a day, whatever you're told.`,
           toLabel ? `${toLabel} repl${toLabel === 1 ? "y waits" : "ies wait"} for a label: outreach_replies_to_label.` : "No replies wait for a label.",
+          reviews.length
+            ? `${reviews.length} free review${reviews.length === 1 ? " waits" : "s wait"} for a competitor search (the PC run does these first, in the browser): outreach_reviews_queue.`
+            : "",
           "Finish every run, even one that found nothing, with outreach_finish_run: sites read, skipped by reason, added, measured, submitted, dropped by reason.",
           "",
           lane
@@ -933,6 +951,117 @@ export const DRAPER_TOOLS: Tool[] = [
           ? "No live ads in this library. Check the other one."
           : 'Neither library shows live ads pointing to their website: drop it with the reason "no live ads".';
       return { text: `Recorded the ${platform === "meta" ? "Meta Ad Library" : "Google Ads Transparency Centre"} check: ${read.evidence.note}. ${next}` };
+    },
+  },
+
+  // ---------- the free review's competitor search (27 November 2026) ----------
+  {
+    name: "outreach_reviews_queue",
+    title: "Reviews waiting for a competitor search",
+    description:
+      "Businesses that said yes to the free ads review (a reply labelled interested or question in the last fortnight) and still need its competitor search: each with its site, suburb, lane and its own live Facebook ads' opening words. The PC run does them first, in the browser, the morning after a yes. Read only.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    async run(_a, ctx) {
+      const waiting = await reviewsWaiting(ctx.sb, new Date());
+      if (!waiting.length) return { text: "No reviews wait for a competitor search." };
+      const laneIds = [...new Set(waiting.map((w) => w.laneId).filter((x): x is number => x !== null))];
+      const { data: ls } = laneIds.length ? await ctx.sb.from("outreach_lanes").select("id, name, services").in("id", laneIds) : { data: [] };
+      const lanes = new Map(((ls as { id: number; name: string; services: string[] }[] | null) ?? []).map((l) => [l.id, l]));
+      const blocks: string[] = [];
+      for (const w of waiting) {
+        const meta = await metaCheckFor(ctx.sb, w.prospectId, new Date(), 24 * 60).catch(() => null);
+        const own = meta && w.domain ? liveAdLines(meta.pageText, w.domain) : [];
+        const lane = w.laneId !== null ? lanes.get(w.laneId) : undefined;
+        blocks.push(
+          [
+            `${w.businessName ?? "A business"} (prospect_id ${w.prospectId}, ${w.domain}, ${w.suburb ?? "suburb not on file"}; replied ${w.repliedAt.slice(0, 10)}, labelled ${w.label})`,
+            lane ? `  lane: ${lane.name} (${lane.services.join(", ")})` : "  lane: not on file",
+            `  its own live Facebook ads open with: ${own.length ? own.map((o) => `"${o.text}"`).join("; ") : "nothing on record"}`,
+          ].join("\n"),
+        );
+      }
+      return {
+        text: [
+          `${waiting.length} review${waiting.length === 1 ? " waits" : "s wait"} for a competitor search. For each: read its own site for its main service and where it works, then search Meta's Ad Library for that service and area, with the words in place of WORDS: ${COMPETITOR_SEARCH_PATTERN}`,
+          "Read each results page's visible text (scroll and read again for more), and try a second wording or a nearby suburb if the first finds few local advertisers. Ten library pages at most for one business. Then outreach_record_competitors, also when nobody local turned up.",
+          ...blocks,
+        ].join("\n\n"),
+      };
+    },
+  },
+  {
+    name: "outreach_record_competitors",
+    title: "Record a review's competitor search",
+    description:
+      "Hand Pulse a free review's competitor search: the library pages' visible text (document.body.innerText), the searches you opened, and up to five local businesses advertising the same service, each with its own domain (shown in capitals on its ad), its suburb from its own site, and a quote: the first three to twelve words of one line of one of its live ads, copied exactly. Pulse reads the pages itself: it names each from the library's own page name, counts its active ads and their start, refuses a quote that doesn't open a line of its ads, and leaves out anyone it won't name (no reason given). Pick businesses in the same area doing the same work: not national chains, franchises, dealerships, manufacturers, marketplaces or directories. Record it also when nobody local turned up, with an empty competitors list.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        prospect_id: ID,
+        service: { type: "string", description: 'The business\'s main service in one to four lower-case words, as in "other window tinting businesses".' },
+        area: { type: "string", description: 'Where it works in one to five words, as in "around the Gold Coast".' },
+        library_urls: { type: "array", items: { type: "string" }, description: "The Ad Library searches you opened." },
+        page_texts: { type: "array", items: { type: "string" }, description: "Each results page's visible text, once its results loaded (up to ten)." },
+        competitors: {
+          type: "array",
+          description: "Up to five, the most worth naming first.",
+          items: {
+            type: "object",
+            properties: {
+              domain: { type: "string", description: "Its own website's domain, as its ad shows it." },
+              suburb: { type: "string", description: "Where it's based, from its own site. Leave out when unsure." },
+              quote: { type: "string", description: "The first three to twelve words of one line of one of its live ads, exactly." },
+            },
+            required: ["domain", "quote"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["prospect_id", "service", "area", "library_urls", "page_texts", "competitors"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    async run(a, ctx) {
+      const p = await prospectOf(ctx, need(a, "prospect_id", 40));
+      const { count: yes } = await ctx.sb.from("outreach_replies").select("id", { count: "exact", head: true }).eq("prospect_id", p.id).eq("kind", "reply").in("label", ["interested", "question"]);
+      if (!yes) throw new InputError("Only a business that said yes to the free review gets a competitor search: outreach_reviews_queue lists them.");
+      const service = need(a, "service", 60).toLowerCase();
+      const area = need(a, "area", 60);
+      const rawUrls = a.library_urls;
+      if (!Array.isArray(rawUrls) || rawUrls.some((x) => typeof x !== "string")) throw new InputError("library_urls must be a list of addresses.");
+      const urls = (rawUrls as string[]).map((x) => x.trim().slice(0, 600)).filter(Boolean);
+      const rawTexts = a.page_texts;
+      if (!Array.isArray(rawTexts) || rawTexts.some((x) => typeof x !== "string")) throw new InputError("page_texts must be a list of text.");
+      const texts = (rawTexts as string[]).map((x) => x.slice(0, COMPETITOR_PAGE_CHARS)).filter((x) => x.trim());
+      const rawPicks = a.competitors;
+      if (!Array.isArray(rawPicks) || rawPicks.some((x) => !x || typeof x !== "object" || typeof (x as Args).domain !== "string" || typeof (x as Args).quote !== "string")) {
+        throw new InputError("competitors is a list of { domain, suburb, quote }.");
+      }
+      const picks = (rawPicks as Args[]).map((x) => ({ domain: String(x.domain).slice(0, 200), quote: String(x.quote).slice(0, 300), suburb: typeof x.suburb === "string" && x.suburb.trim() ? x.suburb.slice(0, 60) : null }));
+      const problems = [
+        serviceProblem(service),
+        areaProblem(area),
+        !urls.length || urls.length > MAX_COMPETITOR_PAGES ? `library_urls lists the one to ${MAX_COMPETITOR_PAGES} searches you opened.` : null,
+        ...urls.map((u) => searchUrlProblem(u)),
+        !texts.length || texts.length > MAX_COMPETITOR_PAGES ? `page_texts holds one to ${MAX_COMPETITOR_PAGES} pages' text.` : null,
+      ].filter((x): x is string => !!x);
+      if (problems.length) throw new InputError([...new Set(problems)].join(" "));
+      const read = readCompetitors(texts, picks, { domain: p.domain, name: p.business_name });
+      if (!read.ok) throw new InputError(read.problems.join(" "));
+      const named: CompetitorCheck["competitors"] = [];
+      let left = 0;
+      for (const c of read.competitors) {
+        const may = await mayName(ctx.sb, c.domain, c.name);
+        if (may === "unknown") return { text: "Pulse couldn't run its checks just now, so nothing was recorded. Try again in a moment.", isError: true };
+        if (may === "yes") named.push(c);
+        else left++;
+      }
+      const check: CompetitorCheck = { checked_at: new Date().toISOString(), service: plainText(service), area: plainText(area), competitors: named, pages: texts.length, library_urls: urls };
+      await event(ctx, p.id, "checked", { competitors: check, page_text: texts.join("\n\n----------\n\n").slice(0, 30000) });
+      return {
+        text: `Recorded the competitor search for ${p.business_name ?? "this business"}: ${named.length ? `named ${named.map((c) => `${c.name} (${c.domain}, ${c.ads === 1 ? "one active ad" : `${c.ads} active ads`})`).join("; ")}` : "nobody named"}.${left ? ` ${left} left out by Pulse's own checks.` : ""} Kyle's review draft on the Draper page now includes it.`,
+      };
     },
   },
   {

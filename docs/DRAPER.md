@@ -1088,3 +1088,27 @@ Kyle creates and enters every secret himself; none is ever pasted into a chat.
   compares both opt-out lines too: a new line B alone read as "already
   installed" before. Settings' "Follow-up's last line" must be on B for the
   follow-up to use it (A would repeat email 1's last line in the same thread).
+- 27 November 2026, evening: the free review, reshaped (Kyle's four answers
+  to the "Draper Review Drafts" page). Name local competitors (Kyle: "I think
+  we should name them"); no site speed at all ("too generic"); keep it short;
+  the PC run may do a competitor search the morning after a yes. The draft
+  (review-draft.ts) now reads: the three things we'd change first, the ads
+  themselves leading (Pulse reads their live Facebook ads' words: an offer
+  whose date has passed, ads that say little more than the business name, one
+  ad running six months or more; else a bracket for Kyle), then the tracking
+  gap pointing to the steps in our last email (the steps themselves only when
+  the follow-up hasn't gone), then the next site fault that isn't speed; then
+  "What other [service] businesses near you are running", named; then "For
+  the record" (ads and tracking). Numbers to twenty as words. Never speed:
+  no load times, layout shift or freezes anywhere in it. Competitor search:
+  `outreach_reviews_queue` lists businesses with a reply labelled interested
+  or question in the last fortnight and no search since; the PC run searches
+  Meta's Ad Library for their service and area and hands the pages' text to
+  `outreach_record_competitors` with up to five picks (domain, suburb, an
+  exact quote). Pulse reads the pages itself (competitors-rules.ts): the name
+  is the library's page name, the ad count and earliest start are counted
+  from the cards, the quote must open a line of one of that business's active
+  ads, and nobody on Kyle's clients, leads, do-not-contact or exclusions is
+  ever named (reviews.ts, no reason given). Stored as an outreach_events
+  "checked" row with detail.competitors: no migration. Run instructions v6
+  adds step B1a; the PC run's scheduled task loads the two new tools.
